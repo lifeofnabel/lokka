@@ -36,7 +36,7 @@ class StampProgressCard extends StatelessWidget {
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
-                  Icons.stamp,
+                  Icons.loyalty_rounded,
                   size: 18,
                   color: progress.isCompleted ? AppColors.mintStrong : AppColors.gray300,
                 ),

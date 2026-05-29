@@ -97,7 +97,7 @@ class WalletCard extends StatelessWidget {
                   const SizedBox(height: AppSpacing.sm),
                   Row(
                     children: [
-                      _StatusDot(active: card.hasStampCards, icon: Icons.stamp, label: 'Stempel'),
+                      _StatusDot(active: card.hasStampCards, icon: Icons.loyalty_rounded, label: 'Stempel'),
                       const SizedBox(width: AppSpacing.sm),
                       _StatusDot(active: card.hasPoints, icon: Icons.stars_rounded, label: 'Punkte'),
                       const SizedBox(width: AppSpacing.sm),

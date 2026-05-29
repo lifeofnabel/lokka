@@ -124,7 +124,7 @@ class _UserStampPageState extends State<UserStampPage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.stamp, size: 64, color: AppColors.gray300),
+            Icon(Icons.loyalty_rounded, size: 64, color: AppColors.gray300),
             SizedBox(height: AppSpacing.md),
             Text(
               'Keine Stempelkarten',

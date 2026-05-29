@@ -1,155 +1,154 @@
+import 'dart:async';
+
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
-import 'package:latlong2/latlong.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import 'package:lokka/core/theme/appColors.dart';
-import 'package:lokka/core/theme/appRadius.dart';
-import 'package:lokka/core/theme/appSpacing.dart';
-import 'package:lokka/features/user/discover/models/publicMerchantUserModel.dart';
-import 'package:lokka/features/user/discover/providers/userDiscoverProvider.dart';
-import 'package:lokka/features/user/discover/widgets/discoverCard.dart';
-import 'package:lokka/features/user/discover/widgets/discoverSection.dart';
-import 'package:lokka/features/user/partners/pages/userPartnerDetailPage.dart';
 
-const _shopTypes = ['Food', 'Café', 'Kiosk', 'Beauty', 'Fitness', 'Bakery', 'Drinks'];
+import '../../../../core/theme/appColors.dart';
+import '../../../../core/theme/appRadius.dart';
+import '../../../../core/theme/appShadows.dart';
+import '../../../../core/theme/appSpacing.dart';
+import '../models/publicMerchantUserModel.dart';
+import '../providers/userDiscoverProvider.dart';
+import '../services/userDiscoverService.dart';
 
-class UserDiscoverPage extends StatelessWidget {
+class UserDiscoverPage extends StatefulWidget {
   const UserDiscoverPage({super.key});
 
   @override
+  State<UserDiscoverPage> createState() => _UserDiscoverPageState();
+}
+
+class _UserDiscoverPageState extends State<UserDiscoverPage> {
+  final _scrollController = ScrollController();
+  final _searchController = TextEditingController();
+  bool _showActions = true;
+  bool _showSearch = false;
+  double _lastOffset = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    final offset = _scrollController.offset;
+    final shouldShow = offset <= _lastOffset || offset < 80;
+    if (shouldShow != _showActions) {
+      setState(() => _showActions = shouldShow);
+    }
+    _lastOffset = offset;
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Consumer<UserDiscoverProvider>(
-      builder: (context, provider, _) => CustomScrollView(
-        slivers: [
-          SliverAppBar(
-            floating: true,
-            snap: true,
-            backgroundColor: AppColors.background,
-            elevation: 0,
-            expandedHeight: 60,
-            flexibleSpace: const FlexibleSpaceBar(
-              titlePadding: EdgeInsets.symmetric(
-                horizontal: AppSpacing.md,
-                vertical: AppSpacing.sm,
-              ),
-              title: Text(
-                'Entdecken',
-                style: TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.black,
-                  letterSpacing: -0.5,
+    final provider = context.watch<UserDiscoverProvider>();
+
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      body: Stack(
+        children: [
+          RefreshIndicator(
+            onRefresh: provider.load,
+            child: CustomScrollView(
+              controller: _scrollController,
+              slivers: [
+                SliverAppBar(
+                  floating: true,
+                  snap: true,
+                  backgroundColor: AppColors.background,
+                  title: const Text('Entdecken'),
                 ),
-              ),
-            ),
-          ),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.md,
-                vertical: AppSpacing.sm,
-              ),
-              child: _SearchHint(),
-            ),
-          ),
-          SliverToBoxAdapter(
-            child: SizedBox(
-              height: 42,
-              child: _FilterChips(
-                selected: provider.selectedShopType,
-                onSelected: provider.setShopType,
-              ),
-            ),
-          ),
-          const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.md)),
-          SliverToBoxAdapter(
-            child: _MapSection(
-              merchants: provider.merchants
-                  .where((m) => m.hasCoordinates)
-                  .toList(),
-            ),
-          ),
-          const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.lg)),
-          if (provider.isLoading)
-            const SliverToBoxAdapter(
-              child: Padding(
-                padding: EdgeInsets.all(AppSpacing.xl),
-                child: Center(child: CircularProgressIndicator()),
-              ),
-            )
-          else if (provider.error != null)
-            const SliverToBoxAdapter(child: _ErrorView())
-          else if (provider.merchants.isEmpty)
-            const SliverToBoxAdapter(child: _EmptyDiscoverView())
-          else ...[
-            SliverToBoxAdapter(
-              child: DiscoverSection(
-                title: 'In deiner Nähe',
-                child: SizedBox(
-                  height: 200,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-                    itemCount: provider.merchants.length,
-                    separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.sm),
-                    itemBuilder: (ctx, i) => DiscoverCard(
-                      merchant: provider.merchants[i],
-                      onTap: () => _openDetail(ctx, provider.merchants[i]),
-                    ),
+                if (provider.usedFallbackLocation)
+                  const SliverToBoxAdapter(child: _LocationNotice()),
+                SliverToBoxAdapter(
+                  child: _StoriesBar(
+                    opacity: (1 - (_scrollController.hasClients
+                                ? (_scrollController.offset / 180)
+                                : 0))
+                            .clamp(0.0, 1.0)
+                            .toDouble(),
+                    merchants: provider.merchants,
                   ),
                 ),
-              ),
+                if (provider.isLoading)
+                  const SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: Center(child: CircularProgressIndicator()),
+                  )
+                else if (provider.error != null)
+                  const SliverFillRemaining(hasScrollBody: false, child: _ErrorState())
+                else if (provider.visibleItems.isEmpty)
+                  const SliverFillRemaining(hasScrollBody: false, child: _EmptyState())
+                else ...[
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
+                    sliver: SliverList.separated(
+                      itemCount: provider.visibleItems.length + (provider.canLoadMore ? 1 : 0),
+                      separatorBuilder: (_, __) => const SizedBox(height: 18),
+                      itemBuilder: (context, index) {
+                        if (index >= provider.visibleItems.length) {
+                          return FilledButton(
+                            onPressed: provider.isLoadingMore ? null : provider.loadMore,
+                            child: const Text('Mehr laden'),
+                          );
+                        }
+                        return _FeedCard(item: provider.visibleItems[index]);
+                      },
+                    ),
+                  ),
+                ],
+              ],
             ),
-            const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.lg)),
-            SliverPadding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-              sliver: SliverList.separated(
-                itemCount: provider.merchants.length,
-                separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.sm),
-                itemBuilder: (ctx, i) {
-                  final m = provider.merchants[i];
-                  return _MerchantListTile(
-                    merchant: m,
-                    onTap: () => _openDetail(ctx, m),
-                  );
+          ),
+          if (_showSearch)
+            Positioned(
+              left: 16,
+              right: 16,
+              bottom: 92,
+              child: _SearchPanel(
+                controller: _searchController,
+                onSubmit: () {
+                  provider.applySearch(_searchController.text);
+                  setState(() => _showSearch = false);
                 },
               ),
             ),
-          ],
-          const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.xxl)),
-        ],
-      ),
-    );
-  }
-
-  void _openDetail(BuildContext context, PublicMerchantUserModel merchant) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => UserPartnerDetailPage(merchant: merchant),
-      ),
-    );
-  }
-}
-
-class _SearchHint extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 46,
-      decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(AppRadius.xl),
-        border: Border.all(color: AppColors.border),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-      child: const Row(
-        children: [
-          Icon(Icons.search_rounded, color: AppColors.gray300, size: 20),
-          SizedBox(width: AppSpacing.sm),
-          Text(
-            'Shops durchsuchen…',
-            style: TextStyle(fontSize: 14, color: AppColors.gray300),
+          Positioned(
+            right: 16,
+            bottom: 92,
+            child: AnimatedSlide(
+              duration: const Duration(milliseconds: 180),
+              offset: _showActions ? Offset.zero : const Offset(0, 2),
+              child: AnimatedOpacity(
+                duration: const Duration(milliseconds: 180),
+                opacity: _showActions ? 1 : 0,
+                child: Column(
+                  children: [
+                    FloatingActionButton.small(
+                      heroTag: 'discoverSearch',
+                      onPressed: () => setState(() => _showSearch = !_showSearch),
+                      child: const Icon(Icons.search_rounded),
+                    ),
+                    const SizedBox(height: 10),
+                    FloatingActionButton.small(
+                      heroTag: 'discoverFilter',
+                      onPressed: () => _showFilters(context, provider),
+                      child: const Icon(Icons.tune_rounded),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -157,219 +156,424 @@ class _SearchHint extends StatelessWidget {
   }
 }
 
-class _FilterChips extends StatelessWidget {
-  const _FilterChips({required this.selected, required this.onSelected});
-
-  final String? selected;
-  final ValueChanged<String?> onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    final options = [null, ..._shopTypes];
-    return ListView.separated(
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-      itemCount: options.length,
-      separatorBuilder: (_, __) => const SizedBox(width: 8),
-      itemBuilder: (_, i) {
-        final value = options[i];
-        final label = value ?? 'Alle';
-        final isActive = value == selected;
-        return GestureDetector(
-          onTap: () => onSelected(isActive ? null : value),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-            decoration: BoxDecoration(
-              color: isActive ? AppColors.black : AppColors.white,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: isActive ? AppColors.black : AppColors.border,
-              ),
-            ),
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: isActive ? AppColors.white : AppColors.gray700,
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _MapSection extends StatelessWidget {
-  const _MapSection({required this.merchants});
+class _StoriesBar extends StatefulWidget {
+  const _StoriesBar({required this.merchants, required this.opacity});
 
   final List<PublicMerchantUserModel> merchants;
+  final double opacity;
 
-  LatLng get _center {
-    if (merchants.isEmpty) return const LatLng(52.52, 13.405);
-    final avgLat = merchants.map((m) => m.lat!).reduce((a, b) => a + b) / merchants.length;
-    final avgLng = merchants.map((m) => m.lng!).reduce((a, b) => a + b) / merchants.length;
-    return LatLng(avgLat, avgLng);
+  @override
+  State<_StoriesBar> createState() => _StoriesBarState();
+}
+
+class _StoriesBarState extends State<_StoriesBar> {
+  final _controller = ScrollController();
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _start();
+  }
+
+  @override
+  void didUpdateWidget(covariant _StoriesBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.merchants.length != widget.merchants.length) {
+      _start();
+    }
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _start() {
+    _timer?.cancel();
+    _timer = Timer.periodic(const Duration(milliseconds: 90), (_) {
+      if (!_controller.hasClients || widget.merchants.length < 2) return;
+      final next = _controller.offset + 0.45;
+      if (next >= _controller.position.maxScrollExtent) {
+        _controller.jumpTo(0);
+      } else {
+        _controller.jumpTo(next);
+      }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 220,
-      margin: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(AppRadius.large),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.black.withOpacity(0.08),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      clipBehavior: Clip.hardEdge,
-      child: FlutterMap(
-        options: MapOptions(
-          initialCenter: _center,
-          initialZoom: merchants.isEmpty ? 12 : 13,
-          interactionOptions: const InteractionOptions(
-            flags: InteractiveFlag.pinchZoom | InteractiveFlag.drag,
-          ),
+    if (widget.merchants.isEmpty) return const SizedBox.shrink();
+    return Opacity(
+      opacity: widget.opacity,
+      child: SizedBox(
+        height: 106,
+        child: ListView.separated(
+          controller: _controller,
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          itemCount: widget.merchants.length,
+          separatorBuilder: (_, __) => const SizedBox(width: 12),
+          itemBuilder: (context, index) => _StoryBubble(merchant: widget.merchants[index]),
         ),
-        children: [
-          TileLayer(
-            urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-            userAgentPackageName: 'com.lokka.app',
-          ),
-          if (merchants.isNotEmpty)
-            MarkerLayer(
-              markers: merchants
-                  .map(
-                    (m) => Marker(
-                      point: LatLng(m.lat!, m.lng!),
-                      width: 36,
-                      height: 36,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: AppColors.mintStrong,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: AppColors.white, width: 2),
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppColors.black.withOpacity(0.2),
-                              blurRadius: 6,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: const Icon(
-                          Icons.store_rounded,
-                          size: 16,
-                          color: Colors.white,
-                        ),
+      ),
+    );
+  }
+}
+
+class _StoryBubble extends StatelessWidget {
+  const _StoryBubble({required this.merchant});
+
+  final PublicMerchantUserModel merchant;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(999),
+      onTap: () => context.push('/user/partners/${merchant.merchantId}', extra: merchant),
+      child: SizedBox(
+        width: 72,
+        child: Column(
+          children: [
+            Container(
+              width: 62,
+              height: 62,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: AppColors.mintSoft,
+                border: Border.all(color: AppColors.mintStrong, width: 2),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: merchant.logoUrl.isNotEmpty
+                  ? CachedNetworkImage(imageUrl: merchant.logoUrl, fit: BoxFit.cover)
+                  : Center(
+                      child: Text(
+                        _initials(merchant.shopName),
+                        style: const TextStyle(fontWeight: FontWeight.w800),
                       ),
                     ),
-                  )
-                  .toList(),
             ),
+            const SizedBox(height: 6),
+            Text(
+              merchant.shopName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FeedCard extends StatelessWidget {
+  const _FeedCard({required this.item});
+
+  final DiscoverFeedItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    final post = item.post;
+    final merchant = item.merchant;
+    final provider = context.read<UserDiscoverProvider>();
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.xl),
+        boxShadow: AppShadows.card,
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(14),
+            child: Row(
+              children: [
+                _Logo(url: merchant.logoUrl, name: merchant.shopName, size: 38),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(merchant.shopName, style: const TextStyle(fontWeight: FontWeight.w800)),
+                      Text(
+                        [merchant.area, merchant.shopType].where((v) => v.isNotEmpty).join(' · '),
+                        style: const TextStyle(fontSize: 12, color: AppColors.gray500),
+                      ),
+                    ],
+                  ),
+                ),
+                PopupMenuButton<String>(
+                  onSelected: (value) => _showInfoSheet(context, value),
+                  itemBuilder: (context) => const [
+                    PopupMenuItem(value: 'report', child: Text('Beitrag melden')),
+                    PopupMenuItem(value: 'why', child: Text('Warum sehe ich das?')),
+                    PopupMenuItem(value: 'share', child: Text('Teilen')),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          Stack(
+            children: [
+              AspectRatio(
+                aspectRatio: 1.08,
+                child: CachedNetworkImage(
+                  imageUrl: post.imageUrl,
+                  fit: BoxFit.cover,
+                  placeholder: (_, __) => Container(color: AppColors.gray100),
+                  errorWidget: (_, __, ___) => Container(color: AppColors.gray100),
+                ),
+              ),
+              Positioned(
+                top: 12,
+                right: 12,
+                child: _Badge(label: feedTypeLabel(post.type)),
+              ),
+              Positioned(
+                bottom: 12,
+                right: 12,
+                child: _LikeButton(
+                  liked: item.isLiked,
+                  onTap: () async {
+                    try {
+                      await provider.toggleLike(item);
+                    } catch (_) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Bitte einloggen')),
+                      );
+                    }
+                  },
+                ),
+              ),
+            ],
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        post.title,
+                        style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900),
+                      ),
+                    ),
+                    if (item.averageRating != null)
+                      Text('★ ${item.averageRating!.toStringAsFixed(1)}')
+                    else
+                      const Text('Neu', style: TextStyle(color: AppColors.gray500)),
+                  ],
+                ),
+                if (post.subtitle.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(post.subtitle, style: const TextStyle(fontWeight: FontWeight.w600)),
+                ],
+                if (post.description.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    post.description,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: AppColors.gray700, height: 1.45),
+                  ),
+                ],
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: () async {
+                      await provider.incrementOpen(post.postId);
+                      if (context.mounted) {
+                        context.push('/user/feed/${post.postId}', extra: post);
+                      }
+                    },
+                    icon: const Icon(Icons.arrow_forward_rounded, size: 17),
+                    label: const Text('Mehr lesen'),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
 }
 
-class _MerchantListTile extends StatelessWidget {
-  const _MerchantListTile({required this.merchant, required this.onTap});
+class _SearchPanel extends StatelessWidget {
+  const _SearchPanel({required this.controller, required this.onSubmit});
 
-  final PublicMerchantUserModel merchant;
-  final VoidCallback onTap;
+  final TextEditingController controller;
+  final VoidCallback onSubmit;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        decoration: BoxDecoration(
-          color: AppColors.white,
-          borderRadius: BorderRadius.circular(AppRadius.medium),
-          border: Border.all(color: AppColors.border),
+    return Material(
+      elevation: 12,
+      borderRadius: BorderRadius.circular(999),
+      color: AppColors.surface.withOpacity(0.96),
+      child: TextField(
+        controller: controller,
+        textInputAction: TextInputAction.search,
+        onSubmitted: (_) => onSubmit(),
+        decoration: InputDecoration(
+          hintText: 'Titel, Shop, Kategorie oder Area',
+          prefixIcon: const Icon(Icons.search_rounded),
+          suffixIcon: IconButton(
+            onPressed: onSubmit,
+            icon: const Icon(Icons.check_rounded),
+          ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(999),
+            borderSide: BorderSide.none,
+          ),
         ),
-        child: Row(
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: AppColors.mintSoft,
-                borderRadius: BorderRadius.circular(12),
+      ),
+    );
+  }
+}
+
+void _showFilters(BuildContext context, UserDiscoverProvider provider) {
+  final city = TextEditingController(text: provider.city);
+  var radius = provider.radius;
+  var area = provider.area;
+  var shopType = provider.shopType;
+  var openNow = provider.openNow;
+  var sort = provider.sort;
+
+  showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setState) => Padding(
+        padding: EdgeInsets.fromLTRB(20, 0, 20, 20 + MediaQuery.of(context).viewInsets.bottom),
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text('Filter', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+              const SizedBox(height: 16),
+              TextField(
+                controller: city,
+                decoration: const InputDecoration(labelText: 'Ort'),
               ),
-              child: const Icon(
-                Icons.store_rounded,
-                color: AppColors.mintStrong,
-                size: 24,
+              const SizedBox(height: 16),
+              _ChipGroup(
+                title: 'Umkreis',
+                options: const ['1 km', '3 km', '5 km', '10 km', '25 km', 'Egal'],
+                selected: radius,
+                onSelected: (value) => setState(() => radius = value),
               ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              _ChipGroup(
+                title: 'Area',
+                options: provider.areas,
+                selected: area,
+                onSelected: (value) => setState(() => area = value == area ? null : value),
+              ),
+              _ChipGroup(
+                title: 'Kategorie',
+                options: provider.shopTypes,
+                selected: shopType,
+                onSelected: (value) => setState(() => shopType = value == shopType ? null : value),
+              ),
+              SwitchListTile(
+                value: openNow,
+                onChanged: (value) => setState(() => openNow = value),
+                title: const Text('Jetzt geöffnet'),
+              ),
+              SegmentedButton<DiscoverSort>(
+                segments: const [
+                  ButtonSegment(value: DiscoverSort.hottest, label: Text('Hottest')),
+                  ButtonSegment(value: DiscoverSort.newest, label: Text('Neueste')),
+                ],
+                selected: {sort},
+                onSelectionChanged: (value) => setState(() => sort = value.first),
+              ),
+              const SizedBox(height: 20),
+              Row(
                 children: [
-                  Text(
-                    merchant.shopName,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.black,
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () {
+                        provider.resetFilters();
+                        context.pop();
+                      },
+                      child: const Text('Zurücksetzen'),
                     ),
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    [merchant.shopType, merchant.area]
-                        .where((s) => s.isNotEmpty)
-                        .join(' · '),
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.gray500,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: () {
+                        provider.applyFilters(
+                          city: city.text,
+                          radius: radius,
+                          area: area,
+                          shopType: shopType,
+                          openNow: openNow,
+                          sort: sort,
+                        );
+                        context.pop();
+                      },
+                      child: const Text('Anwenden'),
                     ),
                   ),
                 ],
               ),
-            ),
-            const Icon(Icons.chevron_right_rounded, color: AppColors.gray300),
-          ],
+            ],
+          ),
         ),
       ),
-    );
-  }
+    ),
+  );
 }
 
-class _EmptyDiscoverView extends StatelessWidget {
-  const _EmptyDiscoverView();
+class _ChipGroup extends StatelessWidget {
+  const _ChipGroup({
+    required this.title,
+    required this.options,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  final String title;
+  final List<String> options;
+  final String? selected;
+  final ValueChanged<String> onSelected;
 
   @override
   Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.all(AppSpacing.xxl),
+    if (options.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.explore_off_rounded, size: 56, color: AppColors.gray300),
-          SizedBox(height: AppSpacing.md),
-          Text(
-            'Noch keine Shops verfügbar',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: AppColors.gray500,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          SizedBox(height: 6),
-          Text(
-            'Neue Partner kommen bald.',
-            style: TextStyle(fontSize: 13, color: AppColors.gray300),
+          Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: options
+                .map(
+                  (option) => ChoiceChip(
+                    label: Text(option),
+                    selected: selected == option,
+                    onSelected: (_) => onSelected(option),
+                  ),
+                )
+                .toList(),
           ),
         ],
       ),
@@ -377,27 +581,136 @@ class _EmptyDiscoverView extends StatelessWidget {
   }
 }
 
-class _ErrorView extends StatelessWidget {
-  const _ErrorView();
+void _showInfoSheet(BuildContext context, String value) {
+  final text = switch (value) {
+    'report' => 'Danke. Diese Funktion wird bald vollständig aktiviert.',
+    'why' =>
+      'Du siehst diesen Beitrag, weil er zu deiner Stadt, deinen Filtern und beliebten lokalen Angeboten passt.',
+    _ => 'Teilen kommt bald.',
+  };
+  showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    builder: (context) => Padding(
+      padding: const EdgeInsets.all(24),
+      child: Text(text),
+    ),
+  );
+}
+
+class _Logo extends StatelessWidget {
+  const _Logo({required this.url, required this.name, required this.size});
+
+  final String url;
+  final String name;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: const BoxDecoration(color: AppColors.mintSoft, shape: BoxShape.circle),
+      clipBehavior: Clip.antiAlias,
+      child: url.isNotEmpty
+          ? CachedNetworkImage(imageUrl: url, fit: BoxFit.cover)
+          : Center(child: Text(_initials(name))),
+    );
+  }
+}
+
+class _Badge extends StatelessWidget {
+  const _Badge({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppColors.black.withOpacity(0.82),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(label, style: const TextStyle(color: AppColors.white, fontSize: 12)),
+    );
+  }
+}
+
+class _LikeButton extends StatelessWidget {
+  const _LikeButton({required this.liked, required this.onTap});
+
+  final bool liked;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton.filled(
+      onPressed: onTap,
+      style: IconButton.styleFrom(backgroundColor: AppColors.white.withOpacity(0.92)),
+      icon: Icon(
+        liked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+        color: liked ? Colors.redAccent : AppColors.black,
+      ),
+    );
+  }
+}
+
+class _LocationNotice extends StatelessWidget {
+  const _LocationNotice();
 
   @override
   Widget build(BuildContext context) {
     return const Padding(
-      padding: EdgeInsets.all(AppSpacing.xl),
-      child: Column(
-        children: [
-          Icon(Icons.wifi_off_rounded, size: 48, color: AppColors.gray300),
-          SizedBox(height: AppSpacing.md),
-          Text(
-            'Laden fehlgeschlagen',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: AppColors.gray700,
-            ),
-          ),
-        ],
-      ),
+      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      child: Text('Standort nicht aktiv. Wir zeigen dir Frankfurt.'),
     );
   }
+}
+
+class _EmptyState extends StatelessWidget {
+  const _EmptyState();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(child: Text('Noch keine Beiträge verfügbar.'));
+  }
+}
+
+class _ErrorState extends StatelessWidget {
+  const _ErrorState();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(child: Text('Entdecken konnte nicht geladen werden.'));
+  }
+}
+
+String _initials(String value) {
+  final parts = value.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+  if (parts.isEmpty) return 'L';
+  if (parts.length == 1) return parts.first.characters.take(2).toString().toUpperCase();
+  return '${parts.first.characters.first}${parts.last.characters.first}'.toUpperCase();
+}
+
+String feedTypeLabel(String type) {
+  const labels = {
+    'offer': 'Angebot',
+    'onePlusOneFree': '1+1 Gratis',
+    'buyOneGetOneFree': 'Kauf 1, bekomme 1',
+    'twoPlusOneFree': '2+1 Gratis',
+    'buyTwoGetOneFree': 'Kauf 2, bekomme 1',
+    'categoryDiscountPercent': 'Prozent-Rabatt',
+    'categoryDiscountFixed': 'Rabatt',
+    'happyHour': 'Happy Hour',
+    'quickSell': 'Schnell weg',
+    'rescueMe': 'Rette mich',
+    'news': 'Neuigkeit',
+    'newProduct': 'Neue Ware',
+    'info': 'Info',
+    'communityEvent': 'Event',
+    'hiring': 'Team gesucht',
+    'sponsoredSpot': 'Sponsored',
+  };
+  return labels[type] ?? type;
 }

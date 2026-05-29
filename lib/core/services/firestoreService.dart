@@ -93,7 +93,7 @@ class FirestoreService {
     if (cleaned.isEmpty) return;
 
     await setDocument('${FirebasePaths.chooser}/${FirebasePaths.shopTypes}', {
-      'values': FieldValue.arrayUnion([cleaned]),
+      'name': FieldValue.arrayUnion([cleaned]),
       'updatedAt': FieldValue.serverTimestamp(),
     });
   }
@@ -102,7 +102,7 @@ class FirestoreService {
     final data = await readDocument('${FirebasePaths.chooser}/$documentId');
     if (data == null) return [];
 
-    final raw = data['values'] ?? data['items'] ?? data[documentId];
+    final raw = data['name'] ?? data['values'] ?? data['items'] ?? data[documentId];
     if (raw is Iterable) {
       return raw.map((item) => item.toString()).where((item) => item.trim().isNotEmpty).toList();
     }

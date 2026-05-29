@@ -20,6 +20,7 @@ class FirebasePaths {
   static const auditLogs = 'auditLogs';
   static const riskEvents = 'riskEvents';
   static const supportTickets = 'supportTickets';
+  static const merchantInvites = 'merchantInvites';
   static const devChecks = 'devChecks';
 
   static const openingHours = 'openingHours';
@@ -33,6 +34,7 @@ class FirebasePaths {
   static const coupons = 'coupons';
   static const campaigns = 'campaigns';
   static const orders = 'orders';
+  static const items = 'items';
   static const menuItems = 'menuItems';
   static const itemCategories = 'itemCategories';
   static const tables = 'tables';

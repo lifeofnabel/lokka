@@ -106,7 +106,10 @@ class AuthProvider extends ChangeNotifier {
     required String email,
     required String password,
     required String phone,
-    required String address,
+    required String street,
+    required String houseNumber,
+    required String postalCode,
+    required String city,
     required String shopType,
     required String area,
     String? customShopType,
@@ -125,7 +128,10 @@ class AuthProvider extends ChangeNotifier {
         lastName: lastName,
         email: email,
         phone: phone,
-        address: address,
+        street: street,
+        houseNumber: houseNumber,
+        postalCode: postalCode,
+        city: city,
         shopType: shopType,
         area: area,
         customShopType: customShopType,
@@ -187,7 +193,10 @@ class AuthProvider extends ChangeNotifier {
     required String firstName,
     required String lastName,
     required String phone,
-    required String address,
+    required String street,
+    required String houseNumber,
+    required String postalCode,
+    required String city,
     required String shopType,
     required String area,
     String? customShopType,
@@ -204,7 +213,10 @@ class AuthProvider extends ChangeNotifier {
         lastName: lastName,
         email: user.email ?? '',
         phone: phone,
-        address: address,
+        street: street,
+        houseNumber: houseNumber,
+        postalCode: postalCode,
+        city: city,
         shopType: shopType,
         area: area,
         customShopType: customShopType,
@@ -233,6 +245,20 @@ class AuthProvider extends ChangeNotifier {
     return user.emailVerified;
   }
 
+  Future<AuthDestination?> reloadVerifyAndResolveDestination() async {
+    return _run<AuthDestination?>(() async {
+      final user = await _authService.reloadCurrentUser();
+      if (user == null) {
+        throw const AuthFlowException('Bitte melde dich erneut an.');
+      }
+      if (!user.emailVerified) {
+        return null;
+      }
+      await _firestoreService.updateEmailVerified(user.uid, true);
+      return _destinationForUser(user.uid);
+    });
+  }
+
   Future<void> resetPassword(String email) {
     return _runVoid(() async {
       await _authService.sendPasswordResetEmail(email);
@@ -242,9 +268,28 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> signOut() => _authService.signOut();
 
-  Future<List<String>> loadAreas() => _firestoreService.loadChooserAreas();
+  Future<List<String>> loadAreas() async {
+    try {
+      final values = await _firestoreService.loadChooserAreas();
+      if (values.isNotEmpty) return values;
+    } catch (_) {}
+    return const [
+      'Westend',
+      'Ostend',
+      'Innenstadt',
+      'Bahnhofsviertel',
+      'Sachsenhausen',
+      'Bornheim',
+    ];
+  }
 
-  Future<List<String>> loadShopTypes() => _firestoreService.loadChooserShopTypes();
+  Future<List<String>> loadShopTypes() async {
+    try {
+      final values = await _firestoreService.loadChooserShopTypes();
+      if (values.isNotEmpty) return values;
+    } catch (_) {}
+    return const ['Food', 'Cafe', 'Kiosk', 'Beauty', 'Barber', 'Fitness', 'Retail', 'Service'];
+  }
 
   Future<AuthDestination> roleGateDestination() async {
     final user = _authService.currentUser;
@@ -282,7 +327,10 @@ class AuthProvider extends ChangeNotifier {
     required String lastName,
     required String email,
     required String phone,
-    required String address,
+    required String street,
+    required String houseNumber,
+    required String postalCode,
+    required String city,
     required String shopType,
     required String area,
     String? customShopType,
@@ -292,6 +340,10 @@ class AuthProvider extends ChangeNotifier {
     final cleanedShopType = (customShopType ?? '').trim().isNotEmpty
         ? customShopType!.trim()
         : shopType.trim();
+    final address = [
+      '${street.trim()} ${houseNumber.trim()}'.trim(),
+      '${postalCode.trim()} ${city.trim()}'.trim(),
+    ].where((part) => part.isNotEmpty).join(', ');
 
     return _firestoreService.createMerchantProfile(
       uid: uid,
@@ -322,8 +374,12 @@ class AuthProvider extends ChangeNotifier {
         'email': email.trim(),
         'emailLowercase': email.trim().toLowerCase(),
         'phone': phone.trim(),
-        'address': address.trim(),
-        'city': '',
+        'street': street.trim(),
+        'houseNumber': houseNumber.trim(),
+        'postalCode': postalCode.trim(),
+        'city': city.trim(),
+        'address': address,
+        'fullAddress': address,
         'area': area.trim(),
         'country': 'Deutschland',
         'shopType': cleanedShopType,
@@ -345,7 +401,12 @@ class AuthProvider extends ChangeNotifier {
         'description': '',
         'area': area.trim(),
         'shopType': cleanedShopType,
-        'address': address.trim(),
+        'street': street.trim(),
+        'houseNumber': houseNumber.trim(),
+        'postalCode': postalCode.trim(),
+        'city': city.trim(),
+        'address': address,
+        'fullAddress': address,
         'phone': phone.trim(),
         'logoUrl': '',
         'coverUrl': '',
