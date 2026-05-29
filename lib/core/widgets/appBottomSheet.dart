@@ -7,7 +7,12 @@ class AppBottomSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return child ?? const SizedBox.shrink();
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: child ?? const SizedBox.shrink(),
+      ),
+    );
   }
 }
 

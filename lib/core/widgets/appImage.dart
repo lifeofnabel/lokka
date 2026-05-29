@@ -12,8 +12,17 @@ class AppImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (imageUrl.isEmpty) {
-      return const SizedBox.shrink();
+      return Container(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        alignment: Alignment.center,
+        child: const Icon(Icons.image_outlined),
+      );
     }
-    return CachedNetworkImage(imageUrl: imageUrl);
+    return CachedNetworkImage(
+      imageUrl: imageUrl,
+      fit: BoxFit.cover,
+      errorWidget: (_, __, ___) => const Icon(Icons.broken_image_outlined),
+      placeholder: (_, __) => const Center(child: CircularProgressIndicator()),
+    );
   }
 }

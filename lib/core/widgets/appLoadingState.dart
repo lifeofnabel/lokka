@@ -7,7 +7,7 @@ class AppLoadingState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return child ?? const SizedBox.shrink();
+    return Center(child: child ?? const CircularProgressIndicator());
   }
 }
 

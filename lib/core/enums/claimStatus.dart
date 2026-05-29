@@ -1,5 +1,5 @@
 enum ClaimStatus {
-  loading,
-  success,
-  error,
+  approved,
+  rejected,
+  pending,
 }

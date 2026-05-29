@@ -1,1 +1,56 @@
-{"flutter":{"platforms":{"android":{"default":{"projectId":"lokka-069","appId":"1:715791241789:android:11e90b85d6f9980ffd9054","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"lokka-069","configurations":{"android":"1:715791241789:android:11e90b85d6f9980ffd9054","ios":"1:715791241789:ios:4c34d5ff8dae22b6fd9054","web":"1:715791241789:web:81b4eb242560c7d7fd9054"}}}}}}
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "lokka-069",
+          "appId": "1:715791241789:android:11e90b85d6f9980ffd9054",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "lokka-069",
+          "configurations": {
+            "android": "1:715791241789:android:11e90b85d6f9980ffd9054",
+            "ios": "1:715791241789:ios:4c34d5ff8dae22b6fd9054",
+            "web": "1:715791241789:web:81b4eb242560c7d7fd9054"
+          }
+        }
+      }
+    }
+  },
+  "firestore": {
+    "database": "(default)",
+    "location": "eur3",
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "hosting": {
+    "public": "public",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  },
+  "database": {
+    "rules": "database.rules.json"
+  },
+  "auth": {
+    "providers": {
+      "anonymous": true,
+      "emailPassword": true,
+      "googleSignIn": {
+        "oAuthBrandDisplayName": "Lokka - Local Deals & Loyalty",
+        "supportEmail": "nabell.321@gmail.com"
+      }
+    }
+  }
+}

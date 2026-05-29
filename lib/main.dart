@@ -7,12 +7,31 @@ import 'firebase_options.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await dotenv.load(fileName: '.env', isOptional: true);
 
-  // Run `flutterfire configure` again whenever Firebase apps or platforms change.
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
+  Object? startupError;
+  StackTrace? startupStackTrace;
+
+  try {
+    await dotenv.load(fileName: '.env', isOptional: true);
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  } catch (error, stackTrace) {
+    startupError = error;
+    startupStackTrace = stackTrace;
+    FlutterError.reportError(
+      FlutterErrorDetails(
+        exception: error,
+        stack: stackTrace,
+        library: 'lokka startup',
+      ),
+    );
+  }
+
+  runApp(
+    App(
+      startupError: startupError,
+      startupStackTrace: startupStackTrace,
+    ),
   );
-
-  runApp(const App());
 }

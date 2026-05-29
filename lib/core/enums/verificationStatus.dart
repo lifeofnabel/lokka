@@ -1,5 +1,7 @@
 enum VerificationStatus {
   pending,
-  verified,
+  approved,
   rejected,
+  blocked,
+  paused,
 }

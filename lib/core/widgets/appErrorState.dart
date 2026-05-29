@@ -7,7 +7,7 @@ class AppErrorState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return child ?? const SizedBox.shrink();
+    return Center(child: child ?? const Text('Ein Fehler ist aufgetreten.'));
   }
 }
 

@@ -1,6 +1,156 @@
-﻿class UserWalletService {
-  const UserWalletService();
+import 'dart:math';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:lokka/core/constants/firebasePaths.dart';
+import 'package:lokka/core/services/authService.dart';
+import 'package:lokka/core/services/firestoreService.dart';
+import 'package:lokka/features/user/discover/models/publicMerchantUserModel.dart';
+import '../models/walletCardModel.dart';
+import '../models/stampProgressModel.dart';
+import '../models/pointsProgressModel.dart';
+import '../models/couponModel.dart';
+import '../models/availableRewardModel.dart';
 
-  Future<void> initialize() async {}
+class UserWalletService {
+  const UserWalletService({
+    required this.firestoreService,
+    required this.authService,
+  });
+
+  final FirestoreService firestoreService;
+  final AuthService authService;
+
+  String? get _uid => authService.currentUser?.uid;
+
+  Stream<List<WalletCardModel>> walletCardsStream() {
+    final uid = _uid;
+    if (uid == null) return Stream.value([]);
+    return firestoreService
+        .collection(
+            '${FirebasePaths.users}/$uid/${FirebasePaths.walletCards}')
+        .orderBy('joinedAt', descending: true)
+        .snapshots()
+        .map((snap) =>
+            snap.docs.map((d) => WalletCardModel.fromMap(d.data())).toList());
+  }
+
+  Future<bool> isInWallet(String merchantId) async {
+    final uid = _uid;
+    if (uid == null) return false;
+    final doc = await firestoreService.readDocument(
+      '${FirebasePaths.users}/$uid/${FirebasePaths.walletCards}/$merchantId',
+    );
+    return doc != null;
+  }
+
+  Future<void> addToWallet(PublicMerchantUserModel merchant) async {
+    final uid = _uid;
+    if (uid == null) return;
+
+    final prefix = _buildPrefix(merchant.shopName);
+    final number = _randomNumber();
+    final walletCode = '$prefix-$number';
+
+    await firestoreService.setDocument(
+      '${FirebasePaths.users}/$uid/${FirebasePaths.walletCards}/${merchant.merchantId}',
+      {
+        'merchantId': merchant.merchantId,
+        'merchantName': merchant.shopName,
+        'merchantLogoUrl': merchant.logoUrl,
+        'merchantArea': merchant.area,
+        'merchantShopType': merchant.shopType,
+        'walletCode': walletCode,
+        'walletNumber': number,
+        'prefix': prefix,
+        'joinedAt': FieldValue.serverTimestamp(),
+        'status': 'active',
+        'hasStampCards': false,
+        'hasPoints': false,
+        'hasCoupons': false,
+        'lastActivityAt': FieldValue.serverTimestamp(),
+      },
+      merge: false,
+    );
+  }
+
+  Stream<List<StampProgressModel>> stampProgressStream() {
+    final uid = _uid;
+    if (uid == null) return Stream.value([]);
+    return firestoreService
+        .collection(
+            '${FirebasePaths.users}/$uid/${FirebasePaths.stampProgress}')
+        .snapshots()
+        .map((snap) =>
+            snap.docs.map((d) => StampProgressModel.fromMap(d.data())).toList());
+  }
+
+  Stream<List<StampProgressModel>> stampProgressByMerchantStream(
+      String merchantId) {
+    final uid = _uid;
+    if (uid == null) return Stream.value([]);
+    return firestoreService
+        .collection(
+            '${FirebasePaths.users}/$uid/${FirebasePaths.stampProgress}')
+        .where('merchantId', isEqualTo: merchantId)
+        .snapshots()
+        .map((snap) =>
+            snap.docs.map((d) => StampProgressModel.fromMap(d.data())).toList());
+  }
+
+  Stream<List<PointsProgressModel>> pointsProgressStream() {
+    final uid = _uid;
+    if (uid == null) return Stream.value([]);
+    return firestoreService
+        .collection(
+            '${FirebasePaths.users}/$uid/${FirebasePaths.pointsProgress}')
+        .snapshots()
+        .map((snap) =>
+            snap.docs.map((d) => PointsProgressModel.fromMap(d.data())).toList());
+  }
+
+  Stream<PointsProgressModel?> pointsProgressByMerchantStream(
+      String merchantId) {
+    final uid = _uid;
+    if (uid == null) return Stream.value(null);
+    return firestoreService
+        .collection(
+            '${FirebasePaths.users}/$uid/${FirebasePaths.pointsProgress}')
+        .where('merchantId', isEqualTo: merchantId)
+        .limit(1)
+        .snapshots()
+        .map((snap) => snap.docs.isEmpty
+            ? null
+            : PointsProgressModel.fromMap(snap.docs.first.data()));
+  }
+
+  Stream<List<CouponModel>> couponsStream() {
+    final uid = _uid;
+    if (uid == null) return Stream.value([]);
+    return firestoreService
+        .collection('${FirebasePaths.users}/$uid/${FirebasePaths.coupons}')
+        .snapshots()
+        .map((snap) =>
+            snap.docs.map((d) => CouponModel.fromMap(d.data())).toList());
+  }
+
+  Stream<List<AvailableRewardModel>> availableRewardsStream() {
+    final uid = _uid;
+    if (uid == null) return Stream.value([]);
+    return firestoreService
+        .collection(
+            '${FirebasePaths.users}/$uid/${FirebasePaths.availableRewards}')
+        .snapshots()
+        .map((snap) =>
+            snap.docs.map((d) => AvailableRewardModel.fromMap(d.data())).toList());
+  }
+
+  String _buildPrefix(String shopName) {
+    final cleaned = shopName.replaceAll(RegExp(r'[^a-zA-Z]'), '');
+    if (cleaned.length >= 2) return cleaned.substring(0, 2).toUpperCase();
+    if (cleaned.length == 1) return cleaned.toUpperCase();
+    return shopName.substring(0, min(2, shopName.length)).toUpperCase();
+  }
+
+  String _randomNumber() {
+    return (10000 + Random().nextInt(90000)).toString();
+  }
 }
-

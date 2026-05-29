@@ -13,31 +13,55 @@ class AppTheme {
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
-      scaffoldBackgroundColor: AppColors.white,
+      scaffoldBackgroundColor: AppColors.background,
       colorScheme: const ColorScheme.light(
         primary: AppColors.black,
         onPrimary: AppColors.white,
-        secondary: AppColors.gray700,
-        onSecondary: AppColors.white,
+        secondary: AppColors.mintStrong,
+        onSecondary: AppColors.black,
         surface: AppColors.white,
         onSurface: AppColors.black,
-        error: AppColors.black,
+        error: Color(0xFFB3261E),
         onError: AppColors.white,
       ),
-      textTheme: textTheme,
+      textTheme: textTheme.apply(
+        bodyColor: AppColors.black,
+        displayColor: AppColors.black,
+      ),
+      appBarTheme: const AppBarTheme(
+        elevation: 0,
+        centerTitle: false,
+        backgroundColor: AppColors.background,
+        foregroundColor: AppColors.black,
+      ),
       cardTheme: CardThemeData(
         color: AppColors.white,
         elevation: 0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.medium),
-          side: const BorderSide(color: AppColors.gray100),
+          borderRadius: BorderRadius.circular(AppRadius.large),
+          side: const BorderSide(color: AppColors.border),
+        ),
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          backgroundColor: AppColors.black,
+          foregroundColor: AppColors.white,
+          minimumSize: const Size.fromHeight(54),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(999),
+          ),
+          textStyle: textTheme.labelLarge?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
         ),
       ),
       inputDecorationTheme: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(AppRadius.small),
-        borderSide: const BorderSide(color: AppColors.gray300),
+        borderRadius: BorderRadius.circular(AppRadius.medium),
+        borderSide: const BorderSide(color: AppColors.border),
       ).let(
         (border) => InputDecorationTheme(
+          filled: true,
+          fillColor: AppColors.white,
           border: border,
           enabledBorder: border,
           focusedBorder: border.copyWith(

@@ -1,20 +1,44 @@
-﻿class PointsProgressModel {
+class PointsProgressModel {
   const PointsProgressModel({
-    required this.id,
+    required this.merchantId,
+    required this.currentPoints,
+    required this.lifetimePoints,
+    required this.status,
+    this.systemId,
+    this.resetDay,
+    this.lastResetAt,
+    this.updatedAt,
   });
 
-  final String id;
+  final String merchantId;
+  final int currentPoints;
+  final int lifetimePoints;
+  final String status;
+  final String? systemId;
+  final int? resetDay;
+  final DateTime? lastResetAt;
+  final DateTime? updatedAt;
 
   factory PointsProgressModel.fromMap(Map<String, dynamic> map) {
     return PointsProgressModel(
-      id: map['id'] as String? ?? '',
+      merchantId: map['merchantId'] as String? ?? '',
+      currentPoints: map['currentPoints'] as int? ?? 0,
+      lifetimePoints: map['lifetimePoints'] as int? ?? 0,
+      status: map['status'] as String? ?? 'active',
+      systemId: map['systemId'] as String?,
+      resetDay: map['resetDay'] as int?,
+      lastResetAt: _tsToDate(map['lastResetAt']),
+      updatedAt: _tsToDate(map['updatedAt']),
     );
-  }
-
-  Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-    };
   }
 }
 
+DateTime? _tsToDate(dynamic v) {
+  if (v == null) return null;
+  if (v is DateTime) return v;
+  try {
+    return (v as dynamic).toDate() as DateTime;
+  } catch (_) {
+    return DateTime.tryParse(v.toString());
+  }
+}

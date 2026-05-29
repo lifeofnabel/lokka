@@ -37,10 +37,13 @@ dependencies:
   firebase_auth:
   firebase_core:
   flutter_dotenv:
+  flutter_map:
   go_router:
+  google_sign_in:
   google_fonts:
   http:
   image_picker:
+  latlong2:
   mobile_scanner:
   provider:
   qr_flutter:
@@ -70,6 +73,7 @@ flutter:
 
   assets:
     - .env
+    - assets/i18n/
 
   # To add assets to your application, add an assets section, like this:
   # assets:
