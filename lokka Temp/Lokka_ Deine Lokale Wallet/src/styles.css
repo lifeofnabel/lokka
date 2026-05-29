@@ -1,0 +1,116 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 24px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-soft: var(--primary-soft);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --shadow-soft: 0 6px 24px -8px color-mix(in oklab, var(--foreground) 10%, transparent);
+  --shadow-card: 0 20px 50px -24px color-mix(in oklab, var(--primary) 30%, transparent);
+  --shadow-glow: 0 30px 80px -30px color-mix(in oklab, var(--primary) 45%, transparent);
+  --gradient-mint: linear-gradient(135deg, oklch(0.93 0.06 175), oklch(0.88 0.09 168));
+  --gradient-hero: radial-gradient(ellipse at top, oklch(0.96 0.04 175) 0%, oklch(0.995 0.005 175) 60%);
+}
+
+:root {
+  --radius: 1.25rem;
+  --background: oklch(0.995 0.003 175);
+  --foreground: oklch(0.22 0.02 220);
+  --surface: oklch(0.98 0.008 175);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.22 0.02 220);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.22 0.02 220);
+  --primary: oklch(0.78 0.11 172);
+  --primary-foreground: oklch(0.2 0.03 200);
+  --primary-soft: oklch(0.94 0.05 172);
+  --secondary: oklch(0.97 0.008 200);
+  --secondary-foreground: oklch(0.25 0.02 220);
+  --muted: oklch(0.96 0.006 220);
+  --muted-foreground: oklch(0.5 0.02 220);
+  --accent: oklch(0.92 0.06 172);
+  --accent-foreground: oklch(0.25 0.03 200);
+  --destructive: oklch(0.63 0.2 25);
+  --destructive-foreground: oklch(0.99 0 0);
+  --border: oklch(0.92 0.01 220);
+  --input: oklch(0.92 0.01 220);
+  --ring: oklch(0.78 0.11 172);
+}
+
+.dark {
+  --background: oklch(0.18 0.02 220);
+  --foreground: oklch(0.98 0.005 175);
+  --card: oklch(0.22 0.02 220);
+  --card-foreground: oklch(0.98 0.005 175);
+  --primary: oklch(0.78 0.11 172);
+  --primary-foreground: oklch(0.2 0.03 200);
+  --muted: oklch(0.28 0.02 220);
+  --muted-foreground: oklch(0.7 0.02 220);
+  --border: oklch(1 0 0 / 10%);
+}
+
+@layer base {
+  * { border-color: var(--color-border); }
+  html { font-family: var(--font-sans); }
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-feature-settings: "ss01", "cv11";
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3, h4 { letter-spacing: -0.02em; font-weight: 700; }
+}
+
+@utility btn-primary {
+  display: inline-flex; align-items: center; justify-content: center;
+  gap: 0.5rem; padding: 0.95rem 1.6rem; border-radius: 9999px;
+  background-color: var(--color-primary); color: var(--color-primary-foreground);
+  font-weight: 600; font-size: 0.95rem;
+  box-shadow: var(--shadow-glow);
+  transition: transform .2s ease, box-shadow .2s ease, background-color .2s ease;
+}
+@utility btn-primary-hover {
+  background-color: oklch(0.74 0.12 172);
+  transform: translateY(-1px);
+}
+@utility btn-secondary {
+  display: inline-flex; align-items: center; justify-content: center;
+  gap: 0.5rem; padding: 0.85rem 1.4rem; border-radius: 9999px;
+  background-color: var(--color-card); color: var(--color-foreground);
+  border: 1px solid var(--color-border); font-weight: 500; font-size: 0.92rem;
+  transition: all .2s ease;
+}
+@utility glass-card {
+  background-color: color-mix(in oklab, var(--color-card) 75%, transparent);
+  backdrop-filter: blur(20px);
+  border: 1px solid color-mix(in oklab, var(--color-border) 60%, transparent);
+}

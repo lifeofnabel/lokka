@@ -1,0 +1,4 @@
+enum FeatureStatus {
+  enabled,
+  disabled,
+}
