@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import 'app/app.dart';
+import 'core/services/authService.dart';
 import 'firebase_options.dart';
 
 Future<void> main() async {
@@ -16,6 +17,7 @@ Future<void> main() async {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
+    await AuthService.configurePersistence();
   } catch (error, stackTrace) {
     startupError = error;
     startupStackTrace = stackTrace;

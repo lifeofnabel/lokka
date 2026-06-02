@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../../core/services/authService.dart';
 import '../../../core/services/firestoreService.dart';
+import '../../../core/services/languageService.dart';
 
 enum AuthDestination {
   userDiscover,
@@ -20,11 +21,14 @@ class AuthProvider extends ChangeNotifier {
   AuthProvider({
     required AuthService authService,
     required FirestoreService firestoreService,
+    required LanguageService languageService,
   })  : _authService = authService,
-        _firestoreService = firestoreService;
+        _firestoreService = firestoreService,
+        _languageService = languageService;
 
   final AuthService _authService;
   final FirestoreService _firestoreService;
+  final LanguageService _languageService;
 
   bool _isLoading = false;
   String? _error;
@@ -44,6 +48,7 @@ class AuthProvider extends ChangeNotifier {
         email: email,
         password: password,
       );
+      await _markLogin(credential.user!.uid, 'password');
       return _destinationForUser(credential.user!.uid);
     });
   }
@@ -58,9 +63,10 @@ class AuthProvider extends ChangeNotifier {
         password: password,
       );
       final uid = credential.user!.uid;
+      await _markLogin(uid, 'password');
       final user = await _firestoreService.getUserProfile(uid);
       if (user?['role'] != 'merchant') {
-        throw AuthFlowException('Dieses Konto ist kein Geschäftskonto.');
+        throw AuthFlowException(_text('auth.error.notMerchantAccount'));
       }
       return _destinationForUser(uid);
     });
@@ -92,6 +98,9 @@ class AuthProvider extends ChangeNotifier {
         'acceptedPrivacy': true,
         'marketingConsent': true,
         'isActive': true,
+        'lastLoginAt': FieldValue.serverTimestamp(),
+        'lastSeenAt': FieldValue.serverTimestamp(),
+        'lastAuthProvider': 'password',
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
@@ -149,6 +158,7 @@ class AuthProvider extends ChangeNotifier {
       final uid = credential.user!.uid;
       final profile = await _firestoreService.getUserProfile(uid);
       if (profile == null) return AuthDestination.chooseRole;
+      await _markLogin(uid, 'google');
       return _destinationForUser(uid);
     });
   }
@@ -161,10 +171,10 @@ class AuthProvider extends ChangeNotifier {
     return _run(() async {
       final user = _authService.currentUser;
       if (user == null) {
-        throw AuthFlowException('Bitte melde dich zuerst mit Google an.');
+        throw AuthFlowException(_text('auth.error.googleRequired'));
       }
       if (!acceptedTerms || !acceptedPrivacy || !marketingConsent) {
-        throw AuthFlowException('Bitte bestätige alle Zustimmungen.');
+        throw AuthFlowException(_text('auth.error.checks'));
       }
 
       final parts = _splitDisplayName(user.displayName ?? '');
@@ -181,6 +191,9 @@ class AuthProvider extends ChangeNotifier {
         'acceptedPrivacy': true,
         'marketingConsent': true,
         'isActive': true,
+        'lastLoginAt': FieldValue.serverTimestamp(),
+        'lastSeenAt': FieldValue.serverTimestamp(),
+        'lastAuthProvider': 'google',
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
@@ -204,7 +217,7 @@ class AuthProvider extends ChangeNotifier {
     return _run(() async {
       final user = _authService.currentUser;
       if (user == null) {
-        throw AuthFlowException('Bitte melde dich zuerst mit Google an.');
+        throw AuthFlowException(_text('auth.error.googleRequired'));
       }
       await _createMerchantDocuments(
         uid: user.uid,
@@ -221,6 +234,7 @@ class AuthProvider extends ChangeNotifier {
         area: area,
         customShopType: customShopType,
         emailVerified: user.emailVerified,
+        authProvider: 'google',
       );
       if ((customShopType ?? '').trim().isNotEmpty) {
         await _firestoreService.addShopTypeIfMissing(customShopType!);
@@ -232,7 +246,7 @@ class AuthProvider extends ChangeNotifier {
   Future<void> sendVerificationAgain() {
     return _runVoid(() async {
       await _authService.sendEmailVerification();
-      _message = 'Bestätigung wurde erneut gesendet.';
+      _message = _text('auth.message.verificationSent');
     });
   }
 
@@ -249,7 +263,7 @@ class AuthProvider extends ChangeNotifier {
     return _run<AuthDestination?>(() async {
       final user = await _authService.reloadCurrentUser();
       if (user == null) {
-        throw const AuthFlowException('Bitte melde dich erneut an.');
+        throw AuthFlowException(_text('auth.error.signInAgain'));
       }
       if (!user.emailVerified) {
         return null;
@@ -262,7 +276,7 @@ class AuthProvider extends ChangeNotifier {
   Future<void> resetPassword(String email) {
     return _runVoid(() async {
       await _authService.sendPasswordResetEmail(email);
-      _message = 'Wir haben dir eine Email zum Zurücksetzen gesendet.';
+      _message = _text('auth.reset.sent');
     });
   }
 
@@ -335,6 +349,7 @@ class AuthProvider extends ChangeNotifier {
     required String area,
     String? customShopType,
     bool emailVerified = false,
+    String authProvider = 'password',
   }) {
     final now = FieldValue.serverTimestamp();
     final cleanedShopType = (customShopType ?? '').trim().isNotEmpty
@@ -359,6 +374,9 @@ class AuthProvider extends ChangeNotifier {
         'acceptedPrivacy': true,
         'marketingConsent': true,
         'isActive': true,
+        'lastLoginAt': now,
+        'lastSeenAt': now,
+        'lastAuthProvider': authProvider,
         'createdAt': now,
         'updatedAt': now,
       },
@@ -450,15 +468,26 @@ class AuthProvider extends ChangeNotifier {
     if (error is FirebaseAuthException) {
       return switch (error.code) {
         'user-not-found' || 'wrong-password' || 'invalid-credential' =>
-          'Email oder Passwort ist nicht korrekt.',
-        'email-already-in-use' => 'Diese Email wird bereits verwendet.',
-        'weak-password' => 'Das Passwort muss mindestens 6 Zeichen haben.',
+          _text('auth.error.invalidCredentials'),
+        'email-already-in-use' => _text('auth.error.emailInUse'),
+        'weak-password' => _text('auth.error.password'),
         'popup-closed-by-user' || 'google-cancelled' =>
-          'Google Anmeldung wurde abgebrochen.',
-        _ => error.message ?? 'Anmeldung fehlgeschlagen.',
+          _text('auth.error.googleCancelled'),
+        _ => error.message ?? _text('auth.error.signInFailed'),
       };
     }
     return error.toString();
+  }
+
+  String _text(String key) => _languageService.text(key);
+
+  Future<void> _markLogin(String uid, String provider) {
+    return _firestoreService.updateUserSession(
+      uid: uid,
+      updateLastLogin: true,
+      updateLastSeen: true,
+      authProvider: provider,
+    );
   }
 }
 

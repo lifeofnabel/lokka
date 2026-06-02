@@ -6,13 +6,12 @@ import 'package:provider/provider.dart';
 
 import '../../../../core/services/authService.dart';
 import '../../../../core/services/firestoreService.dart';
+import '../../../../core/services/languageService.dart';
 import '../../../../core/theme/appColors.dart';
 import '../../../../core/theme/appRadius.dart';
 import '../../../../core/theme/appSpacing.dart';
 import '../providers/merchantDashboardProvider.dart';
 import '../services/merchantDashboardService.dart';
-import '../widgets/creditUsageCard.dart';
-import '../widgets/merchantCustomersPreviewCard.dart';
 import '../widgets/merchantFeedActionCard.dart';
 import '../widgets/merchantHeroCard.dart';
 import '../widgets/merchantModuleCard.dart';
@@ -42,6 +41,7 @@ class _MerchantDashboardView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<MerchantDashboardProvider>();
+    final texts = context.watch<LanguageService>();
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -51,9 +51,9 @@ class _MerchantDashboardView extends StatelessWidget {
             if (provider.isLoading) return const _LoadingDashboard();
             if (provider.error != null) {
               return _DashboardMessage(
-                title: 'Dashboard konnte nicht geladen werden.',
+                title: texts.text('merchant.dashboard.loadErrorTitle'),
                 message: provider.error!,
-                actionLabel: 'Erneut versuchen',
+                actionLabel: texts.text('common.refresh'),
                 onAction: provider.load,
               );
             }
@@ -61,9 +61,9 @@ class _MerchantDashboardView extends StatelessWidget {
             final data = provider.data;
             if (data == null) {
               return _DashboardMessage(
-                title: 'Geschaeftsdaten nicht gefunden',
-                message: 'Melde dich ab und pruefe, ob dein Haendlerkonto vollstaendig angelegt wurde.',
-                actionLabel: 'Abmelden',
+                title: texts.text('merchant.dashboard.noMerchantTitle'),
+                message: texts.text('merchant.dashboard.noMerchantMessage'),
+                actionLabel: texts.text('auth.signOut'),
                 onAction: () async {
                   await provider.signOut();
                   if (context.mounted) context.go('/');
@@ -77,40 +77,46 @@ class _MerchantDashboardView extends StatelessWidget {
                 MerchantHeroCard(
                   merchant: data.merchant,
                   metrics: data.metrics,
-                  onShopTap: () => _showComingSoonSheet(context, title: 'Shop ansehen'),
-                  onSettingsTap: () => _showComingSoonSheet(context, title: 'Funktionen verwalten'),
+                  weekCredits: data.weekCredits,
+                  hasBillingData: data.hasBillingData,
+                  onShopTap: () => _showComingSoonSheet(context, title: texts.text('merchant.dashboard.shopPreview')),
+                  onEditTap: () => context.push('/merchant/shop'),
+                  onBillingTap: () => context.push('/merchant/billing'),
+                  onCustomersTap: () => context.push('/merchant/customers'),
+                  onSettingsTap: () => context.push('/merchant/features'),
                   onTodayTap: () => _showTodaySheet(context, data),
                 ),
                 const SizedBox(height: AppSpacing.lg),
-                ScannerCard(onTap: () => _showComingSoonSheet(context, title: 'Scanner')),
+                ScannerCard(onTap: () => _showComingSoonSheet(context, title: texts.text('merchant.dashboard.scanner'))),
+                const SizedBox(height: AppSpacing.md),
+                _OrdersStrip(
+                  enabled: _ordersEnabled(data),
+                  onTap: () {
+                    if (_ordersEnabled(data)) {
+                      context.push('/merchant/orders');
+                    } else {
+                      _showDisabledSheet(context, title: texts.text('merchant.orders.title'));
+                    }
+                  },
+                ),
                 const SizedBox(height: AppSpacing.lg),
                 MerchantFeedActionCard(
-                  onCreateTap: () => _handleModuleTap(context, data, _moduleByKey('feedPosts')),
-                  onManageTap: () => _handleModuleTap(context, data, _moduleByKey('feedManage')),
+                  onCreateTap: () => context.push('/merchant/feed/create'),
+                  onManageTap: () => context.push('/merchant/feed/manage'),
                 ),
                 const SizedBox(height: AppSpacing.xl),
-                const _SectionTitle(
-                  title: 'Systeme',
-                  subtitle: 'Aktive Tools fuer dein lokales Geschaeft.',
+                _SectionTitle(
+                  title: texts.text('merchant.dashboard.systems'),
+                  subtitle: texts.text('merchant.dashboard.systemsTip'),
                 ),
                 const SizedBox(height: AppSpacing.md),
                 _ModuleGrid(
                   data: data,
                   modules: _mainModules,
-                  onModuleTap: (module) => _handleModuleTap(context, data, module),
-                ),
-                const SizedBox(height: AppSpacing.lg),
-                CreditUsageCard(
-                  weekCredits: data.weekCredits,
-                  hasBillingData: data.hasBillingData,
+                  onModuleTap: (module) => _handleModuleTap(context, data, module, texts),
                 ),
                 const SizedBox(height: AppSpacing.md),
-                MerchantCustomersPreviewCard(
-                  customersCount: data.metrics.customers,
-                  onTap: () => _showComingSoonSheet(context, title: 'Kunden ansehen'),
-                ),
-                const SizedBox(height: AppSpacing.md),
-                _MoreToolsLauncher(onTap: () => _showMoreToolsSheet(context)),
+                _MoreToolsLauncher(onTap: () => _showMoreToolsSheet(context, data)),
                 const SizedBox(height: AppSpacing.lg),
                 TextButton.icon(
                   onPressed: () async {
@@ -118,7 +124,7 @@ class _MerchantDashboardView extends StatelessWidget {
                     if (context.mounted) context.go('/');
                   },
                   icon: const Icon(Icons.logout_rounded),
-                  label: const Text('Abmelden'),
+                  label: Text(texts.text('auth.signOut')),
                   style: TextButton.styleFrom(
                     foregroundColor: AppColors.gray500,
                     textStyle: const TextStyle(fontWeight: FontWeight.w800),
@@ -155,6 +161,61 @@ class _SectionTitle extends StatelessWidget {
   }
 }
 
+class _OrdersStrip extends StatelessWidget {
+  const _OrdersStrip({required this.enabled, required this.onTap});
+
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final texts = context.watch<LanguageService>();
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(AppRadius.large),
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(AppRadius.large),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: enabled ? AppColors.gray50 : AppColors.border,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Icon(
+                Icons.receipt_long_rounded,
+                color: enabled ? AppColors.black : AppColors.gray500,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Text(
+                texts.text('merchant.orders.title'),
+                style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900),
+              ),
+            ),
+            Tooltip(
+              message: enabled ? texts.text('merchant.orders.tooltip') : texts.text('merchant.dashboard.enableInFeatures'),
+              child: Icon(
+                enabled ? Icons.arrow_forward_ios_rounded : Icons.lock_outline_rounded,
+                size: 16,
+                color: AppColors.gray500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _ModuleGrid extends StatelessWidget {
   const _ModuleGrid({
     required this.data,
@@ -168,6 +229,7 @@ class _ModuleGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final texts = context.watch<LanguageService>();
     return LayoutBuilder(
       builder: (context, constraints) {
         final isWide = constraints.maxWidth >= 620;
@@ -184,11 +246,11 @@ class _ModuleGrid extends StatelessWidget {
           itemBuilder: (context, index) {
             final module = modules[index];
             return MerchantModuleCard(
-              title: module.title,
-              description: module.description,
+              title: _moduleTitle(texts, module),
+              description: _moduleDescription(texts, module),
               icon: module.icon,
               isActive: _isModuleActive(data, module),
-              badge: module.badge,
+              badge: module.badgeKey == null ? null : texts.text(module.badgeKey!),
               onTap: () => onModuleTap(module),
             );
           },
@@ -205,6 +267,7 @@ class _MoreToolsLauncher extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final texts = context.watch<LanguageService>();
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(AppRadius.xl),
@@ -227,13 +290,19 @@ class _MoreToolsLauncher extends StatelessWidget {
               child: const Icon(Icons.auto_awesome_motion_rounded),
             ),
             const SizedBox(width: AppSpacing.md),
-            const Expanded(
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Mehr Tools', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
-                  SizedBox(height: 3),
-                  Text('Kategorien, Artikel, Shopdaten und Support.', style: TextStyle(color: AppColors.gray500)),
+                  Text(
+                    texts.text('merchant.dashboard.management'),
+                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    texts.text('merchant.dashboard.managementSubtitle'),
+                    style: const TextStyle(color: AppColors.gray500),
+                  ),
                 ],
               ),
             ),
@@ -311,72 +380,93 @@ class _DashboardMessage extends StatelessWidget {
 
 class _DashboardModule {
   const _DashboardModule({
-    required this.title,
-    required this.description,
+    required this.titleKey,
+    required this.descriptionKey,
     required this.icon,
     required this.key,
     this.defaultActive = false,
-    this.badge,
+    this.badgeKey,
     this.comingSoon = false,
+    this.path,
   });
 
   final String key;
-  final String title;
-  final String description;
+  final String titleKey;
+  final String descriptionKey;
   final IconData icon;
   final bool defaultActive;
-  final String? badge;
+  final String? badgeKey;
   final bool comingSoon;
+  final String? path;
 }
 
 const _mainModules = [
-  _DashboardModule(key: 'orders', title: 'Bestellungen', description: 'Neue und offene Bestellungen.', icon: Icons.receipt_long_rounded, defaultActive: true),
-  _DashboardModule(key: 'stampCards', title: 'Stempel', description: 'Digitale Karten fuer Stammkunden.', icon: Icons.loyalty_rounded, defaultActive: true),
-  _DashboardModule(key: 'pointsSystems', title: 'Punkte', description: 'Belohnungen pro Einkauf.', icon: Icons.stars_rounded, defaultActive: true),
-  _DashboardModule(key: 'coupons', title: 'Gutscheine', description: 'Rabatte und Vorteile.', icon: Icons.confirmation_number_rounded, defaultActive: true),
-  _DashboardModule(key: 'menuCatalog', title: 'Katalog', description: 'Speisen, Artikel und Preise.', icon: Icons.menu_book_rounded, defaultActive: true),
-  _DashboardModule(key: 'tables', title: 'Tische', description: 'QR-Tische und Bereiche.', icon: Icons.table_bar_rounded, defaultActive: true),
-  _DashboardModule(key: 'campaigns', title: 'Gewinnspiel', description: 'Organizer fuer Aktionen.', icon: Icons.emoji_events_rounded, defaultActive: true, badge: 'Bald', comingSoon: true),
-  _DashboardModule(key: 'shiftPlanner', title: 'Schichtplan', description: 'Teamplanung vorbereiten.', icon: Icons.work_history_rounded, defaultActive: true, badge: 'Bald', comingSoon: true),
+  _DashboardModule(key: 'stampCards', titleKey: 'merchant.stamps.title', descriptionKey: 'merchant.stamps.tooltip', icon: Icons.loyalty_rounded, path: '/merchant/stamps'),
+  _DashboardModule(key: 'pointsSystems', titleKey: 'merchant.points.title', descriptionKey: 'merchant.points.tooltip', icon: Icons.stars_rounded, path: '/merchant/points'),
+  _DashboardModule(key: 'menuCatalog', titleKey: 'merchant.catalog.title', descriptionKey: 'merchant.catalog.tooltip', icon: Icons.menu_book_rounded, path: '/merchant/catalog'),
+  _DashboardModule(key: 'coupons', titleKey: 'merchant.coupons.title', descriptionKey: 'merchant.coupons.tooltip', icon: Icons.confirmation_number_rounded, path: '/merchant/coupons'),
+  _DashboardModule(key: 'campaigns', titleKey: 'merchant.campaigns.title', descriptionKey: 'merchant.campaigns.tooltip', icon: Icons.emoji_events_rounded, badgeKey: 'merchant.dashboard.soon', comingSoon: true, path: '/merchant/campaigns'),
+  _DashboardModule(key: 'shiftPlanner', titleKey: 'merchant.shifts.title', descriptionKey: 'merchant.shifts.tooltip', icon: Icons.work_history_rounded, badgeKey: 'merchant.dashboard.soon', comingSoon: true, path: '/merchant/shifts'),
 ];
 
 const _toolModules = [
-  _DashboardModule(key: 'itemCategories', title: 'Kategorien', description: 'Artikelgruppen', icon: Icons.category_rounded, defaultActive: true),
-  _DashboardModule(key: 'menuItems', title: 'Artikel', description: 'Produkte pflegen', icon: Icons.inventory_2_rounded, defaultActive: true),
-  _DashboardModule(key: 'settings', title: 'Shopdaten', description: 'Profil und Module', icon: Icons.tune_rounded, defaultActive: true),
-  _DashboardModule(key: 'support', title: 'Support', description: 'Hilfe anfragen', icon: Icons.support_agent_rounded, defaultActive: true),
-  _DashboardModule(key: 'invite', title: 'Einladen', description: 'Team oder Kunden', icon: Icons.person_add_alt_1_rounded, defaultActive: true),
-  _DashboardModule(key: 'feedManage', title: 'Feed', description: 'Aktionen verwalten', icon: Icons.dynamic_feed_rounded, defaultActive: true),
+  _DashboardModule(key: 'settings', titleKey: 'merchant.shop.title', descriptionKey: 'merchant.shop.tooltip', icon: Icons.tune_rounded, defaultActive: true),
+  _DashboardModule(key: 'support', titleKey: 'merchant.support.title', descriptionKey: 'merchant.support.subtitle', icon: Icons.support_agent_rounded, defaultActive: true),
+  _DashboardModule(key: 'invite', titleKey: 'merchant.invite.title', descriptionKey: 'merchant.invite.subtitle', icon: Icons.person_add_alt_1_rounded, defaultActive: true),
+  _DashboardModule(key: 'feedManage', titleKey: 'merchant.feedManage.title', descriptionKey: 'merchant.feedManage.tooltip', icon: Icons.dynamic_feed_rounded, defaultActive: true),
 ];
 
 _DashboardModule _moduleByKey(String key) {
   return [
     ..._mainModules,
     ..._toolModules,
-    const _DashboardModule(key: 'feedPosts', title: 'Neue Aktion', description: 'Aktion veroeffentlichen.', icon: Icons.add_rounded, defaultActive: true),
+    const _DashboardModule(key: 'feedPosts', titleKey: 'merchant.feedCreate.title', descriptionKey: 'merchant.feedCreate.tooltip', icon: Icons.add_rounded, defaultActive: true, path: '/merchant/feed/create'),
   ].firstWhere((module) => module.key == key);
 }
 
+String _moduleTitle(LanguageService texts, _DashboardModule module) => texts.text(module.titleKey);
+
+String _moduleDescription(LanguageService texts, _DashboardModule module) => texts.text(module.descriptionKey);
+
 bool _isModuleActive(MerchantDashboardData data, _DashboardModule module) {
+  if (module.key == 'feedPosts' || module.comingSoon) return true;
   return data.moduleActive[module.key] ?? module.defaultActive;
 }
 
-void _handleModuleTap(BuildContext context, MerchantDashboardData data, _DashboardModule module) {
+bool _ordersEnabled(MerchantDashboardData data) {
+  if (data.moduleActive['menuCatalog'] != true) return false;
+  return data.moduleActive['catalogOrderQrCashier'] == true ||
+      data.moduleActive['catalogOrderSendCashier'] == true ||
+      data.moduleActive['catalogTableOrders'] == true;
+}
+
+void _handleModuleTap(
+  BuildContext context,
+  MerchantDashboardData data,
+  _DashboardModule module,
+  LanguageService texts,
+) {
   if (!_isModuleActive(data, module)) {
-    _showDisabledSheet(context, title: module.title);
+    _showDisabledSheet(context, title: _moduleTitle(texts, module));
+    return;
+  }
+
+  if (module.path != null) {
+    context.push(module.path!);
     return;
   }
 
   _showComingSoonSheet(
     context,
-    title: module.title,
+    title: _moduleTitle(texts, module),
     message: module.comingSoon
-        ? 'Dieses Modul ist vorbereitet und wird bald vollstaendig verbunden.'
-        : 'Dieses Modul wird im naechsten Sprint verbunden.',
+        ? texts.text('merchant.dashboard.preparedSoon')
+        : texts.text('merchant.dashboard.notConnected'),
   );
 }
 
-void _showMoreToolsSheet(BuildContext context) {
+void _showMoreToolsSheet(BuildContext context, MerchantDashboardData data) {
+  final texts = context.read<LanguageService>();
   showModalBottomSheet<void>(
     context: context,
     showDragHandle: true,
@@ -391,18 +481,71 @@ void _showMoreToolsSheet(BuildContext context) {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text('Mehr Tools', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900)),
+          Text(texts.text('merchant.dashboard.management'), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900)),
           const SizedBox(height: 6),
-          const Text(
-            'Verwalte Sortiment, Shopdaten und Kommunikation an einem Ort.',
-            style: TextStyle(color: AppColors.gray700, fontWeight: FontWeight.w700),
+          Text(
+            texts.text('merchant.dashboard.managementSheetSubtitle'),
+            style: const TextStyle(color: AppColors.gray700, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: AppSpacing.md),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: _ToolSheetRow(
+              tool: _catalogToolEntry,
+              enabled: true,
+              onTap: () {
+                Navigator.of(sheetContext).pop();
+                _showCatalogToolsSheet(context);
+              },
+            ),
+          ),
           ..._toolEntries.map(
             (tool) => Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: _ToolSheetRow(
                 tool: tool,
+                enabled: _isToolEnabled(data, tool),
+                onTap: () {
+                  final enabled = _isToolEnabled(data, tool);
+                  Navigator.of(sheetContext).pop();
+                  if (enabled) {
+                    context.push(tool.path);
+                  } else {
+                    _showDisabledSheet(context, title: texts.text(tool.titleKey));
+                  }
+                },
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+void _showCatalogToolsSheet(BuildContext context) {
+  final texts = context.read<LanguageService>();
+  showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    backgroundColor: AppColors.background,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+    ),
+    builder: (sheetContext) => Padding(
+      padding: const EdgeInsets.fromLTRB(18, 4, 18, 24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(texts.text('merchant.dashboard.catalogTools'), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900)),
+          const SizedBox(height: AppSpacing.md),
+          ..._catalogToolEntries.map(
+            (tool) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _ToolSheetRow(
+                tool: tool,
+                enabled: true,
                 onTap: () {
                   Navigator.of(sheetContext).pop();
                   context.push(tool.path);
@@ -430,31 +573,36 @@ void _showTodaySheet(BuildContext context, MerchantDashboardData data) {
 
 class _ToolEntry {
   const _ToolEntry({
-    required this.title,
-    required this.subtitle,
-    required this.tooltip,
+    required this.titleKey,
+    required this.subtitleKey,
+    required this.tooltipKey,
     required this.icon,
     required this.path,
+    this.featureKey,
   });
 
-  final String title;
-  final String subtitle;
-  final String tooltip;
+  final String titleKey;
+  final String subtitleKey;
+  final String tooltipKey;
   final IconData icon;
   final String path;
+  final String? featureKey;
 }
 
 class _ToolSheetRow extends StatelessWidget {
   const _ToolSheetRow({
     required this.tool,
+    required this.enabled,
     required this.onTap,
   });
 
   final _ToolEntry tool;
+  final bool enabled;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    final texts = context.watch<LanguageService>();
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(AppRadius.large),
@@ -471,28 +619,32 @@ class _ToolSheetRow extends StatelessWidget {
               width: 46,
               height: 46,
               decoration: BoxDecoration(
-                color: AppColors.gray50,
+                color: enabled ? AppColors.gray50 : AppColors.border,
                 borderRadius: BorderRadius.circular(17),
               ),
-              child: Icon(tool.icon),
+              child: Icon(tool.icon, color: enabled ? AppColors.black : AppColors.gray500),
             ),
             const SizedBox(width: AppSpacing.md),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(tool.title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900)),
+                  Text(texts.text(tool.titleKey), style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900)),
                   const SizedBox(height: 3),
-                  Text(tool.subtitle, style: const TextStyle(color: AppColors.gray700, height: 1.25)),
+                  Text(texts.text(tool.subtitleKey), style: const TextStyle(color: AppColors.gray700, height: 1.25)),
                 ],
               ),
             ),
             Tooltip(
-              message: tool.tooltip,
+              message: enabled ? texts.text(tool.tooltipKey) : texts.text('merchant.dashboard.enableInFeatures'),
               child: const Icon(Icons.info_outline_rounded, size: 19, color: AppColors.gray500),
             ),
             const SizedBox(width: 8),
-            const Icon(Icons.arrow_forward_ios_rounded, size: 16),
+            Icon(
+              enabled ? Icons.arrow_forward_ios_rounded : Icons.lock_outline_rounded,
+              size: 16,
+              color: AppColors.gray500,
+            ),
           ],
         ),
       ),
@@ -502,70 +654,89 @@ class _ToolSheetRow extends StatelessWidget {
 
 const _toolEntries = [
   _ToolEntry(
-    title: 'Kategorien',
-    subtitle: 'Gruppen fuer dein Sortiment.',
-    tooltip: 'Gruppen helfen Kunden, deine Artikel schneller zu finden.',
-    icon: Icons.category_rounded,
-    path: '/merchant/tools/categories',
-  ),
-  _ToolEntry(
-    title: 'Artikel',
-    subtitle: 'Produkte, Preise und Verfuegbarkeit.',
-    tooltip: 'Hier pflegst du Produkte, Preise und Verfuegbarkeit.',
-    icon: Icons.inventory_2_rounded,
-    path: '/merchant/tools/items',
-  ),
-  _ToolEntry(
-    title: 'Shopdaten',
-    subtitle: 'Profil, Bilder und Oeffnungszeiten.',
-    tooltip: 'Diese Daten sehen Kunden in deinem oeffentlichen Profil.',
+    titleKey: 'merchant.shop.title',
+    subtitleKey: 'merchant.shop.subtitle',
+    tooltipKey: 'merchant.shop.tooltip',
     icon: Icons.storefront_rounded,
-    path: '/merchant/tools/shop',
+    path: '/merchant/shop',
   ),
   _ToolEntry(
-    title: 'Support',
-    subtitle: 'Hilfe oder Rueckfrage senden.',
-    tooltip: 'Schreib uns, wenn etwas nicht funktioniert oder du Hilfe brauchst.',
+    titleKey: 'merchant.support.title',
+    subtitleKey: 'merchant.support.subtitle',
+    tooltipKey: 'merchant.support.subtitle',
     icon: Icons.support_agent_rounded,
     path: '/merchant/tools/support',
   ),
   _ToolEntry(
-    title: 'Einladen',
-    subtitle: 'Links fuer Kunden und Haendler.',
-    tooltip: 'Teile deinen persoenlichen Link mit Kunden oder anderen Geschaeften.',
+    titleKey: 'merchant.invite.title',
+    subtitleKey: 'merchant.invite.subtitle',
+    tooltipKey: 'merchant.invite.subtitle',
     icon: Icons.person_add_alt_1_rounded,
     path: '/merchant/tools/invite',
   ),
+];
+
+const _catalogToolEntry = _ToolEntry(
+  titleKey: 'merchant.dashboard.catalogTools',
+  subtitleKey: 'merchant.dashboard.catalogToolsSubtitle',
+  tooltipKey: 'merchant.dashboard.catalogToolsTip',
+  icon: Icons.inventory_2_rounded,
+  path: '',
+);
+
+const _catalogToolEntries = [
   _ToolEntry(
-    title: 'Feed verwalten',
-    subtitle: 'Beitraege pausieren oder archivieren.',
-    tooltip: 'Hier pausierst oder aenderst du bereits veroeffentlichte Beitraege.',
-    icon: Icons.dynamic_feed_rounded,
-    path: '/merchant/tools/feedManage',
+    titleKey: 'merchant.catalog.categories',
+    subtitleKey: 'merchant.catalog.categoriesSubtitle',
+    tooltipKey: 'merchant.catalog.categoriesTip',
+    icon: Icons.category_rounded,
+    path: '/merchant/tools/categories',
+  ),
+  _ToolEntry(
+    titleKey: 'merchant.catalog.items',
+    subtitleKey: 'merchant.catalog.itemsSubtitle',
+    tooltipKey: 'merchant.catalog.itemsTip',
+    icon: Icons.inventory_2_rounded,
+    path: '/merchant/tools/items',
+  ),
+  _ToolEntry(
+    titleKey: 'merchant.catalog.tables',
+    subtitleKey: 'merchant.catalog.tablesSubtitle',
+    tooltipKey: 'merchant.catalog.tablesTip',
+    icon: Icons.table_bar_rounded,
+    path: '/merchant/tools/tables',
   ),
 ];
 
+bool _isToolEnabled(MerchantDashboardData data, _ToolEntry tool) {
+  final featureKey = tool.featureKey;
+  if (featureKey == null) return true;
+  return data.moduleActive[featureKey] ?? false;
+}
+
 void _showDisabledSheet(BuildContext context, {required String title}) {
+  final texts = context.read<LanguageService>();
   _showInfoSheet(
     context,
     icon: Icons.toggle_off_rounded,
-    title: '$title ist ausgeschaltet',
-    message: 'Du hast diese Funktion nicht aktiviert. Sie ist deshalb im Dashboard gesperrt.',
-    actionLabel: 'Verstanden',
+    title: texts.text('merchant.dashboard.disabledTitle').replaceAll('{title}', title),
+    message: texts.text('merchant.dashboard.disabledMessage'),
+    actionLabel: texts.text('common.ok'),
   );
 }
 
 void _showComingSoonSheet(
   BuildContext context, {
   required String title,
-  String message = 'Dieser Bereich ist vorbereitet und wird bald verbunden.',
+  String? message,
 }) {
+  final texts = context.read<LanguageService>();
   _showInfoSheet(
     context,
     icon: Icons.auto_awesome_rounded,
     title: title,
-    message: message,
-    actionLabel: 'Okay',
+    message: message ?? texts.text('merchant.dashboard.preparedSoon'),
+    actionLabel: texts.text('common.ok'),
   );
 }
 

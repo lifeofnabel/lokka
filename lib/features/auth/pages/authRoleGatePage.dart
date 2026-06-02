@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../../core/services/authService.dart';
 import '../../../core/services/firestoreService.dart';
 import '../../../core/services/languageService.dart';
+import '../../../core/services/sessionService.dart';
 import '../../../core/theme/appColors.dart';
 import '../../../core/theme/appRadius.dart';
 import '../../../core/theme/appSpacing.dart';
@@ -29,6 +30,7 @@ class _AuthRoleGatePageState extends State<AuthRoleGatePage> {
     try {
       final auth = context.read<AuthService>();
       final firestore = context.read<FirestoreService>();
+      final session = context.read<SessionService>();
       final user = auth.currentUser;
       if (user == null) {
         context.go('/auth/userLogin');
@@ -40,6 +42,8 @@ class _AuthRoleGatePageState extends State<AuthRoleGatePage> {
         context.go('/auth/chooseRole');
         return;
       }
+
+      await session.markLastSeenIfNeeded();
 
       if (profile['role'] == 'user') {
         context.go('/user/discover');

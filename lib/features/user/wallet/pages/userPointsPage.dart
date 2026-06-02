@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:lokka/core/constants/firebasePaths.dart';
 import 'package:lokka/core/services/authService.dart';
 import 'package:lokka/core/services/firestoreService.dart';
 import 'package:lokka/core/theme/appColors.dart';
@@ -8,9 +9,6 @@ import 'package:lokka/core/theme/appSpacing.dart';
 import 'package:lokka/features/user/wallet/models/pointsProgressModel.dart';
 import 'package:lokka/features/user/wallet/widgets/pointsProgressCard.dart';
 import 'package:provider/provider.dart';
-
-const _users = 'users';
-const _pointsProgress = 'pointsProgress';
 
 class UserPointsPage extends StatefulWidget {
   const UserPointsPage({
@@ -53,7 +51,10 @@ class _UserPointsPageState extends State<UserPointsPage> {
     }
 
     _sub = _firestoreService
-        .document('$_users/$uid/$_pointsProgress/${widget.merchantId}')
+        .document(FirebasePaths.userPointsProgressEntry(
+          uid,
+          widget.merchantId,
+        ))
         .snapshots()
         .map((doc) => doc.exists && doc.data() != null
             ? PointsProgressModel.fromMap(doc.data()!)

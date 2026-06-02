@@ -14,11 +14,21 @@ class MerchantModel {
     required this.description,
     required this.email,
     required this.phone,
+    required this.emailLowercase,
+    this.ownerFirstName,
+    this.ownerLastName,
+    this.phoneVerified = false,
+    this.street,
+    this.houseNumber,
+    this.postalCode,
     required this.address,
+    this.fullAddress,
     required this.city,
     required this.area,
     required this.country,
     required this.shopType,
+    this.shopTypePrimary,
+    this.shopTypes = const [],
     required this.logoUrl,
     required this.coverUrl,
     this.lat,
@@ -38,11 +48,21 @@ class MerchantModel {
   final String description;
   final String email;
   final String phone;
+  final String emailLowercase;
+  final String? ownerFirstName;
+  final String? ownerLastName;
+  final bool phoneVerified;
+  final String? street;
+  final String? houseNumber;
+  final String? postalCode;
   final String address;
+  final String? fullAddress;
   final String city;
   final String area;
   final String country;
   final String shopType;
+  final String? shopTypePrimary;
+  final List<String> shopTypes;
   final String logoUrl;
   final String coverUrl;
   final double? lat;
@@ -65,11 +85,23 @@ class MerchantModel {
       description: map['description'] as String? ?? '',
       email: map['email'] as String? ?? '',
       phone: map['phone'] as String? ?? '',
+      emailLowercase: map['emailLowercase'] as String? ?? '',
+      ownerFirstName: map['ownerFirstName'] as String?,
+      ownerLastName: map['ownerLastName'] as String?,
+      phoneVerified: map['phoneVerified'] as bool? ?? false,
+      street: map['street'] as String?,
+      houseNumber: map['houseNumber'] as String?,
+      postalCode: map['postalCode'] as String?,
       address: map['address'] as String? ?? '',
+      fullAddress: map['fullAddress'] as String?,
       city: map['city'] as String? ?? '',
       area: map['area'] as String? ?? '',
       country: map['country'] as String? ?? '',
       shopType: map['shopType'] as String? ?? '',
+      shopTypePrimary: map['shopTypePrimary'] as String?,
+      shopTypes:
+          (map['shopTypes'] as Iterable?)?.map((item) => item.toString()).toList() ??
+              const [],
       logoUrl: map['logoUrl'] as String? ?? '',
       coverUrl: map['coverUrl'] as String? ?? '',
       lat: (map['lat'] as num?)?.toDouble(),
@@ -92,11 +124,21 @@ class MerchantModel {
       'description': description,
       'email': email,
       'phone': phone,
+      'emailLowercase': emailLowercase,
+      'ownerFirstName': ownerFirstName,
+      'ownerLastName': ownerLastName,
+      'phoneVerified': phoneVerified,
+      'street': street,
+      'houseNumber': houseNumber,
+      'postalCode': postalCode,
       'address': address,
+      'fullAddress': fullAddress,
       'city': city,
       'area': area,
       'country': country,
       'shopType': shopType,
+      'shopTypePrimary': shopTypePrimary,
+      'shopTypes': shopTypes,
       'logoUrl': logoUrl,
       'coverUrl': coverUrl,
       'lat': lat,
@@ -118,11 +160,21 @@ class MerchantModel {
     String? description,
     String? email,
     String? phone,
+    String? emailLowercase,
+    String? ownerFirstName,
+    String? ownerLastName,
+    bool? phoneVerified,
+    String? street,
+    String? houseNumber,
+    String? postalCode,
     String? address,
+    String? fullAddress,
     String? city,
     String? area,
     String? country,
     String? shopType,
+    String? shopTypePrimary,
+    List<String>? shopTypes,
     String? logoUrl,
     String? coverUrl,
     double? lat,
@@ -142,11 +194,21 @@ class MerchantModel {
       description: description ?? this.description,
       email: email ?? this.email,
       phone: phone ?? this.phone,
+      emailLowercase: emailLowercase ?? this.emailLowercase,
+      ownerFirstName: ownerFirstName ?? this.ownerFirstName,
+      ownerLastName: ownerLastName ?? this.ownerLastName,
+      phoneVerified: phoneVerified ?? this.phoneVerified,
+      street: street ?? this.street,
+      houseNumber: houseNumber ?? this.houseNumber,
+      postalCode: postalCode ?? this.postalCode,
       address: address ?? this.address,
+      fullAddress: fullAddress ?? this.fullAddress,
       city: city ?? this.city,
       area: area ?? this.area,
       country: country ?? this.country,
       shopType: shopType ?? this.shopType,
+      shopTypePrimary: shopTypePrimary ?? this.shopTypePrimary,
+      shopTypes: shopTypes ?? this.shopTypes,
       logoUrl: logoUrl ?? this.logoUrl,
       coverUrl: coverUrl ?? this.coverUrl,
       lat: lat ?? this.lat,

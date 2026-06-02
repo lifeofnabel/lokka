@@ -12,6 +12,19 @@ class AppUserModel {
     required this.emailLowercase,
     required this.customerCode,
     required this.isActive,
+    this.postalCode,
+    this.phone,
+    this.phoneVerified = false,
+    this.emailVerified = false,
+    this.acceptedTerms = false,
+    this.acceptedPrivacy = false,
+    this.marketingConsent = false,
+    this.lastLoginAt,
+    this.lastSeenAt,
+    this.lastAuthProvider,
+    this.birthday,
+    this.profileImageUrl,
+    this.profileCoverGradient = 0,
     this.createdAt,
     this.updatedAt,
   });
@@ -24,6 +37,19 @@ class AppUserModel {
   final String emailLowercase;
   final String customerCode;
   final bool isActive;
+  final String? postalCode;
+  final String? phone;
+  final bool phoneVerified;
+  final bool emailVerified;
+  final bool acceptedTerms;
+  final bool acceptedPrivacy;
+  final bool marketingConsent;
+  final DateTime? lastLoginAt;
+  final DateTime? lastSeenAt;
+  final String? lastAuthProvider;
+  final DateTime? birthday;
+  final String? profileImageUrl;
+  final int profileCoverGradient;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -37,6 +63,19 @@ class AppUserModel {
       emailLowercase: map['emailLowercase'] as String? ?? '',
       customerCode: map['customerCode'] as String? ?? '',
       isActive: map['isActive'] as bool? ?? true,
+      postalCode: map['postalCode'] as String?,
+      phone: map['phone'] as String?,
+      phoneVerified: map['phoneVerified'] as bool? ?? false,
+      emailVerified: map['emailVerified'] as bool? ?? false,
+      acceptedTerms: map['acceptedTerms'] as bool? ?? false,
+      acceptedPrivacy: map['acceptedPrivacy'] as bool? ?? false,
+      marketingConsent: map['marketingConsent'] as bool? ?? false,
+      lastLoginAt: _date(map['lastLoginAt']),
+      lastSeenAt: _date(map['lastSeenAt']),
+      lastAuthProvider: map['lastAuthProvider'] as String?,
+      birthday: _date(map['birthday']),
+      profileImageUrl: map['profileImageUrl'] as String?,
+      profileCoverGradient: map['profileCoverGradient'] as int? ?? 0,
       createdAt: _date(map['createdAt']),
       updatedAt: _date(map['updatedAt']),
     );
@@ -52,8 +91,21 @@ class AppUserModel {
       'emailLowercase': emailLowercase,
       'customerCode': customerCode,
       'isActive': isActive,
-      'createdAt': createdAt,
-      'updatedAt': updatedAt,
+      'postalCode': postalCode,
+      'phone': phone,
+      'phoneVerified': phoneVerified,
+      'emailVerified': emailVerified,
+      'acceptedTerms': acceptedTerms,
+      'acceptedPrivacy': acceptedPrivacy,
+      'marketingConsent': marketingConsent,
+      'lastLoginAt': lastLoginAt?.toIso8601String(),
+      'lastSeenAt': lastSeenAt?.toIso8601String(),
+      'lastAuthProvider': lastAuthProvider,
+      'birthday': birthday?.toIso8601String(),
+      'profileImageUrl': profileImageUrl,
+      'profileCoverGradient': profileCoverGradient,
+      'createdAt': createdAt?.toIso8601String(),
+      'updatedAt': updatedAt?.toIso8601String(),
     };
   }
 
@@ -66,6 +118,19 @@ class AppUserModel {
     String? emailLowercase,
     String? customerCode,
     bool? isActive,
+    String? postalCode,
+    String? phone,
+    bool? phoneVerified,
+    bool? emailVerified,
+    bool? acceptedTerms,
+    bool? acceptedPrivacy,
+    bool? marketingConsent,
+    DateTime? lastLoginAt,
+    DateTime? lastSeenAt,
+    String? lastAuthProvider,
+    DateTime? birthday,
+    String? profileImageUrl,
+    int? profileCoverGradient,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -78,6 +143,19 @@ class AppUserModel {
       emailLowercase: emailLowercase ?? this.emailLowercase,
       customerCode: customerCode ?? this.customerCode,
       isActive: isActive ?? this.isActive,
+      postalCode: postalCode ?? this.postalCode,
+      phone: phone ?? this.phone,
+      phoneVerified: phoneVerified ?? this.phoneVerified,
+      emailVerified: emailVerified ?? this.emailVerified,
+      acceptedTerms: acceptedTerms ?? this.acceptedTerms,
+      acceptedPrivacy: acceptedPrivacy ?? this.acceptedPrivacy,
+      marketingConsent: marketingConsent ?? this.marketingConsent,
+      lastLoginAt: lastLoginAt ?? this.lastLoginAt,
+      lastSeenAt: lastSeenAt ?? this.lastSeenAt,
+      lastAuthProvider: lastAuthProvider ?? this.lastAuthProvider,
+      birthday: birthday ?? this.birthday,
+      profileImageUrl: profileImageUrl ?? this.profileImageUrl,
+      profileCoverGradient: profileCoverGradient ?? this.profileCoverGradient,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:lokka/core/constants/firebasePaths.dart';
 import 'package:lokka/core/services/authService.dart';
 import 'package:lokka/core/services/firestoreService.dart';
 import 'package:lokka/core/theme/appColors.dart';
@@ -8,9 +9,6 @@ import 'package:lokka/core/theme/appRadius.dart';
 import 'package:lokka/core/theme/appSpacing.dart';
 import 'package:lokka/features/user/wallet/models/stampProgressModel.dart';
 import 'package:lokka/features/user/wallet/widgets/stampProgressCard.dart';
-
-const _users = 'users';
-const _stampProgress = 'stampProgress';
 
 class UserStampPage extends StatefulWidget {
   const UserStampPage({super.key, required this.merchantId});
@@ -54,7 +52,7 @@ class _UserStampPageState extends State<UserStampPage> {
     }
 
     _sub = _firestoreService
-        .collection('$_users/$uid/$_stampProgress')
+        .collection(FirebasePaths.userStampProgress(uid))
         .where('merchantId', isEqualTo: widget.merchantId)
         .snapshots()
         .map((snap) =>

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:lokka/core/services/authService.dart';
 import 'package:lokka/core/services/firestoreService.dart';
+import 'package:lokka/core/services/localCacheService.dart';
 import 'package:lokka/core/theme/appColors.dart';
 import 'package:lokka/features/user/discover/pages/userDiscoverPage.dart';
 import 'package:lokka/features/user/discover/providers/userDiscoverProvider.dart';
@@ -49,6 +50,7 @@ class _UserShellPageState extends State<UserShellPage> {
   Widget build(BuildContext context) {
     final firestoreService = context.read<FirestoreService>();
     final authService = context.read<AuthService>();
+    final cacheService = context.read<LocalCacheService>();
 
     return MultiProvider(
       providers: [
@@ -57,6 +59,7 @@ class _UserShellPageState extends State<UserShellPage> {
             service: UserDiscoverService(
               firestoreService: firestoreService,
               authService: authService,
+              cacheService: cacheService,
             ),
           ),
         ),
@@ -70,6 +73,7 @@ class _UserShellPageState extends State<UserShellPage> {
             service: UserWalletService(
               firestoreService: firestoreService,
               authService: authService,
+              cacheService: cacheService,
             ),
           ),
         ),
@@ -78,6 +82,7 @@ class _UserShellPageState extends State<UserShellPage> {
             service: UserProfileService(
               firestoreService: firestoreService,
               authService: authService,
+              cacheService: cacheService,
             ),
           ),
         ),

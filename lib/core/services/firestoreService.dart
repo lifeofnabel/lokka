@@ -12,6 +12,10 @@ class FirestoreService {
     return _firestore.collection(path);
   }
 
+  Query<Map<String, dynamic>> collectionGroup(String collectionId) {
+    return _firestore.collectionGroup(collectionId);
+  }
+
   DocumentReference<Map<String, dynamic>> document(String path) {
     return _firestore.doc(path);
   }
@@ -33,6 +37,16 @@ class FirestoreService {
     return document(path).update(data);
   }
 
+  Future<T> runTransaction<T>(
+    Future<T> Function(Transaction transaction) action,
+  ) {
+    return _firestore.runTransaction(action);
+  }
+
+  WriteBatch batch() {
+    return _firestore.batch();
+  }
+
   Stream<List<Map<String, dynamic>>> collectionStream(String path) {
     return collection(path)
         .snapshots()
@@ -40,7 +54,7 @@ class FirestoreService {
   }
 
   Future<void> createUserProfile(String uid, Map<String, dynamic> data) {
-    return setDocument('${FirebasePaths.users}/$uid', data);
+    return setDocument(FirebasePaths.user(uid), data);
   }
 
   Future<void> createMerchantProfile({
@@ -50,22 +64,32 @@ class FirestoreService {
     required Map<String, dynamic> publicMerchantData,
   }) {
     final batch = _firestore.batch();
-    batch.set(document('${FirebasePaths.users}/$uid'), userData, SetOptions(merge: true));
-    batch.set(document('${FirebasePaths.merchants}/$uid'), merchantData, SetOptions(merge: true));
+    batch.set(document(FirebasePaths.user(uid)), userData, SetOptions(merge: true));
+    batch.set(document(FirebasePaths.merchant(uid)), merchantData, SetOptions(merge: true));
     batch.set(
-      document('${FirebasePaths.publicMerchants}/$uid'),
+      document(FirebasePaths.publicMerchant(uid)),
       publicMerchantData,
+      SetOptions(merge: true),
+    );
+    batch.set(
+      document(FirebasePaths.merchantFeatureConfig(uid, 'feedPosts')),
+      {
+        'module': 'feedPosts',
+        'isEnabled': true,
+        'status': 'enabled',
+        'updatedAt': FieldValue.serverTimestamp(),
+      },
       SetOptions(merge: true),
     );
     return batch.commit();
   }
 
   Future<Map<String, dynamic>?> getUserProfile(String uid) {
-    return readDocument('${FirebasePaths.users}/$uid');
+    return readDocument(FirebasePaths.user(uid));
   }
 
   Future<Map<String, dynamic>?> getMerchantProfile(String uid) {
-    return readDocument('${FirebasePaths.merchants}/$uid');
+    return readDocument(FirebasePaths.merchant(uid));
   }
 
   Future<void> updateEmailVerified(String uid, bool emailVerified) async {
@@ -73,11 +97,27 @@ class FirestoreService {
       'emailVerified': emailVerified,
       'updatedAt': FieldValue.serverTimestamp(),
     };
-    await setDocument('${FirebasePaths.users}/$uid', data);
+    await setDocument(FirebasePaths.user(uid), data);
     final merchant = await getMerchantProfile(uid);
     if (merchant != null) {
-      await setDocument('${FirebasePaths.merchants}/$uid', data);
+      await setDocument(FirebasePaths.merchant(uid), data);
     }
+  }
+
+  Future<void> updateUserSession({
+    required String uid,
+    bool updateLastLogin = false,
+    bool updateLastSeen = false,
+    String? authProvider,
+  }) {
+    final data = <String, dynamic>{
+      if (updateLastLogin) 'lastLoginAt': FieldValue.serverTimestamp(),
+      if (updateLastSeen) 'lastSeenAt': FieldValue.serverTimestamp(),
+      if (authProvider != null) 'lastAuthProvider': authProvider,
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+    if (data.length == 1) return Future.value();
+    return setDocument(FirebasePaths.user(uid), data);
   }
 
   Future<List<String>> loadChooserAreas() {
@@ -92,14 +132,14 @@ class FirestoreService {
     final cleaned = value.trim();
     if (cleaned.isEmpty) return;
 
-    await setDocument('${FirebasePaths.chooser}/${FirebasePaths.shopTypes}', {
+    await setDocument(FirebasePaths.chooserDocument(FirebasePaths.shopTypes), {
       'name': FieldValue.arrayUnion([cleaned]),
       'updatedAt': FieldValue.serverTimestamp(),
     });
   }
 
   Future<List<String>> _loadChooserList(String documentId) async {
-    final data = await readDocument('${FirebasePaths.chooser}/$documentId');
+    final data = await readDocument(FirebasePaths.chooserDocument(documentId));
     if (data == null) return [];
 
     final raw = data['name'] ?? data['values'] ?? data['items'] ?? data[documentId];

@@ -1,6 +1,8 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../../../../core/services/languageService.dart';
 import '../../../../core/theme/appColors.dart';
 import '../../../../core/theme/appRadius.dart';
 import '../../../../core/theme/appShadows.dart';
@@ -12,33 +14,41 @@ class MerchantHeroCard extends StatelessWidget {
     super.key,
     required this.merchant,
     required this.metrics,
+    required this.weekCredits,
+    required this.hasBillingData,
     required this.onShopTap,
+    required this.onEditTap,
+    required this.onBillingTap,
+    required this.onCustomersTap,
     required this.onSettingsTap,
     required this.onTodayTap,
   });
 
   final Map<String, dynamic> merchant;
   final MerchantDashboardMetrics metrics;
+  final int weekCredits;
+  final bool hasBillingData;
   final VoidCallback onShopTap;
+  final VoidCallback onEditTap;
+  final VoidCallback onBillingTap;
+  final VoidCallback onCustomersTap;
   final VoidCallback onSettingsTap;
   final VoidCallback onTodayTap;
 
   @override
   Widget build(BuildContext context) {
-    final shopName = _text('shopName', fallback: 'Dein Geschaeft');
+    final texts = context.watch<LanguageService>();
+    final shopName = _text('shopName', fallback: texts.text('merchant.dashboard.yourShop'));
     final logoUrl = _text('logoUrl');
     final coverUrl = _text('coverUrl');
-    final status = _text('verificationStatus', fallback: 'pending');
-    final areaLine = [_text('area'), _text('shopType')]
-        .where((value) => value.isNotEmpty)
-        .join(' - ');
-    final rating = merchant['averageRating'] ?? merchant['ratingAvg'];
-    final scansToday = merchant['scansToday'];
-    final isPublic = merchant['isPublic'] == true;
-    final isActive = merchant['isActive'] == true;
+    final shopTypes = merchant['shopTypes'];
+    final typeLine = shopTypes is Iterable
+        ? shopTypes.map((item) => item.toString()).where((item) => item.isNotEmpty).join(', ')
+        : _text('shopType');
+    final areaLine = [_text('area'), typeLine].where((value) => value.isNotEmpty).join(' | ');
 
     return Container(
-      constraints: const BoxConstraints(minHeight: 246),
+      constraints: const BoxConstraints(minHeight: 284),
       decoration: BoxDecoration(
         color: AppColors.black,
         borderRadius: BorderRadius.circular(AppRadius.xxl),
@@ -68,7 +78,7 @@ class MerchantHeroCard extends StatelessWidget {
                   end: Alignment.bottomCenter,
                   colors: [
                     Colors.black.withOpacity(0.14),
-                    Colors.black.withOpacity(0.86),
+                    Colors.black.withOpacity(0.9),
                   ],
                 ),
               ),
@@ -82,22 +92,14 @@ class MerchantHeroCard extends StatelessWidget {
                 Row(
                   children: [
                     _GlassButton(
-                      icon: Icons.storefront_rounded,
-                      label: 'Shop ansehen',
+                      icon: Icons.remove_red_eye_rounded,
+                      label: texts.text('merchant.dashboard.shopPreview'),
                       onTap: onShopTap,
                     ),
                     const Spacer(),
-                    _IconGlassButton(
-                      icon: Icons.insights_rounded,
-                      tooltip: 'Heute',
-                      onTap: onTodayTap,
-                    ),
+                    _IconGlassButton(icon: Icons.insights_rounded, tooltip: texts.text('merchant.dashboard.today'), onTap: onTodayTap),
                     const SizedBox(width: 8),
-                    _SettingsGlassButton(
-                      logoUrl: logoUrl,
-                      shopName: shopName,
-                      onTap: onSettingsTap,
-                    ),
+                    _IconGlassButton(icon: Icons.tune_rounded, tooltip: texts.text('merchant.features.title'), onTap: onSettingsTap),
                   ],
                 ),
                 const SizedBox(height: 56),
@@ -124,7 +126,7 @@ class MerchantHeroCard extends StatelessWidget {
                           ),
                           const SizedBox(height: 7),
                           Text(
-                            areaLine.isEmpty ? 'Lokaler Partner' : areaLine,
+                            areaLine.isEmpty ? texts.text('merchant.dashboard.localPartner') : areaLine,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
@@ -135,19 +137,30 @@ class MerchantHeroCard extends StatelessWidget {
                         ],
                       ),
                     ),
+                    const SizedBox(width: 8),
+                    _EditButton(onTap: onEditTap),
                   ],
                 ),
                 const SizedBox(height: AppSpacing.md),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
+                Row(
                   children: [
-                    _HeroPill(label: _statusLabel(status), strong: status == 'approved'),
-                    if (rating != null) _HeroPill(label: 'Rating ${_ratingText(rating)}'),
-                    if (scansToday != null) _HeroPill(label: '$scansToday Scans heute'),
-                    if (scansToday == null) _HeroPill(label: '${metrics.customers} Kunden'),
-                    _HeroPill(label: isActive ? 'Aktiv' : 'Nicht aktiv'),
-                    _HeroPill(label: isPublic ? 'Oeffentlich' : 'Privat'),
+                    Expanded(
+                      child: _HeroMetric(
+                        label: texts.text('merchant.dashboard.credits'),
+                        value: hasBillingData ? weekCredits.toString() : '0',
+                        icon: Icons.credit_score_rounded,
+                        onTap: onBillingTap,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _HeroMetric(
+                        label: texts.text('merchant.customers.title'),
+                        value: metrics.customers.toString(),
+                        icon: Icons.groups_rounded,
+                        onTap: onCustomersTap,
+                      ),
+                    ),
                   ],
                 ),
               ],
@@ -170,11 +183,11 @@ class _Logo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 58,
-      height: 58,
+      width: 62,
+      height: 62,
       decoration: BoxDecoration(
         color: AppColors.white,
-        borderRadius: BorderRadius.circular(22),
+        shape: BoxShape.circle,
         border: Border.all(color: AppColors.white.withOpacity(0.9), width: 3),
       ),
       clipBehavior: Clip.antiAlias,
@@ -190,27 +203,46 @@ class _Logo extends StatelessWidget {
   }
 }
 
-class _HeroPill extends StatelessWidget {
-  const _HeroPill({required this.label, this.strong = false});
+class _HeroMetric extends StatelessWidget {
+  const _HeroMetric({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.onTap,
+  });
 
   final String label;
-  final bool strong;
+  final String value;
+  final IconData icon;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
-      decoration: BoxDecoration(
-        color: strong ? AppColors.mint.withOpacity(0.96) : AppColors.white.withOpacity(0.15),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: AppColors.white.withOpacity(0.18)),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: strong ? AppColors.black : AppColors.white,
-          fontSize: 12,
-          fontWeight: FontWeight.w900,
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(22),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.white.withOpacity(0.13),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: AppColors.white.withOpacity(0.18)),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: AppColors.mint, size: 20),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(value, style: const TextStyle(color: AppColors.white, fontSize: 18, fontWeight: FontWeight.w900, height: 1)),
+                  const SizedBox(height: 3),
+                  Text(label, style: const TextStyle(color: Color(0xFFDDE4DE), fontSize: 12, fontWeight: FontWeight.w800)),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -256,6 +288,29 @@ class _GlassButton extends StatelessWidget {
   }
 }
 
+class _EditButton extends StatelessWidget {
+  const _EditButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final texts = context.watch<LanguageService>();
+    return FilledButton.icon(
+      onPressed: onTap,
+      icon: const Icon(Icons.edit_rounded, size: 16),
+      label: Text(texts.text('common.edit')),
+      style: FilledButton.styleFrom(
+        backgroundColor: AppColors.white,
+        foregroundColor: AppColors.black,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        minimumSize: Size.zero,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+    );
+  }
+}
+
 class _IconGlassButton extends StatelessWidget {
   const _IconGlassButton({
     required this.icon,
@@ -285,71 +340,12 @@ class _IconGlassButton extends StatelessWidget {
   }
 }
 
-class _SettingsGlassButton extends StatelessWidget {
-  const _SettingsGlassButton({
-    required this.logoUrl,
-    required this.shopName,
-    required this.onTap,
-  });
-
-  final String logoUrl;
-  final String shopName;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: 'Funktionen verwalten',
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(999),
-        child: Container(
-          width: 46,
-          height: 42,
-          padding: const EdgeInsets.all(4),
-          decoration: _glassDecoration(),
-          child: Container(
-            decoration: BoxDecoration(
-              color: AppColors.white,
-              borderRadius: BorderRadius.circular(999),
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: logoUrl.isEmpty
-                ? Center(
-                    child: Text(
-                      _initials(shopName),
-                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w900),
-                    ),
-                  )
-                : CachedNetworkImage(imageUrl: logoUrl, fit: BoxFit.cover),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 BoxDecoration _glassDecoration() {
   return BoxDecoration(
     color: AppColors.white.withOpacity(0.14),
     borderRadius: BorderRadius.circular(999),
     border: Border.all(color: AppColors.white.withOpacity(0.22)),
   );
-}
-
-String _statusLabel(String value) {
-  return switch (value) {
-    'approved' => 'Freigeschaltet',
-    'rejected' => 'Abgelehnt',
-    'blocked' => 'Gesperrt',
-    'paused' => 'Pausiert',
-    _ => 'In Pruefung',
-  };
-}
-
-String _ratingText(dynamic value) {
-  if (value is num) return value.toStringAsFixed(1);
-  return value.toString();
 }
 
 String _initials(String value) {

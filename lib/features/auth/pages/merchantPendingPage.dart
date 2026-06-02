@@ -96,7 +96,8 @@ class _StatusCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final content = _content(status);
+    final texts = context.watch<LanguageService>();
+    final content = _content(status, texts);
     return Container(
       padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
@@ -126,34 +127,37 @@ class _StatusCard extends StatelessWidget {
   }
 }
 
-({String title, List<String> lines, IconData icon}) _content(String status) {
+({String title, List<String> lines, IconData icon}) _content(
+  String status,
+  LanguageService texts,
+) {
   return switch (status) {
     'approved' => (
-        title: 'Dein Geschäftskonto ist freigeschaltet.',
-        lines: ['Du kannst jetzt dein Dashboard öffnen und deine Module vorbereiten.'],
+        title: texts.text('auth.merchantPending.approvedTitle'),
+        lines: [texts.text('auth.merchantPending.approvedLine')],
         icon: Icons.check_circle_rounded,
       ),
     'rejected' => (
-        title: 'Deine Anfrage wurde abgelehnt.',
-        lines: ['Bitte kontaktiere den Support, wenn du Rückfragen zur Prüfung hast.'],
+        title: texts.text('auth.merchantPending.rejectedTitle'),
+        lines: [texts.text('auth.merchantPending.rejectedLine')],
         icon: Icons.cancel_rounded,
       ),
     'blocked' => (
-        title: 'Dein Konto ist gesperrt.',
-        lines: ['Bitte kontaktiere den Support, damit wir den nächsten Schritt klären können.'],
+        title: texts.text('auth.merchantPending.blockedTitle'),
+        lines: [texts.text('auth.merchantPending.blockedLine')],
         icon: Icons.block_rounded,
       ),
     'paused' => (
-        title: 'Dein Konto ist pausiert.',
-        lines: ['Dein Geschäftskonto ist aktuell nicht vollständig aktiv. Der Support hilft dir weiter.'],
+        title: texts.text('auth.merchantPending.pausedTitle'),
+        lines: [texts.text('auth.merchantPending.pausedLine')],
         icon: Icons.pause_circle_rounded,
       ),
     _ => (
-        title: 'Deine Händlerprüfung läuft.',
+        title: texts.text('auth.merchantPending.pendingTitle'),
         lines: [
-          'Danke für deine Registrierung. Wir prüfen dein Geschäftskonto und melden uns bald telefonisch oder per E-Mail bei dir.',
-          'In der Regel dauert die Freischaltung maximal einen Arbeitstag.',
-          'Du kannst deine Angaben später vorbereiten, aber dein Dashboard wird erst nach der Freischaltung vollständig aktiv.',
+          texts.text('auth.merchantPending.pendingLine1'),
+          texts.text('auth.merchantPending.pendingLine2'),
+          texts.text('auth.merchantPending.pendingLine3'),
         ],
         icon: Icons.hourglass_top_rounded,
       ),

@@ -43,6 +43,7 @@ dependencies:
   google_fonts:
   geolocator:
   http:
+  image:
   image_picker:
   latlong2:
   mobile_scanner:
@@ -75,6 +76,7 @@ flutter:
   assets:
     - .env
     - assets/i18n/
+    - assets/data/
 
   # To add assets to your application, add an assets section, like this:
   # assets:

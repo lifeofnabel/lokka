@@ -64,8 +64,8 @@ class WalletCardModel {
       'hasStampCards': hasStampCards,
       'hasPoints': hasPoints,
       'hasCoupons': hasCoupons,
-      'joinedAt': joinedAt,
-      'lastActivityAt': lastActivityAt,
+      'joinedAt': joinedAt?.toIso8601String(),
+      'lastActivityAt': lastActivityAt?.toIso8601String(),
     };
   }
 }

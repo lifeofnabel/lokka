@@ -9,6 +9,11 @@ class UploadedMediaModel {
     required this.width,
     required this.height,
     required this.bytes,
+    this.thumbUrl,
+    this.thumbSecureUrl,
+    this.thumbPublicId,
+    this.thumbBytes,
+    this.mediaType,
     this.createdAt,
   });
 
@@ -19,6 +24,11 @@ class UploadedMediaModel {
   final int width;
   final int height;
   final int bytes;
+  final String? thumbUrl;
+  final String? thumbSecureUrl;
+  final String? thumbPublicId;
+  final int? thumbBytes;
+  final String? mediaType;
   final DateTime? createdAt;
 
   factory UploadedMediaModel.fromMap(Map<String, dynamic> map) {
@@ -30,6 +40,13 @@ class UploadedMediaModel {
       width: (map['width'] as num?)?.toInt() ?? 0,
       height: (map['height'] as num?)?.toInt() ?? 0,
       bytes: (map['bytes'] as num?)?.toInt() ?? 0,
+      thumbUrl: map['thumbUrl'] as String?,
+      thumbSecureUrl:
+          map['thumbSecureUrl'] as String? ?? map['thumb_secure_url'] as String?,
+      thumbPublicId:
+          map['thumbPublicId'] as String? ?? map['thumb_public_id'] as String?,
+      thumbBytes: (map['thumbBytes'] as num?)?.toInt(),
+      mediaType: map['mediaType'] as String?,
       createdAt: _date(map['createdAt']),
     );
   }
@@ -43,6 +60,11 @@ class UploadedMediaModel {
       'width': width,
       'height': height,
       'bytes': bytes,
+      'thumbUrl': thumbUrl,
+      'thumbSecureUrl': thumbSecureUrl,
+      'thumbPublicId': thumbPublicId,
+      'thumbBytes': thumbBytes,
+      'mediaType': mediaType,
       'createdAt': createdAt,
     };
   }
@@ -55,6 +77,11 @@ class UploadedMediaModel {
     int? width,
     int? height,
     int? bytes,
+    String? thumbUrl,
+    String? thumbSecureUrl,
+    String? thumbPublicId,
+    int? thumbBytes,
+    String? mediaType,
     DateTime? createdAt,
   }) {
     return UploadedMediaModel(
@@ -65,6 +92,11 @@ class UploadedMediaModel {
       width: width ?? this.width,
       height: height ?? this.height,
       bytes: bytes ?? this.bytes,
+      thumbUrl: thumbUrl ?? this.thumbUrl,
+      thumbSecureUrl: thumbSecureUrl ?? this.thumbSecureUrl,
+      thumbPublicId: thumbPublicId ?? this.thumbPublicId,
+      thumbBytes: thumbBytes ?? this.thumbBytes,
+      mediaType: mediaType ?? this.mediaType,
       createdAt: createdAt ?? this.createdAt,
     );
   }

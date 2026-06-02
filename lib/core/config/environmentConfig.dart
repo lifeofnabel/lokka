@@ -11,4 +11,7 @@ class EnvironmentConfig {
 
   static String get cloudinaryFolder =>
       dotenv.env['CLOUDINARY_FOLDER'] ?? 'lokka';
+
+  static String get aiSuggestionEndpoint =>
+      dotenv.env['AI_SUGGESTION_ENDPOINT'] ?? '';
 }

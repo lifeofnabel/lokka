@@ -6,8 +6,10 @@ import '../core/services/cloudinaryService.dart';
 import '../core/services/firebaseService.dart';
 import '../core/services/firestoreService.dart';
 import '../core/services/languageService.dart';
+import '../core/services/localCacheService.dart';
 import '../core/services/qrService.dart';
 import '../core/services/scannerService.dart';
+import '../core/services/sessionService.dart';
 import '../core/services/uploadService.dart';
 import '../features/auth/providers/authProvider.dart';
 
@@ -29,16 +31,28 @@ class AppProviders extends StatelessWidget {
         Provider<FirebaseService>(create: (_) => const FirebaseService()),
         Provider<AuthService>(create: (_) => AuthService()),
         Provider<FirestoreService>(create: (_) => FirestoreService()),
-        ChangeNotifierProxyProvider2<AuthService, FirestoreService, AuthProvider>(
+        Provider<LocalCacheService>(create: (_) => LocalCacheService()),
+        ProxyProvider3<AuthService, FirestoreService, LocalCacheService, SessionService>(
+          update: (_, authService, firestoreService, cacheService, __) =>
+              SessionService(
+            authService: authService,
+            firestoreService: firestoreService,
+            cacheService: cacheService,
+          ),
+        ),
+        ChangeNotifierProxyProvider3<AuthService, FirestoreService,
+            LanguageService, AuthProvider>(
           create: (context) => AuthProvider(
             authService: context.read<AuthService>(),
             firestoreService: context.read<FirestoreService>(),
+            languageService: context.read<LanguageService>(),
           ),
-          update: (_, authService, firestoreService, previous) =>
+          update: (_, authService, firestoreService, languageService, previous) =>
               previous ??
               AuthProvider(
                 authService: authService,
                 firestoreService: firestoreService,
+                languageService: languageService,
               ),
         ),
         Provider<CloudinaryService>(create: (_) => CloudinaryService()),

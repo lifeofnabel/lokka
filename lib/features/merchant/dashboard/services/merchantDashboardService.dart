@@ -52,10 +52,13 @@ class MerchantDashboardService {
     final merchant = await firestoreService.getMerchantProfile(uid);
     if (merchant == null) return null;
 
-    final customers = await _count('${FirebasePaths.merchants}/$uid/${FirebasePaths.customers}');
-    final feedPosts = await _count('${FirebasePaths.merchants}/$uid/${FirebasePaths.feedPosts}');
-    final stampCards = await _count('${FirebasePaths.merchants}/$uid/${FirebasePaths.stampCards}');
-    final moduleActive = await _moduleStatuses(uid);
+    final customers = await _count(FirebasePaths.merchantCustomers(uid));
+    final feedPosts = await _count(FirebasePaths.merchantFeedPosts(uid));
+    final stampCards = await _count(FirebasePaths.merchantStampCards(uid));
+    final moduleActive = {
+      'feedPosts': true,
+      ...await _moduleStatuses(uid),
+    };
     final activeModules = moduleActive.values.where((active) => active).length;
     final billing = await _weekCredits(uid);
 
@@ -76,7 +79,8 @@ class MerchantDashboardService {
 
   Future<int> _count(String collectionPath) async {
     try {
-      final snapshot = await firestoreService.collection(collectionPath).limit(200).get();
+      final snapshot =
+          await firestoreService.collection(collectionPath).limit(200).get();
       return snapshot.docs.length;
     } catch (_) {
       return 0;
@@ -86,12 +90,23 @@ class MerchantDashboardService {
   Future<Map<String, bool>> _moduleStatuses(String merchantId) async {
     try {
       final snapshot = await firestoreService
-          .collection('${FirebasePaths.merchants}/$merchantId/${FirebasePaths.featureConfigs}')
+          .collection(FirebasePaths.merchantFeatureConfigs(merchantId))
           .get();
-      return {
-        for (final doc in snapshot.docs)
-          doc.id: _featureActive(doc.data()),
-      };
+      final states = <String, bool>{};
+      for (final doc in snapshot.docs) {
+        final data = doc.data();
+        final active = _featureActive(data);
+        states[doc.id] = active;
+        if (doc.id == 'menuCatalog') {
+          final settings = data['settings'];
+          if (settings is Map) {
+            states['catalogOrderQrCashier'] = active && settings['catalogOrderQrCashier'] == true;
+            states['catalogOrderSendCashier'] = active && settings['catalogOrderSendCashier'] == true;
+            states['catalogTableOrders'] = active && settings['catalogTableOrders'] == true;
+          }
+        }
+      }
+      return states;
     } catch (_) {
       return const {};
     }
@@ -99,13 +114,16 @@ class MerchantDashboardService {
 
   bool _featureActive(Map<String, dynamic> data) {
     final status = data['status']?.toString();
-    return data['isActive'] == true || status == 'active' || status == 'enabled';
+    return data['isEnabled'] == true ||
+        data['isActive'] == true ||
+        status == 'active' ||
+        status == 'enabled';
   }
 
   Future<(int, bool)> _weekCredits(String merchantId) async {
     try {
       final snapshot = await firestoreService
-          .collection('${FirebasePaths.merchants}/$merchantId/${FirebasePaths.billingWeeks}')
+          .collection(FirebasePaths.merchantBillingWeeks(merchantId))
           .orderBy('updatedAt', descending: true)
           .limit(1)
           .get();

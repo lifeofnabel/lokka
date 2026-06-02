@@ -9,6 +9,11 @@ class AuthService {
   final FirebaseAuth _firebaseAuth;
   static bool _googleInitialized = false;
 
+  static Future<void> configurePersistence() async {
+    if (!kIsWeb) return;
+    await FirebaseAuth.instance.setPersistence(Persistence.LOCAL);
+  }
+
   Stream<User?> authStateChanges() => _firebaseAuth.authStateChanges();
 
   User? get currentUser => _firebaseAuth.currentUser;
@@ -90,6 +95,75 @@ class AuthService {
   }
 
   Future<void> signOut() => _firebaseAuth.signOut();
+
+  /// Re-authenticates with email+password, then updates to [newPassword].
+  Future<void> reauthenticateAndChangePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    final user = currentUser;
+    if (user == null || user.email == null) {
+      throw FirebaseAuthException(
+        code: 'no-current-user',
+        message: 'Kein Benutzer eingeloggt.',
+      );
+    }
+    final credential = EmailAuthProvider.credential(
+      email: user.email!,
+      password: currentPassword,
+    );
+    await user.reauthenticateWithCredential(credential);
+    await user.updatePassword(newPassword);
+  }
+
+  /// Sends an SMS verification code to [phoneNumber].
+  /// Mobile only (iOS + Android). No reCAPTCHA needed.
+  Future<void> sendPhoneVerificationCode({
+    required String phoneNumber,
+    required void Function(String verificationId, int? resendToken) onCodeSent,
+    required void Function(FirebaseAuthException e) onVerificationFailed,
+    void Function(PhoneAuthCredential credential)? onAutoVerified,
+  }) async {
+    await _firebaseAuth.verifyPhoneNumber(
+      phoneNumber: phoneNumber,
+      verificationCompleted: (credential) {
+        onAutoVerified?.call(credential);
+      },
+      verificationFailed: onVerificationFailed,
+      codeSent: (verificationId, resendToken) {
+        onCodeSent(verificationId, resendToken);
+      },
+      codeAutoRetrievalTimeout: (_) {},
+    );
+  }
+
+  /// Links the current user's account with the phone credential.
+  /// Handles the case where the phone is already linked (re-auth).
+  Future<void> verifyPhoneCode({
+    required String verificationId,
+    required String smsCode,
+  }) async {
+    final user = currentUser;
+    if (user == null) {
+      throw FirebaseAuthException(
+        code: 'no-current-user',
+        message: 'Kein Benutzer eingeloggt.',
+      );
+    }
+    final credential = PhoneAuthProvider.credential(
+      verificationId: verificationId,
+      smsCode: smsCode,
+    );
+    try {
+      await user.linkWithCredential(credential);
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'provider-already-linked') {
+        await user.reauthenticateWithCredential(credential);
+      } else {
+        rethrow;
+      }
+    }
+  }
 
   Future<UserCredential> _signInWithEmail({
     required String email,

@@ -1,8 +1,8 @@
-import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:lokka/core/constants/firebasePaths.dart';
 import 'package:lokka/core/services/authService.dart';
 import 'package:lokka/core/services/firestoreService.dart';
+import 'package:lokka/core/services/localCacheService.dart';
 import 'package:lokka/features/user/discover/models/publicMerchantUserModel.dart';
 import '../models/walletCardModel.dart';
 import '../models/stampProgressModel.dart';
@@ -14,30 +14,45 @@ class UserWalletService {
   const UserWalletService({
     required this.firestoreService,
     required this.authService,
+    required this.cacheService,
   });
 
   final FirestoreService firestoreService;
   final AuthService authService;
+  final LocalCacheService cacheService;
 
   String? get _uid => authService.currentUser?.uid;
 
   Stream<List<WalletCardModel>> walletCardsStream() {
     final uid = _uid;
     if (uid == null) return Stream.value([]);
-    return firestoreService
-        .collection(
-            '${FirebasePaths.users}/$uid/${FirebasePaths.walletCards}')
+    return _cachedWalletCardsStream(uid);
+  }
+
+  Stream<List<WalletCardModel>> _cachedWalletCardsStream(String uid) async* {
+    final cached = await cacheService.readMapList('user.walletCards.$uid');
+    if (cached != null) {
+      yield cached.map(WalletCardModel.fromMap).toList();
+    }
+    yield* firestoreService
+        .collection(FirebasePaths.userWalletCards(uid))
         .orderBy('joinedAt', descending: true)
         .snapshots()
-        .map((snap) =>
-            snap.docs.map((d) => WalletCardModel.fromMap(d.data())).toList());
+        .asyncMap((snap) async {
+      final cards = snap.docs.map((d) => WalletCardModel.fromMap(d.data())).toList();
+      await cacheService.writeMapList(
+        'user.walletCards.$uid',
+        cards.map((card) => card.toMap()).toList(),
+      );
+      return cards;
+    });
   }
 
   Future<bool> isInWallet(String merchantId) async {
     final uid = _uid;
     if (uid == null) return false;
     final doc = await firestoreService.readDocument(
-      '${FirebasePaths.users}/$uid/${FirebasePaths.walletCards}/$merchantId',
+      FirebasePaths.userWalletCard(uid, merchantId),
     );
     return doc != null;
   }
@@ -47,11 +62,11 @@ class UserWalletService {
     if (uid == null) return;
 
     final prefix = _buildPrefix(merchant.shopName);
-    final number = _randomNumber();
+    final number = _hashNumber(uid, merchant.merchantId);
     final walletCode = '$prefix-$number';
 
     await firestoreService.setDocument(
-      '${FirebasePaths.users}/$uid/${FirebasePaths.walletCards}/${merchant.merchantId}',
+      FirebasePaths.userWalletCard(uid, merchant.merchantId),
       {
         'merchantId': merchant.merchantId,
         'merchantName': merchant.shopName,
@@ -76,8 +91,7 @@ class UserWalletService {
     final uid = _uid;
     if (uid == null) return Stream.value([]);
     return firestoreService
-        .collection(
-            '${FirebasePaths.users}/$uid/${FirebasePaths.stampProgress}')
+        .collection(FirebasePaths.userStampProgress(uid))
         .snapshots()
         .map((snap) =>
             snap.docs.map((d) => StampProgressModel.fromMap(d.data())).toList());
@@ -88,8 +102,7 @@ class UserWalletService {
     final uid = _uid;
     if (uid == null) return Stream.value([]);
     return firestoreService
-        .collection(
-            '${FirebasePaths.users}/$uid/${FirebasePaths.stampProgress}')
+        .collection(FirebasePaths.userStampProgress(uid))
         .where('merchantId', isEqualTo: merchantId)
         .snapshots()
         .map((snap) =>
@@ -100,8 +113,7 @@ class UserWalletService {
     final uid = _uid;
     if (uid == null) return Stream.value([]);
     return firestoreService
-        .collection(
-            '${FirebasePaths.users}/$uid/${FirebasePaths.pointsProgress}')
+        .collection(FirebasePaths.userPointsProgress(uid))
         .snapshots()
         .map((snap) =>
             snap.docs.map((d) => PointsProgressModel.fromMap(d.data())).toList());
@@ -112,8 +124,7 @@ class UserWalletService {
     final uid = _uid;
     if (uid == null) return Stream.value(null);
     return firestoreService
-        .collection(
-            '${FirebasePaths.users}/$uid/${FirebasePaths.pointsProgress}')
+        .collection(FirebasePaths.userPointsProgress(uid))
         .where('merchantId', isEqualTo: merchantId)
         .limit(1)
         .snapshots()
@@ -126,7 +137,7 @@ class UserWalletService {
     final uid = _uid;
     if (uid == null) return Stream.value([]);
     return firestoreService
-        .collection('${FirebasePaths.users}/$uid/${FirebasePaths.coupons}')
+        .collection(FirebasePaths.userCoupons(uid))
         .snapshots()
         .map((snap) =>
             snap.docs.map((d) => CouponModel.fromMap(d.data())).toList());
@@ -136,8 +147,7 @@ class UserWalletService {
     final uid = _uid;
     if (uid == null) return Stream.value([]);
     return firestoreService
-        .collection(
-            '${FirebasePaths.users}/$uid/${FirebasePaths.availableRewards}')
+        .collection(FirebasePaths.userAvailableRewards(uid))
         .snapshots()
         .map((snap) =>
             snap.docs.map((d) => AvailableRewardModel.fromMap(d.data())).toList());
@@ -147,10 +157,18 @@ class UserWalletService {
     final cleaned = shopName.replaceAll(RegExp(r'[^a-zA-Z]'), '');
     if (cleaned.length >= 2) return cleaned.substring(0, 2).toUpperCase();
     if (cleaned.length == 1) return cleaned.toUpperCase();
-    return shopName.substring(0, min(2, shopName.length)).toUpperCase();
+    final fallback = shopName.replaceAll(RegExp(r'\s'), '');
+    return fallback.substring(0, fallback.length.clamp(0, 2)).toUpperCase();
   }
 
-  String _randomNumber() {
-    return (10000 + Random().nextInt(90000)).toString();
+  /// Deterministic 5-digit number derived from uid+merchantId.
+  /// Same inputs always produce the same code.
+  String _hashNumber(String uid, String merchantId) {
+    final input = uid + merchantId;
+    int hash = 5381;
+    for (final c in input.codeUnits) {
+      hash = ((hash << 5) + hash + c) & 0x7FFFFFFF;
+    }
+    return (10000 + (hash % 90000)).toString();
   }
 }

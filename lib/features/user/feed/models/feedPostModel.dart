@@ -22,6 +22,11 @@ class FeedPostModel {
     this.newPrice,
     this.discountPercent,
     this.categoryId,
+    this.buttonText,
+    this.buttonLink,
+    this.buttonActionType,
+    this.validFrom,
+    this.validUntil,
     this.createdAt,
     this.updatedAt,
     this.publishedAt,
@@ -49,6 +54,11 @@ class FeedPostModel {
   final double? newPrice;
   final int? discountPercent;
   final String? categoryId;
+  final String? buttonText;
+  final String? buttonLink;
+  final String? buttonActionType;
+  final DateTime? validFrom;
+  final DateTime? validUntil;
   final DateTime? createdAt;
   final DateTime? updatedAt;
   final DateTime? publishedAt;
@@ -77,14 +87,62 @@ class FeedPostModel {
       newPrice: (map['newPrice'] as num?)?.toDouble(),
       discountPercent: (map['discountPercent'] as num?)?.toInt(),
       categoryId: map['categoryId'] as String?,
+      buttonText: map['buttonText'] as String?,
+      buttonLink: map['buttonLink'] as String?,
+      buttonActionType: map['buttonActionType'] as String?,
+      validFrom: _tsToDate(map['validFrom']),
+      validUntil: _tsToDate(map['validUntil']),
       createdAt: _tsToDate(map['createdAt']),
       updatedAt: _tsToDate(map['updatedAt']),
       publishedAt: _tsToDate(map['publishedAt']),
     );
   }
 
+  Map<String, dynamic> toMap() {
+    return {
+      'postId': postId,
+      'merchantId': merchantId,
+      'merchantName': merchantName,
+      'merchantLogoUrl': merchantLogoUrl,
+      'merchantArea': merchantArea,
+      'merchantShopType': merchantShopType,
+      'type': type,
+      'title': title,
+      'subtitle': subtitle,
+      'description': description,
+      'imageUrl': imageUrl,
+      'isActive': isActive,
+      'isArchived': isArchived,
+      'isPrivate': isPrivate,
+      'likesCount': likesCount,
+      'viewsCount': viewsCount,
+      'opensCount': opensCount,
+      'clicksCount': clicksCount,
+      'oldPrice': oldPrice,
+      'newPrice': newPrice,
+      'discountPercent': discountPercent,
+      'categoryId': categoryId,
+      'buttonText': buttonText,
+      'buttonLink': buttonLink,
+      'buttonActionType': buttonActionType,
+      'validFrom': validFrom?.toIso8601String(),
+      'validUntil': validUntil?.toIso8601String(),
+      'createdAt': createdAt?.toIso8601String(),
+      'updatedAt': updatedAt?.toIso8601String(),
+      'publishedAt': publishedAt?.toIso8601String(),
+    };
+  }
+
   bool get hasPriceInfo => newPrice != null || discountPercent != null;
   bool get hasDiscount => discountPercent != null && discountPercent! > 0;
+  bool get hasButton => buttonText != null && buttonText!.isNotEmpty;
+
+  bool get isCurrentlyValid {
+    final now = DateTime.now();
+    if (validFrom != null && now.isBefore(validFrom!)) return false;
+    if (validUntil != null && now.isAfter(validUntil!)) return false;
+    return true;
+  }
 }
 
 DateTime? _tsToDate(dynamic v) {

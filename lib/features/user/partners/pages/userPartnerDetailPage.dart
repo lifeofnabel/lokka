@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:lokka/core/services/authService.dart';
 import 'package:lokka/core/services/firestoreService.dart';
+import 'package:lokka/core/services/localCacheService.dart';
 import 'package:lokka/core/theme/appColors.dart';
 import 'package:lokka/core/theme/appRadius.dart';
 import 'package:lokka/core/theme/appSpacing.dart';
@@ -30,6 +31,7 @@ class _UserPartnerDetailPageState extends State<UserPartnerDetailPage> {
     _walletService = UserWalletService(
       firestoreService: context.read<FirestoreService>(),
       authService: context.read<AuthService>(),
+      cacheService: context.read<LocalCacheService>(),
     );
     _checkWallet();
   }

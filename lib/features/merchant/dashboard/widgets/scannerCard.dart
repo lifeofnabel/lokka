@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../../../../core/services/languageService.dart';
 import '../../../../core/theme/appColors.dart';
 import '../../../../core/theme/appRadius.dart';
 import '../../../../core/theme/appShadows.dart';
@@ -12,6 +14,7 @@ class ScannerCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final texts = context.watch<LanguageService>();
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(AppRadius.xl),
@@ -35,18 +38,18 @@ class ScannerCard extends StatelessWidget {
               child: const Icon(Icons.qr_code_scanner_rounded, color: AppColors.mint, size: 31),
             ),
             const SizedBox(width: AppSpacing.md),
-            const Expanded(
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Kunde scannen',
-                    style: TextStyle(color: AppColors.white, fontSize: 25, fontWeight: FontWeight.w900, height: 1),
+                    texts.text('merchant.dashboard.scanCustomer'),
+                    style: const TextStyle(color: AppColors.white, fontSize: 25, fontWeight: FontWeight.w900, height: 1),
                   ),
-                  SizedBox(height: 8),
+                  const SizedBox(height: 8),
                   Text(
-                    'Punkte, Stempel oder Bestellung pruefen',
-                    style: TextStyle(color: Color(0xFFD7DED6), height: 1.25, fontWeight: FontWeight.w700),
+                    texts.text('merchant.dashboard.scanCustomerTip'),
+                    style: const TextStyle(color: Color(0xFFD7DED6), height: 1.25, fontWeight: FontWeight.w700),
                   ),
                 ],
               ),
