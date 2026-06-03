@@ -20,6 +20,7 @@ enum UploadImageType {
   pointsReward,
   coupon,
   general,
+  displayLayout,
 }
 
 class PickedUploadFile {
@@ -250,6 +251,14 @@ class UploadService {
           aspectHeight: 1,
           quality: 84,
           maxBytes: 2 * 1024 * 1024,
+        ),
+      UploadImageType.displayLayout => const _ImageSpec(
+          width: 1920,
+          height: 1080,
+          aspectWidth: 16,
+          aspectHeight: 9,
+          quality: 86,
+          maxBytes: 4 * 1024 * 1024,
         ),
     };
   }

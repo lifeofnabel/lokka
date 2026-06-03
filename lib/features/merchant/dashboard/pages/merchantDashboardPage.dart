@@ -17,6 +17,7 @@ import '../widgets/merchantHeroCard.dart';
 import '../widgets/merchantModuleCard.dart';
 import '../widgets/merchantTodaySummarySheet.dart';
 import '../widgets/scannerCard.dart';
+import '../../display_studio/widgets/display_studio_dashboard_card.dart';
 
 class MerchantDashboardPage extends StatelessWidget {
   const MerchantDashboardPage({super.key});
@@ -114,6 +115,10 @@ class _MerchantDashboardView extends StatelessWidget {
                   data: data,
                   modules: _mainModules,
                   onModuleTap: (module) => _handleModuleTap(context, data, module, texts),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                DisplayStudioDashboardCard(
+                  onTap: () => context.push('/merchant/display-studio'),
                 ),
                 const SizedBox(height: AppSpacing.md),
                 _MoreToolsLauncher(onTap: () => _showMoreToolsSheet(context, data)),
@@ -407,6 +412,8 @@ const _mainModules = [
   _DashboardModule(key: 'coupons', titleKey: 'merchant.coupons.title', descriptionKey: 'merchant.coupons.tooltip', icon: Icons.confirmation_number_rounded, path: '/merchant/coupons'),
   _DashboardModule(key: 'campaigns', titleKey: 'merchant.campaigns.title', descriptionKey: 'merchant.campaigns.tooltip', icon: Icons.emoji_events_rounded, badgeKey: 'merchant.dashboard.soon', comingSoon: true, path: '/merchant/campaigns'),
   _DashboardModule(key: 'shiftPlanner', titleKey: 'merchant.shifts.title', descriptionKey: 'merchant.shifts.tooltip', icon: Icons.work_history_rounded, badgeKey: 'merchant.dashboard.soon', comingSoon: true, path: '/merchant/shifts'),
+  _DashboardModule(key: 'deliveryService', titleKey: 'merchant.delivery.title', descriptionKey: 'merchant.delivery.tooltip', icon: Icons.delivery_dining_rounded, badgeKey: 'merchant.dashboard.soon', comingSoon: true, path: '/merchant/delivery'),
+  _DashboardModule(key: 'reservations', titleKey: 'merchant.reservations.title', descriptionKey: 'merchant.reservations.tooltip', icon: Icons.event_seat_rounded, badgeKey: 'merchant.dashboard.soon', comingSoon: true, path: '/merchant/reservations'),
 ];
 
 const _toolModules = [
@@ -448,6 +455,15 @@ void _handleModuleTap(
 ) {
   if (!_isModuleActive(data, module)) {
     _showDisabledSheet(context, title: _moduleTitle(texts, module));
+    return;
+  }
+
+  if (module.comingSoon) {
+    _showComingSoonSheet(
+      context,
+      title: _moduleTitle(texts, module),
+      message: texts.text('merchant.dashboard.preparedSoon'),
+    );
     return;
   }
 
@@ -705,6 +721,13 @@ const _catalogToolEntries = [
     tooltipKey: 'merchant.catalog.tablesTip',
     icon: Icons.table_bar_rounded,
     path: '/merchant/tools/tables',
+  ),
+  _ToolEntry(
+    titleKey: 'merchant.itemTags.title',
+    subtitleKey: 'merchant.itemTags.subtitle',
+    tooltipKey: 'merchant.itemTags.tooltip',
+    icon: Icons.fact_check_rounded,
+    path: '/merchant/tools/itemTags',
   ),
 ];
 

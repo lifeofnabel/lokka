@@ -22,11 +22,13 @@ import '../features/merchant/comingSoon/pages/merchantComingSoonPage.dart';
 import '../features/merchant/coupons/pages/merchantCouponsPage.dart';
 import '../features/merchant/customers/pages/merchantCustomersPage.dart';
 import '../features/merchant/dashboard/pages/merchantDashboardPage.dart';
+import '../features/merchant/display_studio/pages/display_studio_page.dart';
 import '../features/merchant/features/pages/merchantFeaturesPage.dart';
 import '../features/merchant/feedManager/pages/merchantFeedCreatePage.dart';
 import '../features/merchant/feedManager/pages/merchantFeedManagePage.dart';
 import '../features/invite/pages/merchantInvitePage.dart';
 import '../features/merchant/catalog/pages/merchantCategoriesPage.dart';
+import '../features/merchant/catalog/pages/merchantItemTagsPage.dart';
 import '../features/merchant/catalog/pages/merchantItemsPage.dart';
 import '../features/merchant/coupons/pages/merchantCouponEditPage.dart';
 import '../features/merchant/orders/pages/merchantOrderDetailPage.dart';
@@ -333,6 +335,28 @@ class AppRouter {
         ),
       ),
       GoRoute(
+        path: '/merchant/delivery',
+        builder: (context, state) => const MerchantComingSoonPage(
+          titleKey: 'merchant.delivery.title',
+          subtitleKey: 'merchant.delivery.subtitle',
+          tooltipKey: 'merchant.delivery.tooltip',
+          icon: Icons.delivery_dining_rounded,
+        ),
+      ),
+      GoRoute(
+        path: '/merchant/reservations',
+        builder: (context, state) => const MerchantComingSoonPage(
+          titleKey: 'merchant.reservations.title',
+          subtitleKey: 'merchant.reservations.subtitle',
+          tooltipKey: 'merchant.reservations.tooltip',
+          icon: Icons.event_seat_rounded,
+        ),
+      ),
+      GoRoute(
+        path: '/merchant/display-studio',
+        builder: (context, state) => const DisplayStudioPage(),
+      ),
+      GoRoute(
         path: '/merchant/feed/create',
         builder: (context, state) => const MerchantFeedCreatePage(),
       ),
@@ -347,6 +371,10 @@ class AppRouter {
       GoRoute(
         path: '/merchant/tools/items',
         builder: (context, state) => const MerchantItemsPage(),
+      ),
+      GoRoute(
+        path: '/merchant/tools/itemTags',
+        builder: (context, state) => const MerchantItemTagsPage(),
       ),
       GoRoute(
         path: '/merchant/tools/shop',

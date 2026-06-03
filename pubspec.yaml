@@ -32,10 +32,10 @@ dependencies:
     sdk: flutter
 
   cached_network_image:
-  cloud_firestore:
+  cloud_firestore: ^6.5.0
   file_picker:
   firebase_auth:
-  firebase_core:
+  firebase_core: ^4.10.0
   flutter_dotenv:
   flutter_map:
   go_router:
@@ -47,9 +47,13 @@ dependencies:
   image_picker:
   latlong2:
   mobile_scanner:
-  provider:
-  qr_flutter:
+  provider: ^6.1.5+1
+  qr_flutter: ^4.1.0
   cupertino_icons: ^1.0.8
+  shared_preferences: ^2.5.5
+  connectivity_plus: ^7.1.1
+  package_info_plus: ^10.1.0
+  uuid: ^4.5.3
 
 dev_dependencies:
   flutter_test:
