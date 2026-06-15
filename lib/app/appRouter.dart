@@ -23,7 +23,6 @@ import '../features/merchant/comingSoon/pages/merchantComingSoonPage.dart';
 import '../features/merchant/coupons/pages/merchantCouponsPage.dart';
 import '../features/merchant/customers/pages/merchantCustomersPage.dart';
 import '../features/merchant/dashboard/pages/merchantDashboardPage.dart';
-import '../features/merchant/display_studio/pages/display_studio_page.dart';
 import '../features/merchant/features/pages/merchantFeaturesPage.dart';
 import '../features/merchant/feedManager/pages/merchantFeedCreatePage.dart';
 import '../features/merchant/feedManager/pages/merchantFeedManagePage.dart';
@@ -399,6 +398,11 @@ class AppRouter {
         path: '/merchant/catalog/demo',
         redirect: (_, _) => '/merchant/catalog',
       ),
+      // Coupons (#36): vollständig gebaut, aber bewusst NOCH NICHT live – kein
+      // Dashboard-/Feature-Einstieg (merchantFeatureModule coupons = comingSoon).
+      // Nur per Deep-Link erreichbar; die Schreibpfade sind durch den
+      // /merchant/*-Route-Guard (#3) + die Firestore-Rules geschützt.
+      // Aktivieren = Feature-Toggle aktiv schalten + Dashboard-Modul ergänzen.
       GoRoute(
         path: '/merchant/coupons',
         builder: (context, state) => _merchantDark(const MerchantCouponsPage()),
@@ -474,13 +478,6 @@ class AppRouter {
             icon: Icons.event_seat_rounded,
           ),
         ),
-      ),
-      GoRoute(
-        path: '/merchant/display-studio',
-        // Display Studio bleibt im hellen Look: viele Schwarz/Weiß-Werte sind
-        // Design-Canvas-Inhalt (man gestaltet In-Store-Bildschirme), kein
-        // UI-Chrome – Dunkel-Wrapping würde das Gestaltungs-Tool verfälschen.
-        builder: (context, state) => const DisplayStudioPage(),
       ),
       GoRoute(
         path: '/merchant/feed/create',

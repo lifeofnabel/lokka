@@ -158,39 +158,6 @@ class FirebasePaths {
   static String merchantShifts(String merchantId) =>
       '${merchant(merchantId)}/$shifts';
 
-  // Display Studio
-  static const displayStudio = 'displayStudio';
-  static const displayStudioMain = 'main';
-  static const displayLayouts = 'displayLayouts';
-  static const displayDevices = 'displayDevices';
-  static const displayRoutines = 'displayRoutines';
-  static const displayLogs = 'displayLogs';
-
-  static String merchantDisplayStudio(String merchantId) =>
-      '${merchant(merchantId)}/$displayStudio';
-  static String merchantDisplayStudioMain(String merchantId) =>
-      '${merchantDisplayStudio(merchantId)}/$displayStudioMain';
-  static String merchantDisplayLayouts(String merchantId) =>
-      '${merchantDisplayStudioMain(merchantId)}/$displayLayouts';
-  static String merchantDisplayLayout(String merchantId, String layoutId) =>
-      '${merchantDisplayLayouts(merchantId)}/$layoutId';
-  static String merchantDisplayDevices(String merchantId) =>
-      '${merchantDisplayStudioMain(merchantId)}/$displayDevices';
-  static String merchantDisplayDevice(String merchantId, String deviceId) =>
-      '${merchantDisplayDevices(merchantId)}/$deviceId';
-  static String merchantDisplayRoutines(String merchantId) =>
-      '${merchantDisplayStudioMain(merchantId)}/$displayRoutines';
-  static String merchantDisplayRoutine(String merchantId, String routineId) =>
-      '${merchantDisplayRoutines(merchantId)}/$routineId';
-  static String merchantDisplayLogs(String merchantId) =>
-      '${merchantDisplayStudioMain(merchantId)}/$displayLogs';
-  static String merchantDisplayLog(String merchantId, String logId) =>
-      '${merchantDisplayLogs(merchantId)}/$logId';
-
-  // Display Pairing Sessions (global root collection)
-  static const displayPairingSessions = 'displayPairingSessions';
-  static String displayPairingSession(String pairingId) =>
-      '$displayPairingSessions/$pairingId';
 
   static String feedLikes(String postId) => '${feedPost(postId)}/$likes';
   static String feedLike(String postId, String uid) =>
