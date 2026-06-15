@@ -230,7 +230,7 @@ class MerchantActionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final bg = isDark ? MerchantPremiumColors.baseElevated : MerchantPremiumColors.surface;
     final fg = isDark ? Colors.white : MerchantPremiumColors.ink;
-    final muted = isDark ? Colors.white.withOpacity(0.66) : MerchantPremiumColors.muted;
+    final muted = isDark ? Colors.white.withValues(alpha: 0.66) : MerchantPremiumColors.muted;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(AppRadius.xl),
@@ -250,7 +250,7 @@ class MerchantActionCard extends StatelessWidget {
               : null,
           borderRadius: BorderRadius.circular(AppRadius.xl),
           border: Border.all(
-            color: isDark ? Colors.white.withOpacity(0.10) : MerchantPremiumColors.line,
+            color: isDark ? Colors.white.withValues(alpha: 0.10) : MerchantPremiumColors.line,
           ),
           boxShadow: MerchantPremiumShadows.soft,
         ),
@@ -264,7 +264,7 @@ class MerchantActionCard extends StatelessWidget {
                   height: 44,
                   decoration: BoxDecoration(
                     color: isDark
-                        ? MerchantPremiumColors.gold.withOpacity(0.18)
+                        ? MerchantPremiumColors.gold.withValues(alpha: 0.18)
                         : MerchantPremiumColors.goldSoft,
                     borderRadius: BorderRadius.circular(17),
                   ),
@@ -432,22 +432,22 @@ _StatusColors _colorsFor(String status) {
     'success' || 'active' => _StatusColors(
         background: MerchantPremiumColors.successSoft,
         foreground: MerchantPremiumColors.success,
-        border: MerchantPremiumColors.success.withOpacity(0.18),
+        border: MerchantPremiumColors.success.withValues(alpha: 0.18),
       ),
     'warning' || 'paused' => _StatusColors(
         background: MerchantPremiumColors.warningSoft,
         foreground: MerchantPremiumColors.warning,
-        border: MerchantPremiumColors.warning.withOpacity(0.20),
+        border: MerchantPremiumColors.warning.withValues(alpha: 0.20),
       ),
     'danger' || 'archived' => _StatusColors(
         background: MerchantPremiumColors.dangerSoft,
         foreground: MerchantPremiumColors.danger,
-        border: MerchantPremiumColors.danger.withOpacity(0.18),
+        border: MerchantPremiumColors.danger.withValues(alpha: 0.18),
       ),
     'dark' => _StatusColors(
-        background: MerchantPremiumColors.gold.withOpacity(0.16),
+        background: MerchantPremiumColors.gold.withValues(alpha: 0.16),
         foreground: MerchantPremiumColors.goldSoft,
-        border: MerchantPremiumColors.gold.withOpacity(0.22),
+        border: MerchantPremiumColors.gold.withValues(alpha: 0.22),
       ),
     _ => const _StatusColors(
         background: MerchantPremiumColors.surfaceAlt,

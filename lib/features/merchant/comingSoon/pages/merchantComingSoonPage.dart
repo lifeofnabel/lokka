@@ -37,7 +37,7 @@ class MerchantComingSoonPage extends StatelessWidget {
             decoration: BoxDecoration(
               color: MerchantPremiumColors.ink,
               borderRadius: BorderRadius.circular(34),
-              border: Border.all(color: Colors.white.withOpacity(0.10)),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
               boxShadow: MerchantPremiumShadows.card,
             ),
             child: Column(
@@ -47,7 +47,7 @@ class MerchantComingSoonPage extends StatelessWidget {
                   width: 62,
                   height: 62,
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.12),
+                    color: Colors.white.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(24),
                   ),
                   child: Icon(icon, color: Colors.white, size: 30),
@@ -66,7 +66,7 @@ class MerchantComingSoonPage extends StatelessWidget {
                 Text(
                   texts.text(tooltipKey),
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.68),
+                    color: Colors.white.withValues(alpha: 0.68),
                     fontWeight: FontWeight.w800,
                     height: 1.35,
                   ),

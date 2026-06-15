@@ -238,7 +238,7 @@ class _PublicNoticeCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(26),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.16),
+            color: Colors.black.withValues(alpha: 0.16),
             blurRadius: 24,
             offset: const Offset(0, 12),
           ),
@@ -250,7 +250,7 @@ class _PublicNoticeCard extends StatelessWidget {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: palette.background.withOpacity(0.12),
+              color: palette.background.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(16),
             ),
             child: Icon(Icons.info_outline_rounded, color: palette.background, size: 21),
@@ -371,7 +371,7 @@ class _PublicItemCard extends StatelessWidget {
           border: Border.all(color: palette.line),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(palette.dark ? 0.12 : 0.045),
+              color: Colors.black.withValues(alpha: palette.dark ? 0.12 : 0.045),
               blurRadius: 20,
               offset: const Offset(0, 10),
             ),

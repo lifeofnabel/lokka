@@ -100,7 +100,7 @@ class _OrderHeader extends StatelessWidget {
           ],
         ),
         borderRadius: BorderRadius.circular(32),
-        border: Border.all(color: MerchantPremiumColors.gold.withOpacity(0.20)),
+        border: Border.all(color: MerchantPremiumColors.gold.withValues(alpha: 0.20)),
         boxShadow: MerchantPremiumShadows.card,
       ),
       child: Column(
@@ -319,9 +319,9 @@ class _LightPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
       decoration: BoxDecoration(
-        color: MerchantPremiumColors.gold.withOpacity(0.16),
+        color: MerchantPremiumColors.gold.withValues(alpha: 0.16),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: MerchantPremiumColors.gold.withOpacity(0.22)),
+        border: Border.all(color: MerchantPremiumColors.gold.withValues(alpha: 0.22)),
       ),
       child: Text(
         label,

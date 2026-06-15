@@ -96,7 +96,7 @@ class _OrderSummary extends StatelessWidget {
           ],
         ),
         borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: MerchantPremiumColors.gold.withOpacity(0.20)),
+        border: Border.all(color: MerchantPremiumColors.gold.withValues(alpha: 0.20)),
         boxShadow: MerchantPremiumShadows.card,
       ),
       child: Row(
@@ -175,7 +175,7 @@ class _DividerLine extends StatelessWidget {
       width: 1,
       height: 38,
       margin: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-      color: MerchantPremiumColors.gold.withOpacity(0.18),
+      color: MerchantPremiumColors.gold.withValues(alpha: 0.18),
     );
   }
 }
@@ -209,7 +209,7 @@ class _FilterBar extends StatelessWidget {
               selectedColor: MerchantPremiumColors.goldSoft,
               backgroundColor: MerchantPremiumColors.baseSoft,
               side: BorderSide(
-                color: selected ? MerchantPremiumColors.gold : Colors.white.withOpacity(0.12),
+                color: selected ? MerchantPremiumColors.gold : Colors.white.withValues(alpha: 0.12),
               ),
               labelStyle: TextStyle(
                 color: selected ? MerchantPremiumColors.ink : MerchantPremiumColors.mutedLight,

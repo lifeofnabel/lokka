@@ -42,7 +42,7 @@ class PublicShopActionBar extends StatelessWidget {
               borderRadius: BorderRadius.circular(30),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.22),
+                  color: Colors.black.withValues(alpha: 0.22),
                   blurRadius: 26,
                   offset: const Offset(0, 14),
                 ),
@@ -67,7 +67,7 @@ class PublicShopActionBar extends StatelessWidget {
                         width: 46,
                         height: 46,
                         decoration: BoxDecoration(
-                          color: fg.withOpacity(0.10),
+                          color: fg.withValues(alpha: 0.10),
                           borderRadius: BorderRadius.circular(18),
                         ),
                         child: Icon(Icons.shopping_bag_rounded, color: fg),

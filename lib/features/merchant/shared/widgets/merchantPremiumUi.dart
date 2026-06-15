@@ -3,32 +3,34 @@ import 'package:flutter/material.dart';
 class MerchantPremiumColors {
   const MerchantPremiumColors._();
 
-  // ── Google-Home-Dark – neutral, dunkel, Grün als Akzent ──────────────────
+  // ── Soft-Dark – neutral, dunkel, Grün als Akzent ─────────────────────────
   // Token-Namen bleiben gleich (alle Merchant-Seiten erben automatisch).
-  // ACHTUNG: surface ist jetzt DUNKEL, ink ist HELL (Theme invertiert).
-  // Minimal aufgehellt für besseren Kontrast / klarere Karten-Abgrenzung.
-  static const Color base = Color(0xFF17181B); // Hintergrund (dunkel, weicher)
-  static const Color baseElevated = Color(0xFF202327);
-  static const Color baseSoft = Color(0xFF2A2D32);
-  static const Color surface = Color(0xFF24272B); // Karten (heller abgesetzt)
-  static const Color surfaceAlt = Color(0xFF2E3137);
-  static const Color surfaceWarm = Color(0xFF33373D);
-  static const Color ink = Color(0xFFF1F3F5); // Text hell (höherer Kontrast)
-  static const Color muted = Color(0xFFAEB4BB); // Sekundärtext (heller)
-  static const Color mutedLight = Color(0xFFCDD1D6);
-  static const Color line = Color(0xFF3C4047); // Border/Divider (sichtbarer)
-  static const Color gold = Color(0xFF45C9A4); // Akzent = Grün
-  static const Color goldSoft = Color(0xFF14352C); // grüner Container (dunkel)
-  static const Color mint = Color(0xFF8EE8C8);
-  static const Color mintSoft = Color(0xFF14352C);
-  static const Color coral = Color(0xFFFF8A6A);
-  static const Color coralSoft = Color(0xFF3A231D);
-  static const Color success = Color(0xFF5BD18E);
-  static const Color successSoft = Color(0xFF14352A);
-  static const Color danger = Color(0xFFF2776B);
-  static const Color dangerSoft = Color(0xFF3A1E1B);
-  static const Color warning = Color(0xFFF9C266);
-  static const Color warningSoft = Color(0xFF3A2F16);
+  // ACHTUNG: surface ist DUNKEL, ink ist HELL (Theme invertiert).
+  // Aufgehellt (weiches Anthrazit statt Fast-Schwarz) + helleres Grün für
+  // besseren Kontrast/Lesbarkeit – bleibt aber dunkler als der User-Bereich.
+  // WICHTIG: Werte mit `AppTheme.merchantDark` (appTheme.dart) synchron halten.
+  static const Color base = Color(0xFF1E2126); // Hintergrund (weiches Anthrazit)
+  static const Color baseElevated = Color(0xFF262A30);
+  static const Color baseSoft = Color(0xFF2F343B);
+  static const Color surface = Color(0xFF2C3036); // Karten (klar abgesetzt)
+  static const Color surfaceAlt = Color(0xFF373C44);
+  static const Color surfaceWarm = Color(0xFF3E434C);
+  static const Color ink = Color(0xFFF5F7F9); // Primärtext (hoher Kontrast)
+  static const Color muted = Color(0xFFBBC2CA); // Sekundärtext (klar lesbar)
+  static const Color mutedLight = Color(0xFFDBDFE4);
+  static const Color line = Color(0xFF49505A); // Border/Divider (sichtbar)
+  static const Color gold = Color(0xFF55D8B0); // Akzent = Grün (heller)
+  static const Color goldSoft = Color(0xFF1D4A3D); // grüner Container
+  static const Color mint = Color(0xFF9CEFD4);
+  static const Color mintSoft = Color(0xFF1D4A3D);
+  static const Color coral = Color(0xFFFF9270);
+  static const Color coralSoft = Color(0xFF402720);
+  static const Color success = Color(0xFF63D996);
+  static const Color successSoft = Color(0xFF173D2F);
+  static const Color danger = Color(0xFFF58578);
+  static const Color dangerSoft = Color(0xFF40221E);
+  static const Color warning = Color(0xFFFBCB73);
+  static const Color warningSoft = Color(0xFF40331A);
 
   // Transparenz / Glas (Google-Home-Feel auf dunklem Grund).
   static const Color glass = Color(0x14FFFFFF); // subtiler heller Overlay
@@ -40,7 +42,7 @@ class MerchantPremiumShadows {
 
   static List<BoxShadow> get card => [
         BoxShadow(
-          color: const Color(0xFF3B2415).withOpacity(0.18),
+          color: const Color(0xFF3B2415).withValues(alpha: 0.18),
           blurRadius: 32,
           offset: const Offset(0, 16),
         ),
@@ -48,7 +50,7 @@ class MerchantPremiumShadows {
 
   static List<BoxShadow> get soft => [
         BoxShadow(
-          color: const Color(0xFF3B2415).withOpacity(0.08),
+          color: const Color(0xFF3B2415).withValues(alpha: 0.08),
           blurRadius: 24,
           offset: const Offset(0, 12),
         ),
@@ -123,13 +125,13 @@ class MerchantPremiumIconBox extends StatelessWidget {
       height: size,
       decoration: BoxDecoration(
         color: dark
-            ? MerchantPremiumColors.gold.withOpacity(0.18)
+            ? MerchantPremiumColors.gold.withValues(alpha: 0.18)
             : MerchantPremiumColors.goldSoft,
         borderRadius: BorderRadius.circular(size * 0.34),
         border: Border.all(
           color: dark
-              ? Colors.white.withOpacity(0.16)
-              : MerchantPremiumColors.gold.withOpacity(0.22),
+              ? Colors.white.withValues(alpha: 0.16)
+              : MerchantPremiumColors.gold.withValues(alpha: 0.22),
         ),
       ),
       child: Icon(
@@ -207,7 +209,7 @@ InputDecoration merchantPremiumInputDecoration({
       fontWeight: FontWeight.w800,
     ),
     hintStyle: TextStyle(
-      color: MerchantPremiumColors.muted.withOpacity(0.72),
+      color: MerchantPremiumColors.muted.withValues(alpha: 0.72),
       fontWeight: FontWeight.w700,
     ),
     border: border,

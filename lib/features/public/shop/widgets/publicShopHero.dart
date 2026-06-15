@@ -38,7 +38,7 @@ class PublicShopHero extends StatelessWidget {
         borderRadius: BorderRadius.circular(34),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(darkMode ? 0.28 : 0.16),
+            color: Colors.black.withValues(alpha: darkMode ? 0.28 : 0.16),
             blurRadius: 30,
             offset: const Offset(0, 15),
           ),
@@ -66,8 +66,8 @@ class PublicShopHero extends StatelessWidget {
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    Colors.black.withOpacity(0.16),
-                    Colors.black.withOpacity(0.88),
+                    Colors.black.withValues(alpha: 0.16),
+                    Colors.black.withValues(alpha: 0.88),
                   ],
                 ),
               ),
@@ -121,7 +121,7 @@ class PublicShopHero extends StatelessWidget {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
-                                color: AppColors.white.withOpacity(0.74),
+                                color: AppColors.white.withValues(alpha: 0.74),
                                 fontWeight: FontWeight.w800,
                               ),
                             ),
@@ -138,7 +138,7 @@ class PublicShopHero extends StatelessWidget {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      color: AppColors.white.withOpacity(0.68),
+                      color: AppColors.white.withValues(alpha: 0.68),
                       height: 1.3,
                       fontWeight: FontWeight.w700,
                     ),
@@ -167,9 +167,9 @@ class _HeroPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
       decoration: BoxDecoration(
-        color: AppColors.white.withOpacity(0.14),
+        color: AppColors.white.withValues(alpha: 0.14),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: AppColors.white.withOpacity(0.16)),
+        border: Border.all(color: AppColors.white.withValues(alpha: 0.16)),
       ),
       child: Text(
         label,

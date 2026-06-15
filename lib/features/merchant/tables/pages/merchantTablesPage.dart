@@ -154,7 +154,7 @@ class _AreaChip extends StatelessWidget {
           selectedColor: MerchantPremiumColors.surface,
           backgroundColor: MerchantPremiumColors.baseSoft,
           side: BorderSide(
-            color: selected ? MerchantPremiumColors.gold : Colors.white.withOpacity(0.12),
+            color: selected ? MerchantPremiumColors.gold : Colors.white.withValues(alpha: 0.12),
           ),
           labelStyle: TextStyle(
             color: selected ? MerchantPremiumColors.ink : MerchantPremiumColors.mutedLight,

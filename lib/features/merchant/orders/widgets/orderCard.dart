@@ -31,7 +31,7 @@ class OrderCard extends StatelessWidget {
               width: 50,
               height: 50,
               decoration: BoxDecoration(
-                color: _statusColor(order.status).withOpacity(0.12),
+                color: _statusColor(order.status).withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(18),
               ),
               child: Icon(Icons.receipt_long_rounded, color: _statusColor(order.status)),
