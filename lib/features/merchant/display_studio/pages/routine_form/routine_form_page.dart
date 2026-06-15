@@ -203,7 +203,7 @@ class _RoutineFormPageState extends State<RoutineFormPage> {
             Row(children: [
               const Expanded(child: Text('Routine aktiv', style: TextStyle(fontWeight: FontWeight.w800))),
               Switch(
-                value: _isActive, activeColor: AppColors.black,
+                value: _isActive, activeThumbColor: AppColors.black,
                 onChanged: (v) => setState(() => _isActive = v),
               ),
             ]),

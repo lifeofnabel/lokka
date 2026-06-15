@@ -6,8 +6,6 @@ import '../../../core/services/authService.dart';
 import '../../../core/services/firestoreService.dart';
 import '../../../core/services/languageService.dart';
 import '../../../core/theme/appColors.dart';
-import '../../../core/theme/appRadius.dart';
-import '../../../core/theme/appSpacing.dart';
 import '../providers/authProvider.dart';
 import '../widgets/authFlowWidgets.dart';
 
@@ -33,10 +31,11 @@ class _MerchantPendingPageState extends State<MerchantPendingPage> {
 
   Future<void> _loadStatus() async {
     final auth = context.read<AuthService>();
+    final firestore = context.read<FirestoreService>();
     final user = auth.currentUser;
     if (user == null) return;
     await auth.reloadCurrentUser();
-    final merchant = await context.read<FirestoreService>().getMerchantProfile(user.uid);
+    final merchant = await firestore.getMerchantProfile(user.uid);
     final status = merchant?['verificationStatus'] as String?;
     if (!mounted) return;
     setState(() {
@@ -57,29 +56,31 @@ class _MerchantPendingPageState extends State<MerchantPendingPage> {
     return AuthPageShell(
       titleKey: 'auth.merchantPending.title',
       subtitleKey: 'auth.merchantPending.subtitle',
+      dark: true,
       icon: Icons.verified_user_rounded,
       children: [
         _StatusCard(status: _status),
-        const SizedBox(height: AppSpacing.md),
+        const SizedBox(height: 16),
         if (!_emailVerified && _status == 'pending')
           AuthPrimaryButton(
             labelKey: 'auth.email.resend',
             onPressed: () => context.read<AuthProvider>().sendVerificationAgain(),
           ),
-        if (_status == 'approved') ...[
+        if (_status == 'approved')
           FilledButton.icon(
             onPressed: () => context.go('/merchant/dashboard'),
+            style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
             icon: const Icon(Icons.dashboard_rounded),
             label: Text(texts.text('auth.dashboard')),
           ),
-        ],
-        const SizedBox(height: AppSpacing.sm),
+        const SizedBox(height: 10),
         OutlinedButton.icon(
           onPressed: () => _showSupport(context, texts),
+          style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(52)),
           icon: const Icon(Icons.support_agent_rounded),
           label: Text(texts.text('auth.support')),
         ),
-        const SizedBox(height: AppSpacing.sm),
+        const SizedBox(height: 4),
         TextButton(
           onPressed: _signOut,
           child: Text(texts.text('auth.signOut')),
@@ -97,28 +98,48 @@ class _StatusCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final texts = context.watch<LanguageService>();
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
     final content = _content(status, texts);
     return Container(
-      padding: const EdgeInsets.all(AppSpacing.lg),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppColors.gray50,
-        borderRadius: BorderRadius.circular(AppRadius.large),
-        border: Border.all(color: AppColors.border),
+        color: AppColors.surfaceGray,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: cs.outlineVariant),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(content.icon, size: 34, color: AppColors.black),
-          const SizedBox(height: AppSpacing.md),
+          Container(
+            width: 52,
+            height: 52,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: cs.secondaryContainer,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Icon(content.icon, color: cs.onSecondaryContainer, size: 26),
+          ),
+          const SizedBox(height: 16),
           Text(
             content.title,
-            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
+            style: tt.titleLarge?.copyWith(
+              fontWeight: FontWeight.w700,
+              color: cs.onSurface,
+            ),
           ),
-          const SizedBox(height: AppSpacing.sm),
+          const SizedBox(height: 8),
           ...content.lines.map(
             (line) => Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Text(line, style: const TextStyle(height: 1.45, color: AppColors.gray700)),
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Text(
+                line,
+                style: tt.bodyMedium?.copyWith(
+                  height: 1.45,
+                  color: cs.onSurfaceVariant,
+                ),
+              ),
             ),
           ),
         ],
@@ -168,9 +189,46 @@ void _showSupport(BuildContext context, LanguageService texts) {
   showModalBottomSheet<void>(
     context: context,
     showDragHandle: true,
-    builder: (context) => Padding(
-      padding: const EdgeInsets.all(24),
-      child: Text(texts.text('auth.supportSoon')),
-    ),
+    builder: (context) {
+      final cs = Theme.of(context).colorScheme;
+      final tt = Theme.of(context).textTheme;
+      return SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 4, 24, 28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 64,
+                height: 64,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: cs.secondaryContainer,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Icon(Icons.support_agent_rounded,
+                    color: cs.onSecondaryContainer, size: 32),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                texts.text('auth.support'),
+                textAlign: TextAlign.center,
+                style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                texts.text('auth.supportSoon'),
+                textAlign: TextAlign.center,
+                style: tt.bodyMedium?.copyWith(
+                  color: cs.onSurfaceVariant,
+                  height: 1.4,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
   );
 }

@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../../core/services/authService.dart';
 import '../../../core/services/firestoreService.dart';
+import '../../../core/services/geoapifyService.dart';
 import '../../../core/services/languageService.dart';
 
 enum AuthDestination {
@@ -350,7 +351,7 @@ class AuthProvider extends ChangeNotifier {
     String? customShopType,
     bool emailVerified = false,
     String authProvider = 'password',
-  }) {
+  }) async {
     final now = FieldValue.serverTimestamp();
     final cleanedShopType = (customShopType ?? '').trim().isNotEmpty
         ? customShopType!.trim()
@@ -359,6 +360,18 @@ class AuthProvider extends ChangeNotifier {
       '${street.trim()} ${houseNumber.trim()}'.trim(),
       '${postalCode.trim()} ${city.trim()}'.trim(),
     ].where((part) => part.isNotEmpty).join(', ');
+
+    // Geo: Adresse → Koordinaten + normalisierte Adresse (best effort). Ohne
+    // Geoapify-Key oder bei Fehler bleibt geo == null und wir nutzen die
+    // getippte Adresse; lat/lng bleiben dann null wie bisher.
+    final geo = await GeoapifyService().forwardGeocode(
+      street: street,
+      houseNumber: houseNumber,
+      postalCode: postalCode,
+      city: city,
+    );
+    final formattedAddress =
+        (geo?.formatted.isNotEmpty ?? false) ? geo!.formatted : address;
 
     return _firestoreService.createMerchantProfile(
       uid: uid,
@@ -396,8 +409,8 @@ class AuthProvider extends ChangeNotifier {
         'houseNumber': houseNumber.trim(),
         'postalCode': postalCode.trim(),
         'city': city.trim(),
-        'address': address,
-        'fullAddress': address,
+        'address': formattedAddress,
+        'fullAddress': formattedAddress,
         'area': area.trim(),
         'country': 'Deutschland',
         'shopType': cleanedShopType,
@@ -405,8 +418,8 @@ class AuthProvider extends ChangeNotifier {
         'description': '',
         'logoUrl': '',
         'coverUrl': '',
-        'lat': null,
-        'lng': null,
+        'lat': geo?.lat,
+        'lng': geo?.lng,
         'emailVerified': emailVerified,
         'isPublic': false,
         'isActive': false,
@@ -423,8 +436,10 @@ class AuthProvider extends ChangeNotifier {
         'houseNumber': houseNumber.trim(),
         'postalCode': postalCode.trim(),
         'city': city.trim(),
-        'address': address,
-        'fullAddress': address,
+        'address': formattedAddress,
+        'fullAddress': formattedAddress,
+        'lat': geo?.lat,
+        'lng': geo?.lng,
         'phone': phone.trim(),
         'logoUrl': '',
         'coverUrl': '',

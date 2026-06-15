@@ -17,7 +17,8 @@ class DisplayStudioProvider extends ChangeNotifier {
 
   // ── Core state ────────────────────────────────────────────────────────────
   bool isLoading = true;
-  String? error;
+  String? error; // transienter Aktions-Fehler (→ SnackBar, #8)
+  String? loadError; // persistenter Stream-/Ladefehler (→ AppErrorState, #9)
   bool isBusy = false;
 
   DisplayStudioConfig? config;
@@ -114,10 +115,14 @@ class DisplayStudioProvider extends ChangeNotifier {
       (cfg) {
         config = cfg;
         isLoading = false;
+        loadError = null;
         notifyListeners();
       },
-      onError: (_) {
+      onError: (e) {
+        // Fehler NICHT mehr verschlucken (#9): erfassen, damit die View einen
+        // AppErrorState statt eines falschen Leerzustands zeigen kann.
         isLoading = false;
+        loadError = e.toString();
         notifyListeners();
       },
     );
@@ -125,26 +130,58 @@ class DisplayStudioProvider extends ChangeNotifier {
     _layoutsSub = service.layoutsStream().listen(
       (list) {
         layouts = list;
+        loadError = null;
         notifyListeners();
       },
-      onError: (_) {},
+      onError: (e) {
+        loadError = e.toString();
+        notifyListeners();
+      },
     );
 
     _devicesSub = service.devicesStream().listen(
       (list) {
         devices = list;
+        loadError = null;
         notifyListeners();
       },
-      onError: (_) {},
+      onError: (e) {
+        loadError = e.toString();
+        notifyListeners();
+      },
     );
 
     _routinesSub = service.routinesStream().listen(
       (list) {
         routines = list;
+        loadError = null;
         notifyListeners();
       },
-      onError: (_) {},
+      onError: (e) {
+        loadError = e.toString();
+        notifyListeners();
+      },
     );
+  }
+
+  /// Streams neu aufsetzen (für AppErrorState-Retry, #9).
+  Future<void> retry() async {
+    await _configSub?.cancel();
+    await _layoutsSub?.cancel();
+    await _devicesSub?.cancel();
+    await _routinesSub?.cancel();
+    loadError = null;
+    isLoading = true;
+    notifyListeners();
+    _init();
+    await ensureConfig();
+  }
+
+  /// Quittiert einen Aktions-Fehler, nachdem er (als SnackBar) gezeigt wurde (#8).
+  void clearError() {
+    if (error == null) return;
+    error = null;
+    notifyListeners();
   }
 
   // ── Config ────────────────────────────────────────────────────────────────

@@ -6,9 +6,9 @@ import '../../../../core/services/authService.dart';
 import '../../../../core/services/firestoreService.dart';
 import '../../../../core/services/languageService.dart';
 import '../../../../core/services/uploadService.dart';
-import '../../../../core/theme/appColors.dart';
 import '../../../../core/theme/appRadius.dart';
 import '../../../../core/theme/appSpacing.dart';
+import '../../shared/widgets/merchantPremiumUi.dart';
 import '../../tools/widgets/merchantToolUi.dart';
 import '../models/couponModel.dart';
 import '../providers/merchantCouponsProvider.dart';
@@ -288,9 +288,9 @@ class _MerchantCouponEditViewState extends State<_MerchantCouponEditView> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Text(
-                  texts.text('merchant.coupons.creditHint'),
-                  style: const TextStyle(
-                    color: AppColors.gray700,
+                  texts.text('merchant.coupons.section.publishTip'),
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                     fontWeight: FontWeight.w700,
                     height: 1.35,
                   ),
@@ -357,7 +357,6 @@ class _MerchantCouponEditViewState extends State<_MerchantCouponEditView> {
       isActive: status == CouponStatus.active,
       isArchived: status == CouponStatus.archived,
       isPrivate: false,
-      creditCostPerWeek: 1,
       createdAt: existing.createdAt,
       updatedAt: existing.updatedAt,
       publishedAt: existing.publishedAt,
@@ -438,7 +437,7 @@ class _CouponPreview extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
-        color: AppColors.black,
+        color: MerchantPremiumColors.baseElevated,
         borderRadius: BorderRadius.circular(32),
       ),
       child: Row(
@@ -464,7 +463,7 @@ class _CouponPreview extends StatelessWidget {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    color: AppColors.white,
+                    color: MerchantPremiumColors.ink,
                     fontSize: 25,
                     height: 1,
                     fontWeight: FontWeight.w900,
@@ -475,8 +474,8 @@ class _CouponPreview extends StatelessWidget {
                   coupon.valueText.isEmpty ? texts.text('merchant.coupons.previewValue') : coupon.valueText,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: AppColors.white.withOpacity(0.72),
+                  style: const TextStyle(
+                    color: MerchantPremiumColors.muted,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -506,9 +505,9 @@ class _SectionCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: AppSpacing.md),
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: MerchantPremiumColors.surface,
         borderRadius: BorderRadius.circular(AppRadius.xl),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: MerchantPremiumColors.line),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -561,12 +560,19 @@ class _ChipWrap extends StatelessWidget {
               label: Text(option.label),
               selected: selected == option.value,
               onSelected: (_) => onSelected(option.value),
-              selectedColor: AppColors.black,
+              selectedColor: MerchantPremiumColors.gold,
+              backgroundColor: MerchantPremiumColors.surfaceAlt,
               labelStyle: TextStyle(
-                color: selected == option.value ? AppColors.white : AppColors.black,
+                color: selected == option.value
+                    ? MerchantPremiumColors.base
+                    : MerchantPremiumColors.ink,
                 fontWeight: FontWeight.w800,
               ),
-              side: const BorderSide(color: AppColors.border),
+              side: BorderSide(
+                color: selected == option.value
+                    ? MerchantPremiumColors.gold
+                    : MerchantPremiumColors.line,
+              ),
             ),
           )
           .toList(),
@@ -584,9 +590,9 @@ class _CodePill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
-        color: AppColors.gray50,
+        color: MerchantPremiumColors.surfaceAlt,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: MerchantPremiumColors.line),
       ),
       child: Text(code, style: const TextStyle(fontWeight: FontWeight.w900)),
     );
@@ -603,7 +609,7 @@ Future<Map<String, String>?> _openCodesSheet({
     context: context,
     showDragHandle: true,
     isScrollControlled: true,
-    backgroundColor: AppColors.background,
+    backgroundColor: MerchantPremiumColors.surface,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
     ),
@@ -656,7 +662,7 @@ class _CodesSheetState extends State<_CodesSheet> {
             Text(
               texts.text('merchant.coupons.codesTip'),
               textAlign: TextAlign.center,
-              style: const TextStyle(color: AppColors.gray700, fontWeight: FontWeight.w700),
+              style: const TextStyle(color: MerchantPremiumColors.muted, fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: AppSpacing.md),
             Flexible(
@@ -704,9 +710,9 @@ class _CodeStatusRow extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: MerchantPremiumColors.surfaceAlt,
         borderRadius: BorderRadius.circular(AppRadius.xl),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: MerchantPremiumColors.line),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -756,9 +762,10 @@ class _StatusChoice extends StatelessWidget {
     return ChoiceChip(
       label: Text(label),
       selected: selected,
-      selectedColor: AppColors.black,
+      selectedColor: MerchantPremiumColors.gold,
+      backgroundColor: MerchantPremiumColors.surfaceWarm,
       labelStyle: TextStyle(
-        color: selected ? AppColors.white : AppColors.black,
+        color: selected ? MerchantPremiumColors.base : MerchantPremiumColors.ink,
         fontWeight: FontWeight.w900,
       ),
       onSelected: (_) => onTap(),
@@ -795,7 +802,7 @@ Future<bool?> _showPublishSheet(BuildContext context) {
   return showModalBottomSheet<bool>(
     context: context,
     showDragHandle: true,
-    backgroundColor: AppColors.surface,
+    backgroundColor: MerchantPremiumColors.surface,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
     ),
@@ -817,7 +824,7 @@ Future<bool?> _showPublishSheet(BuildContext context) {
               texts.text('merchant.coupons.publishMessage'),
               textAlign: TextAlign.center,
               style: const TextStyle(
-                color: AppColors.gray700,
+                color: MerchantPremiumColors.muted,
                 fontWeight: FontWeight.w700,
                 height: 1.35,
               ),

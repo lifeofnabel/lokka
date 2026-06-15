@@ -41,6 +41,7 @@ class _LayoutContentPageState extends State<LayoutContentPage> {
 
   // Type-specific controllers
   final _subtitleCtrl = TextEditingController();
+  final _menuTitleCtrl = TextEditingController(); // eigener Titel für Menü (#10)
   final _priceCtrl = TextEditingController();
   final _oldPriceCtrl = TextEditingController();
   final _badgeCtrl = TextEditingController();
@@ -55,9 +56,11 @@ class _LayoutContentPageState extends State<LayoutContentPage> {
   @override
   void dispose() {
     for (final c in [
-      _titleCtrl, _subtitleCtrl, _priceCtrl, _oldPriceCtrl,
+      _titleCtrl, _subtitleCtrl, _menuTitleCtrl, _priceCtrl, _oldPriceCtrl,
       _badgeCtrl, _textCtrl, _rewardCtrl, _descCtrl,
-    ]) c.dispose();
+    ]) {
+      c.dispose();
+    }
     super.dispose();
   }
 
@@ -171,7 +174,7 @@ class _LayoutContentPageState extends State<LayoutContentPage> {
       case DisplayLayoutType.menu:
         return [
           _Section('Menü-Inhalt', [
-            _Field('Kategorie / Titel', _titleCtrl),
+            _Field('Kategorie / Titel', _menuTitleCtrl),
             const SizedBox(height: 10),
             _MenuItemsEditor(
               items: _menuItems,
@@ -214,7 +217,7 @@ class _LayoutContentPageState extends State<LayoutContentPage> {
               const Expanded(child: Text('QR anzeigen', style: TextStyle(fontWeight: FontWeight.w700))),
               Switch(
                 value: _qrEnabled,
-                activeColor: AppColors.black,
+                activeThumbColor: AppColors.black,
                 onChanged: (v) => setState(() => _qrEnabled = v),
               ),
             ]),
@@ -266,8 +269,6 @@ class _LayoutContentPageState extends State<LayoutContentPage> {
         return [
           _Section('Freies Layout', [
             _Field('Haupttext', _textCtrl, maxLines: 4),
-            const SizedBox(height: 10),
-            _Field('Untertitel (optional)', _subtitleCtrl),
           ]),
         ];
 
@@ -291,7 +292,7 @@ class _LayoutContentPageState extends State<LayoutContentPage> {
         .toList();
 
     // Inject user input into corresponding blocks
-    void _updateBlockValue(String type, Map<String, dynamic> updates) {
+    void updateBlockValue(String type, Map<String, dynamic> updates) {
       for (final b in blocks) {
         if (b['type'] == type) {
           final v = Map<String, dynamic>.from(b['value'] as Map? ?? {});
@@ -302,19 +303,61 @@ class _LayoutContentPageState extends State<LayoutContentPage> {
       }
     }
 
+    // Aktualisiert den (skip+1)-ten Block eines Typs – z. B. den 2. text-Block
+    // (Untertitel). Gibt false zurück, wenn es so viele Blöcke nicht gibt (#11).
+    bool updateBlockValueAt(String type, int skip, Map<String, dynamic> updates) {
+      var seen = 0;
+      for (final b in blocks) {
+        if (b['type'] == type) {
+          if (seen == skip) {
+            final v = Map<String, dynamic>.from(b['value'] as Map? ?? {});
+            v.addAll(updates);
+            b['value'] = v;
+            return true;
+          }
+          seen++;
+        }
+      }
+      return false;
+    }
+
     switch (widget.type) {
       case DisplayLayoutType.deal:
-        _updateBlockValue('text', {'content': _textCtrl.text});
-        _updateBlockValue('price', {
+        updateBlockValue('text', {'content': _textCtrl.text});
+        // Untertitel → 2. text-Block, falls vorhanden (deal_splitimage); sonst
+        // neuen text-Block anhängen (deal_bigprice hat nur einen), damit die
+        // Eingabe in KEINEM Deal-Template verloren geht (#11).
+        if (_subtitleCtrl.text.trim().isNotEmpty) {
+          final subtitle = _subtitleCtrl.text.trim();
+          final written = updateBlockValueAt('text', 1, {'content': subtitle});
+          if (!written) {
+            blocks.add({
+              'type': 'text',
+              'order': blocks.length,
+              'isVisible': true,
+              'value': {
+                'content': subtitle,
+                'fontSize': 14.0,
+                'fontWeight': 'normal',
+                'color': '#CCCCCC',
+                'alignment': 'left',
+              },
+              'sourceType': 'manual',
+              'sourceId': '',
+              'style': const <String, dynamic>{},
+            });
+          }
+        }
+        updateBlockValue('price', {
           'price': _priceCtrl.text,
           'oldPrice': _oldPriceCtrl.text,
         });
-        _updateBlockValue('badge', {'text': _badgeCtrl.text});
+        updateBlockValue('badge', {'text': _badgeCtrl.text});
         break;
 
       case DisplayLayoutType.menu:
-        _updateBlockValue('text', {'content': _titleCtrl.text});
-        _updateBlockValue('menuList', {
+        updateBlockValue('text', {'content': _menuTitleCtrl.text});
+        updateBlockValue('menuList', {
           'items': _menuItems
               .map((item) => {'name': item['name'], 'price': item['price']})
               .toList(),
@@ -322,16 +365,21 @@ class _LayoutContentPageState extends State<LayoutContentPage> {
         break;
 
       case DisplayLayoutType.gallery:
-        _updateBlockValue('text', {'content': _textCtrl.text});
+        updateBlockValue('text', {'content': _textCtrl.text});
         break;
 
       case DisplayLayoutType.qr:
-        _updateBlockValue('text', {'content': _textCtrl.text});
-        _updateBlockValue('qr', {'targetType': _qrTargetType, 'showLabel': _qrEnabled});
+        updateBlockValue('text', {'content': _textCtrl.text});
+        updateBlockValue('qr', {
+          'targetType': _qrTargetType,
+          'showLabel': _qrEnabled,
+          // Benefit-Text → echtes qr-Label (#11); leer = Template-Default behalten.
+          if (_subtitleCtrl.text.trim().isNotEmpty) 'label': _subtitleCtrl.text.trim(),
+        });
         break;
 
       case DisplayLayoutType.loyalty:
-        _updateBlockValue('loyalty', {
+        updateBlockValue('loyalty', {
           'title': _textCtrl.text,
           'description': _descCtrl.text,
           'rewardText': _rewardCtrl.text,
@@ -339,19 +387,19 @@ class _LayoutContentPageState extends State<LayoutContentPage> {
         break;
 
       case DisplayLayoutType.feed:
-        _updateBlockValue('text', {'content': _textCtrl.text});
+        updateBlockValue('text', {'content': _textCtrl.text});
         break;
 
       case DisplayLayoutType.orders:
-        _updateBlockValue('text', {'content': _textCtrl.text});
+        updateBlockValue('text', {'content': _textCtrl.text});
         break;
 
       case DisplayLayoutType.free:
-        _updateBlockValue('text', {'content': _textCtrl.text});
+        updateBlockValue('text', {'content': _textCtrl.text});
         break;
 
       case DisplayLayoutType.review:
-        _updateBlockValue('review', {
+        updateBlockValue('review', {
           'text': _textCtrl.text,
           'authorName': _subtitleCtrl.text,
         });
@@ -508,7 +556,7 @@ class _DropField<T> extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DropdownButtonFormField<T>(
-      value: value,
+      initialValue: value,
       decoration: InputDecoration(
         labelText: label,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),

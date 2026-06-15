@@ -6,9 +6,8 @@ import '../../../../core/services/authService.dart';
 import '../../../../core/services/firestoreService.dart';
 import '../../../../core/services/languageService.dart';
 import '../../../../core/services/uploadService.dart';
-import '../../../../core/theme/appColors.dart';
-import '../../../../core/theme/appRadius.dart';
 import '../../../../core/theme/appSpacing.dart';
+import '../../shared/widgets/merchantPremiumUi.dart';
 import '../../tools/widgets/merchantToolUi.dart';
 import '../models/stampCardModel.dart';
 import '../providers/merchantStampsProvider.dart';
@@ -48,7 +47,7 @@ class _MerchantStampsView extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _CreditNotice(texts: texts),
+          _IntroNotice(texts: texts),
           const SizedBox(height: AppSpacing.md),
           MerchantPrimaryButton(
             label: texts.text('merchant.stamps.create'),
@@ -71,7 +70,7 @@ class _MerchantStampsView extends StatelessWidget {
           else
             ...provider.cards.map(
               (card) => Padding(
-                padding: const EdgeInsets.only(bottom: 14),
+                padding: const EdgeInsets.only(bottom: 20),
                 child: MerchantStampCard(
                   card: card,
                   onEdit: () => context.push('/merchant/stamps/edit/${card.id}'),
@@ -111,7 +110,7 @@ class _MerchantStampsView extends StatelessWidget {
     await _confirmAction(
       context,
       titleKey: 'merchant.stamps.publishTitle',
-      messageKey: 'merchant.stamps.publishMessage',
+      message: kStampPublishMessage,
       confirmKey: 'merchant.stamps.publish',
       onConfirm: () async {
         await provider.publishCard(card);
@@ -120,39 +119,38 @@ class _MerchantStampsView extends StatelessWidget {
   }
 }
 
-class _CreditNotice extends StatelessWidget {
-  const _CreditNotice({required this.texts});
+/// Lokale, kostenlose Hinweistexte (kein Credit-/Preis-Bezug mehr).
+const String kStampPublishMessage =
+    'Nach der Bestätigung wird die Karte sofort für deine Kundinnen und Kunden aktiv.';
+const String kStampIntroMessage =
+    'Erstelle eine digitale Stempelkarte, die Gäste gern vollmachen. Du entscheidest über Bedingung, Belohnung und Look – ganz ohne zusätzliche Kosten.';
+
+class _IntroNotice extends StatelessWidget {
+  const _IntroNotice({required this.texts});
 
   final LanguageService texts;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return MerchantPremiumCard(
       padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppColors.mintSoft,
-        borderRadius: BorderRadius.circular(AppRadius.large),
-        border: Border.all(color: AppColors.border),
-      ),
+      color: MerchantPremiumColors.surfaceAlt,
+      radius: 26,
       child: Row(
         children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: AppColors.black,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: const Icon(Icons.credit_score_rounded, color: AppColors.white),
+          const MerchantPremiumIconBox(
+            icon: Icons.loyalty_rounded,
+            size: 46,
+            iconSize: 22,
           ),
           const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Text(
-              texts.text('merchant.stamps.creditHint'),
+              kStampIntroMessage,
               style: const TextStyle(
-                color: AppColors.black,
-                fontWeight: FontWeight.w800,
-                height: 1.25,
+                color: MerchantPremiumColors.mutedLight,
+                fontWeight: FontWeight.w700,
+                height: 1.3,
               ),
             ),
           ),
@@ -165,16 +163,18 @@ class _CreditNotice extends StatelessWidget {
 Future<void> _confirmAction(
   BuildContext context, {
   required String titleKey,
-  required String messageKey,
+  String? messageKey,
+  String? message,
   required String confirmKey,
   required Future<void> Function() onConfirm,
   bool isDanger = false,
 }) async {
   final texts = context.read<LanguageService>();
+  final resolvedMessage = message ?? (messageKey != null ? texts.text(messageKey) : '');
   final accepted = await showModalBottomSheet<bool>(
     context: context,
     showDragHandle: true,
-    backgroundColor: AppColors.surface,
+    backgroundColor: MerchantPremiumColors.surface,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
     ),
@@ -189,14 +189,18 @@ Future<void> _confirmAction(
             Text(
               texts.text(titleKey),
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900),
+              style: const TextStyle(
+                color: MerchantPremiumColors.ink,
+                fontSize: 24,
+                fontWeight: FontWeight.w900,
+              ),
             ),
             const SizedBox(height: AppSpacing.sm),
             Text(
-              texts.text(messageKey),
+              resolvedMessage,
               textAlign: TextAlign.center,
               style: const TextStyle(
-                color: AppColors.gray700,
+                color: MerchantPremiumColors.muted,
                 fontWeight: FontWeight.w700,
                 height: 1.35,
               ),
@@ -205,8 +209,8 @@ Future<void> _confirmAction(
             FilledButton(
               onPressed: () => Navigator.of(sheetContext).pop(true),
               style: FilledButton.styleFrom(
-                backgroundColor: isDanger ? Colors.red.shade700 : AppColors.black,
-                foregroundColor: AppColors.white,
+                backgroundColor: isDanger ? MerchantPremiumColors.danger : MerchantPremiumColors.ink,
+                foregroundColor: isDanger ? Colors.white : MerchantPremiumColors.base,
                 minimumSize: const Size.fromHeight(54),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
               ),

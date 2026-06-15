@@ -2,10 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../core/services/languageService.dart';
-import '../../../../core/theme/appColors.dart';
 import '../../../../core/theme/appRadius.dart';
-import '../../../../core/theme/appShadows.dart';
 import '../../../../core/theme/appSpacing.dart';
+import '../../shared/widgets/merchantPremiumUi.dart';
 
 class ScannerCard extends StatelessWidget {
   const ScannerCard({super.key, required this.onTap});
@@ -21,9 +20,18 @@ class ScannerCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.lg),
         decoration: BoxDecoration(
-          color: AppColors.black,
+          color: MerchantPremiumColors.surface,
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              MerchantPremiumColors.surface,
+              MerchantPremiumColors.baseElevated,
+            ],
+          ),
           borderRadius: BorderRadius.circular(AppRadius.xl),
-          boxShadow: AppShadows.card,
+          border: Border.all(color: MerchantPremiumColors.gold.withValues(alpha: 0.30)),
+          boxShadow: MerchantPremiumShadows.card,
         ),
         child: Row(
           children: [
@@ -31,11 +39,15 @@ class ScannerCard extends StatelessWidget {
               width: 62,
               height: 62,
               decoration: BoxDecoration(
-                color: AppColors.white.withOpacity(0.09),
+                color: MerchantPremiumColors.gold.withValues(alpha: 0.16),
                 borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: AppColors.white.withOpacity(0.12)),
+                border: Border.all(color: MerchantPremiumColors.gold.withValues(alpha: 0.28)),
               ),
-              child: const Icon(Icons.qr_code_scanner_rounded, color: AppColors.mint, size: 31),
+              child: const Icon(
+                Icons.qr_code_scanner_rounded,
+                color: MerchantPremiumColors.gold,
+                size: 31,
+              ),
             ),
             const SizedBox(width: AppSpacing.md),
             Expanded(
@@ -44,12 +56,21 @@ class ScannerCard extends StatelessWidget {
                 children: [
                   Text(
                     texts.text('merchant.dashboard.scanCustomer'),
-                    style: const TextStyle(color: AppColors.white, fontSize: 25, fontWeight: FontWeight.w900, height: 1),
+                    style: const TextStyle(
+                      color: MerchantPremiumColors.ink,
+                      fontSize: 25,
+                      fontWeight: FontWeight.w900,
+                      height: 1,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     texts.text('merchant.dashboard.scanCustomerTip'),
-                    style: const TextStyle(color: Color(0xFFD7DED6), height: 1.25, fontWeight: FontWeight.w700),
+                    style: const TextStyle(
+                      color: MerchantPremiumColors.muted,
+                      height: 1.25,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ],
               ),
@@ -59,10 +80,10 @@ class ScannerCard extends StatelessWidget {
               width: 46,
               height: 46,
               decoration: const BoxDecoration(
-                color: AppColors.white,
+                color: MerchantPremiumColors.gold,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.arrow_forward_rounded, color: AppColors.black),
+              child: const Icon(Icons.arrow_forward_rounded, color: MerchantPremiumColors.goldSoft),
             ),
           ],
         ),

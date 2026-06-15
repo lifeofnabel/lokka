@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../core/services/languageService.dart';
-import '../../../../core/theme/appColors.dart';
 import '../../../../core/theme/appRadius.dart';
 import '../../../../core/theme/appSpacing.dart';
+import '../../shared/widgets/merchantPremiumUi.dart';
 import '../models/orderModel.dart';
 
 class OrderCard extends StatelessWidget {
@@ -23,20 +23,8 @@ class OrderCard extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(AppRadius.xl),
-      child: Container(
+      child: MerchantPremiumCard(
         padding: const EdgeInsets.all(AppSpacing.md),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(AppRadius.xl),
-          border: Border.all(color: AppColors.border),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 18,
-              offset: const Offset(0, 10),
-            ),
-          ],
-        ),
         child: Row(
           children: [
             Container(
@@ -60,10 +48,13 @@ class OrderCard extends StatelessWidget {
                           order.orderCode.isEmpty ? texts.text('merchant.orders.order') : order.orderCode,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+                          style: const TextStyle(
+                            color: MerchantPremiumColors.ink,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
+                          ),
                         ),
                       ),
-                      if (order.isDemo) _Pill(label: texts.text('merchant.orders.demoBadge')),
                     ],
                   ),
                   const SizedBox(height: 5),
@@ -71,7 +62,10 @@ class OrderCard extends StatelessWidget {
                     order.itemsText.isEmpty ? order.placeLabel : order.itemsText,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: AppColors.gray700, fontWeight: FontWeight.w700),
+                    style: const TextStyle(
+                      color: MerchantPremiumColors.muted,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Row(
@@ -80,14 +74,21 @@ class OrderCard extends StatelessWidget {
                       const SizedBox(width: 8),
                       Text(
                         _price(order.totalPrice, texts),
-                        style: const TextStyle(fontWeight: FontWeight.w900),
+                        style: const TextStyle(
+                          color: MerchantPremiumColors.ink,
+                          fontWeight: FontWeight.w900,
+                        ),
                       ),
                     ],
                   ),
                 ],
               ),
             ),
-            const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: AppColors.gray500),
+            const Icon(
+              Icons.arrow_forward_ios_rounded,
+              size: 16,
+              color: MerchantPremiumColors.muted,
+            ),
           ],
         ),
       ),
@@ -105,11 +106,18 @@ class _Pill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
-        color: AppColors.gray50,
+        color: MerchantPremiumColors.surfaceAlt,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: MerchantPremiumColors.line),
       ),
-      child: Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w900)),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: MerchantPremiumColors.ink,
+          fontSize: 11,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
     );
   }
 }
@@ -125,10 +133,10 @@ String _statusLabel(LanguageService texts, String status) {
 
 Color _statusColor(String status) {
   return switch (status) {
-    'preparing' => const Color(0xFFB87512),
-    'done' => const Color(0xFF2E9E5B),
-    'cancelled' => const Color(0xFFD83A34),
-    _ => AppColors.black,
+    'preparing' => MerchantPremiumColors.warning,
+    'done' => MerchantPremiumColors.success,
+    'cancelled' => MerchantPremiumColors.danger,
+    _ => MerchantPremiumColors.ink,
   };
 }
 

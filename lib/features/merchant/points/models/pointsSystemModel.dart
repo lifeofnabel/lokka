@@ -17,18 +17,27 @@ class PointsRewardType {
   static const custom = 'custom';
 }
 
+class PointsProgramMode {
+  const PointsProgramMode._();
+
+  static const monthlyRewards = 'monthlyRewards';
+  static const pointsShopRewards = 'pointsShopRewards';
+}
+
 class PointsSystemModel {
   const PointsSystemModel({
     required this.id,
     required this.merchantId,
     required this.title,
     required this.description,
+    required this.programMode,
+    required this.monthlyResetDay,
     required this.pointsPerEuro,
     required this.status,
     required this.isActive,
     required this.isArchived,
     required this.existingParticipantsCanContinue,
-    required this.creditCostPerWeek,
+    this.transitionEndsAt,
     this.createdAt,
     this.updatedAt,
     this.publishedAt,
@@ -41,12 +50,14 @@ class PointsSystemModel {
   final String merchantId;
   final String title;
   final String description;
+  final String programMode;
+  final int monthlyResetDay;
   final num pointsPerEuro;
   final String status;
   final bool isActive;
   final bool isArchived;
   final bool existingParticipantsCanContinue;
-  final int creditCostPerWeek;
+  final DateTime? transitionEndsAt;
   final DateTime? createdAt;
   final DateTime? updatedAt;
   final DateTime? publishedAt;
@@ -65,12 +76,13 @@ class PointsSystemModel {
       merchantId: merchantId,
       title: 'Lokka Punkte',
       description: '',
+      programMode: PointsProgramMode.monthlyRewards,
+      monthlyResetDay: 1,
       pointsPerEuro: 1,
       status: PointsStatus.draft,
       isActive: false,
       isArchived: false,
       existingParticipantsCanContinue: true,
-      creditCostPerWeek: 1,
     );
   }
 
@@ -80,13 +92,15 @@ class PointsSystemModel {
       merchantId: (map['merchantId'] ?? '').toString(),
       title: (map['title'] ?? map['name'] ?? '').toString(),
       description: (map['description'] ?? '').toString(),
+      programMode: (map['programMode'] ?? PointsProgramMode.monthlyRewards).toString(),
+      monthlyResetDay: _clampDay(_readInt(map['monthlyResetDay'], fallback: 1)),
       pointsPerEuro: _readNum(map['pointsPerEuro'], fallback: 1),
       status: (map['status'] ?? PointsStatus.draft).toString(),
       isActive: map['isActive'] as bool? ?? false,
       isArchived: map['isArchived'] as bool? ?? false,
       existingParticipantsCanContinue:
           map['existingParticipantsCanContinue'] as bool? ?? true,
-      creditCostPerWeek: _readInt(map['creditCostPerWeek'], fallback: 1),
+      transitionEndsAt: _readDateTime(map['transitionEndsAt']),
       createdAt: _readDateTime(map['createdAt']),
       updatedAt: _readDateTime(map['updatedAt']),
       publishedAt: _readDateTime(map['publishedAt']),
@@ -104,12 +118,14 @@ class PointsSystemModel {
       'title': title.trim(),
       'name': title.trim(),
       'description': description.trim(),
+      'programMode': programMode,
+      'monthlyResetDay': _clampDay(monthlyResetDay),
       'pointsPerEuro': pointsPerEuro,
       'status': status,
       'isActive': isActive,
       'isArchived': isArchived,
       'existingParticipantsCanContinue': existingParticipantsCanContinue,
-      'creditCostPerWeek': creditCostPerWeek,
+      if (transitionEndsAt != null) 'transitionEndsAt': Timestamp.fromDate(transitionEndsAt!),
       if (createdAt != null) 'createdAt': Timestamp.fromDate(createdAt!),
       if (updatedAt != null) 'updatedAt': Timestamp.fromDate(updatedAt!),
       if (publishedAt != null) 'publishedAt': Timestamp.fromDate(publishedAt!),
@@ -124,12 +140,14 @@ class PointsSystemModel {
     String? merchantId,
     String? title,
     String? description,
+    String? programMode,
+    int? monthlyResetDay,
     num? pointsPerEuro,
     String? status,
     bool? isActive,
     bool? isArchived,
     bool? existingParticipantsCanContinue,
-    int? creditCostPerWeek,
+    DateTime? transitionEndsAt,
     DateTime? createdAt,
     DateTime? updatedAt,
     DateTime? publishedAt,
@@ -142,13 +160,15 @@ class PointsSystemModel {
       merchantId: merchantId ?? this.merchantId,
       title: title ?? this.title,
       description: description ?? this.description,
+      programMode: programMode ?? this.programMode,
+      monthlyResetDay: monthlyResetDay ?? this.monthlyResetDay,
       pointsPerEuro: pointsPerEuro ?? this.pointsPerEuro,
       status: status ?? this.status,
       isActive: isActive ?? this.isActive,
       isArchived: isArchived ?? this.isArchived,
       existingParticipantsCanContinue:
           existingParticipantsCanContinue ?? this.existingParticipantsCanContinue,
-      creditCostPerWeek: creditCostPerWeek ?? this.creditCostPerWeek,
+      transitionEndsAt: transitionEndsAt ?? this.transitionEndsAt,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       publishedAt: publishedAt ?? this.publishedAt,
@@ -174,7 +194,6 @@ class PointsRewardModel {
     required this.status,
     required this.isActive,
     required this.isArchived,
-    required this.creditCostPerWeek,
     this.createdAt,
     this.updatedAt,
     this.publishedAt,
@@ -196,7 +215,6 @@ class PointsRewardModel {
   final String status;
   final bool isActive;
   final bool isArchived;
-  final int creditCostPerWeek;
   final DateTime? createdAt;
   final DateTime? updatedAt;
   final DateTime? publishedAt;
@@ -224,7 +242,6 @@ class PointsRewardModel {
       status: PointsStatus.draft,
       isActive: false,
       isArchived: false,
-      creditCostPerWeek: 1,
     );
   }
 
@@ -243,7 +260,6 @@ class PointsRewardModel {
       status: (map['status'] ?? PointsStatus.draft).toString(),
       isActive: map['isActive'] as bool? ?? false,
       isArchived: map['isArchived'] as bool? ?? false,
-      creditCostPerWeek: _readInt(map['creditCostPerWeek'], fallback: 1),
       createdAt: _readDateTime(map['createdAt']),
       updatedAt: _readDateTime(map['updatedAt']),
       publishedAt: _readDateTime(map['publishedAt']),
@@ -269,7 +285,6 @@ class PointsRewardModel {
       'status': status,
       'isActive': isActive,
       'isArchived': isArchived,
-      'creditCostPerWeek': creditCostPerWeek,
       if (createdAt != null) 'createdAt': Timestamp.fromDate(createdAt!),
       if (updatedAt != null) 'updatedAt': Timestamp.fromDate(updatedAt!),
       if (publishedAt != null) 'publishedAt': Timestamp.fromDate(publishedAt!),
@@ -293,7 +308,6 @@ class PointsRewardModel {
     String? status,
     bool? isActive,
     bool? isArchived,
-    int? creditCostPerWeek,
     DateTime? createdAt,
     DateTime? updatedAt,
     DateTime? publishedAt,
@@ -315,7 +329,6 @@ class PointsRewardModel {
       status: status ?? this.status,
       isActive: isActive ?? this.isActive,
       isArchived: isArchived ?? this.isArchived,
-      creditCostPerWeek: creditCostPerWeek ?? this.creditCostPerWeek,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       publishedAt: publishedAt ?? this.publishedAt,
@@ -331,6 +344,8 @@ int _readInt(dynamic value, {required int fallback}) {
   if (value is num) return value.round();
   return int.tryParse((value ?? '').toString()) ?? fallback;
 }
+
+int _clampDay(int value) => value.clamp(1, 31).toInt();
 
 num _readNum(dynamic value, {required num fallback}) {
   if (value is num) return value;

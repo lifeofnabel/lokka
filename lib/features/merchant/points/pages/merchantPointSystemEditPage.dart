@@ -6,8 +6,8 @@ import '../../../../core/services/authService.dart';
 import '../../../../core/services/firestoreService.dart';
 import '../../../../core/services/languageService.dart';
 import '../../../../core/services/uploadService.dart';
-import '../../../../core/theme/appColors.dart';
 import '../../../../core/theme/appSpacing.dart';
+import '../../shared/widgets/merchantPremiumUi.dart';
 import '../../tools/widgets/merchantToolUi.dart';
 import '../models/pointsSystemModel.dart';
 import '../providers/merchantPointsProvider.dart';
@@ -199,7 +199,6 @@ class _PointSystemEditViewState extends State<_PointSystemEditView> {
       isActive: status == PointsStatus.active,
       isArchived: status == PointsStatus.archived,
       existingParticipantsCanContinue: true,
-      creditCostPerWeek: 1,
       transitionEndsAt: _modeChanged(existing)
           ? DateTime.now().add(Duration(days: _transitionDays))
           : existing.transitionEndsAt,
@@ -272,22 +271,24 @@ class _Preview extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final texts = context.watch<LanguageService>();
-    return Container(
+    return MerchantPremiumCard(
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppColors.black,
-        borderRadius: BorderRadius.circular(32),
-      ),
+      radius: 28,
       child: Row(
         children: [
           Container(
             width: 54,
             height: 54,
+            alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: AppColors.mint,
-              borderRadius: BorderRadius.circular(22),
+              color: MerchantPremiumColors.goldSoft,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: MerchantPremiumColors.gold.withValues(alpha: 0.24),
+              ),
             ),
-            child: const Icon(Icons.stars_rounded, color: AppColors.black),
+            child: const Icon(Icons.stars_rounded,
+                color: MerchantPremiumColors.gold, size: 26),
           ),
           const SizedBox(width: AppSpacing.md),
           Expanded(
@@ -301,7 +302,7 @@ class _Preview extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    color: AppColors.white,
+                    color: MerchantPremiumColors.ink,
                     fontSize: 21,
                     fontWeight: FontWeight.w900,
                   ),
@@ -309,8 +310,8 @@ class _Preview extends StatelessWidget {
                 const SizedBox(height: 5),
                 Text(
                   '${_modeLabel(texts, system.programMode)} / ${system.pointsPerEuro} ${texts.text('merchant.points.pointsPerEuro')}',
-                  style: TextStyle(
-                    color: AppColors.white.withOpacity(0.70),
+                  style: const TextStyle(
+                    color: MerchantPremiumColors.muted,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -385,25 +386,39 @@ class _ModeCard extends StatelessWidget {
         constraints: const BoxConstraints(minHeight: 118),
         padding: const EdgeInsets.all(AppSpacing.md),
         decoration: BoxDecoration(
-          color: selected ? AppColors.black : AppColors.surface,
+          color: selected
+              ? MerchantPremiumColors.goldSoft
+              : MerchantPremiumColors.surface,
           borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: selected ? AppColors.black : AppColors.border),
+          border: Border.all(
+            color: selected
+                ? MerchantPremiumColors.gold
+                : MerchantPremiumColors.line,
+            width: selected ? 1.4 : 1,
+          ),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                Icon(icon, color: selected ? AppColors.mint : AppColors.black),
+                Icon(icon,
+                    color: selected
+                        ? MerchantPremiumColors.gold
+                        : MerchantPremiumColors.ink),
                 const Spacer(),
-                Tooltip(
-                  message: tooltip,
-                  child: Icon(
-                    Icons.info_outline_rounded,
-                    size: 18,
-                    color: selected ? AppColors.white.withOpacity(0.72) : AppColors.gray500,
+                if (selected)
+                  const Icon(Icons.check_circle_rounded,
+                      size: 18, color: MerchantPremiumColors.gold)
+                else
+                  Tooltip(
+                    message: tooltip,
+                    child: const Icon(
+                      Icons.info_outline_rounded,
+                      size: 18,
+                      color: MerchantPremiumColors.muted,
+                    ),
                   ),
-                ),
               ],
             ),
             const SizedBox(height: 28),
@@ -411,8 +426,8 @@ class _ModeCard extends StatelessWidget {
               title,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: selected ? AppColors.white : AppColors.black,
+              style: const TextStyle(
+                color: MerchantPremiumColors.ink,
                 fontWeight: FontWeight.w900,
                 height: 1.05,
               ),
@@ -439,9 +454,9 @@ class _ResetDayPicker extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: MerchantPremiumColors.surface,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: MerchantPremiumColors.line),
       ),
       child: Row(
         children: [
@@ -450,18 +465,28 @@ class _ResetDayPicker extends StatelessWidget {
               children: [
                 Text(
                   texts.text('merchant.points.monthlyResetDay'),
-                  style: const TextStyle(fontWeight: FontWeight.w900),
+                  style: const TextStyle(
+                    color: MerchantPremiumColors.ink,
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
                 const SizedBox(width: 8),
                 Tooltip(
                   message: texts.text('merchant.points.monthlyResetDayTip'),
-                  child: const Icon(Icons.info_outline_rounded, size: 18, color: AppColors.gray500),
+                  child: const Icon(Icons.info_outline_rounded, size: 18, color: MerchantPremiumColors.muted),
                 ),
               ],
             ),
           ),
           DropdownButton<int>(
             value: value,
+            dropdownColor: MerchantPremiumColors.surfaceAlt,
+            iconEnabledColor: MerchantPremiumColors.muted,
+            style: const TextStyle(
+              color: MerchantPremiumColors.ink,
+              fontWeight: FontWeight.w800,
+            ),
+            underline: const SizedBox.shrink(),
             items: List.generate(
               31,
               (index) => DropdownMenuItem(
@@ -494,21 +519,25 @@ class _SwitchWarning extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF7DF),
+        color: MerchantPremiumColors.warningSoft,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFE8CC78)),
+        border:
+            Border.all(color: MerchantPremiumColors.warning.withValues(alpha: 0.20)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
-              const Icon(Icons.warning_amber_rounded, color: Color(0xFF8A6200)),
+              const Icon(Icons.warning_amber_rounded, color: MerchantPremiumColors.warning),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: Text(
                   texts.text('merchant.points.modeSwitchWarningTitle'),
-                  style: const TextStyle(fontWeight: FontWeight.w900),
+                  style: const TextStyle(
+                    color: MerchantPremiumColors.ink,
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
               ),
             ],
@@ -516,7 +545,7 @@ class _SwitchWarning extends StatelessWidget {
           const SizedBox(height: AppSpacing.sm),
           Text(
             texts.text('merchant.points.modeSwitchWarningMessage'),
-            style: const TextStyle(color: AppColors.gray700, fontWeight: FontWeight.w700, height: 1.35),
+            style: const TextStyle(color: MerchantPremiumColors.muted, fontWeight: FontWeight.w700, height: 1.35),
           ),
           const SizedBox(height: AppSpacing.sm),
           Wrap(
@@ -542,7 +571,7 @@ Future<bool?> _confirmPublish(BuildContext context) {
   return showModalBottomSheet<bool>(
     context: context,
     showDragHandle: true,
-    backgroundColor: AppColors.surface,
+    backgroundColor: MerchantPremiumColors.surface,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
     ),
@@ -557,14 +586,18 @@ Future<bool?> _confirmPublish(BuildContext context) {
             Text(
               texts.text('merchant.points.activateSystemTitle'),
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900),
+              style: const TextStyle(
+                color: MerchantPremiumColors.ink,
+                fontSize: 24,
+                fontWeight: FontWeight.w900,
+              ),
             ),
             const SizedBox(height: AppSpacing.sm),
             Text(
               texts.text('merchant.points.activateSystemMessage'),
               textAlign: TextAlign.center,
               style: const TextStyle(
-                color: AppColors.gray700,
+                color: MerchantPremiumColors.muted,
                 fontWeight: FontWeight.w700,
                 height: 1.35,
               ),
@@ -591,7 +624,7 @@ Future<bool?> _confirmModeSwitch(BuildContext context) {
   return showModalBottomSheet<bool>(
     context: context,
     showDragHandle: true,
-    backgroundColor: const Color(0xFFFFF7DF),
+    backgroundColor: MerchantPremiumColors.warningSoft,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
     ),
@@ -603,19 +636,23 @@ Future<bool?> _confirmModeSwitch(BuildContext context) {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Icon(Icons.warning_amber_rounded, size: 38, color: Color(0xFF8A6200)),
+            const Icon(Icons.warning_amber_rounded, size: 38, color: MerchantPremiumColors.warning),
             const SizedBox(height: AppSpacing.sm),
             Text(
               texts.text('merchant.points.modeSwitchConfirmTitle'),
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900),
+              style: const TextStyle(
+                color: MerchantPremiumColors.ink,
+                fontSize: 24,
+                fontWeight: FontWeight.w900,
+              ),
             ),
             const SizedBox(height: AppSpacing.sm),
             Text(
               texts.text('merchant.points.modeSwitchConfirmMessage'),
               textAlign: TextAlign.center,
               style: const TextStyle(
-                color: AppColors.gray700,
+                color: MerchantPremiumColors.muted,
                 fontWeight: FontWeight.w700,
                 height: 1.35,
               ),

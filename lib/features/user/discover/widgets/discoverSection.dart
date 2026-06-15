@@ -29,7 +29,7 @@ class DiscoverSection extends StatelessWidget {
                   style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w700,
-                    color: AppColors.black,
+                    color: AppColors.onSurfaceDark,
                     letterSpacing: -0.3,
                   ),
                 ),

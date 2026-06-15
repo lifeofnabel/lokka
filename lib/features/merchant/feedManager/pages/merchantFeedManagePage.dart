@@ -1,13 +1,13 @@
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../core/services/authService.dart';
 import '../../../../core/services/firestoreService.dart';
 import '../../../../core/services/languageService.dart';
-import '../../../../core/theme/appColors.dart';
-import '../../../../core/theme/appRadius.dart';
 import '../../../../core/theme/appSpacing.dart';
+import '../../shared/widgets/merchantPremiumUi.dart';
 import '../../tools/providers/merchantToolsProvider.dart';
 import '../../tools/services/merchantToolsService.dart';
 import '../../tools/widgets/merchantToolUi.dart';
@@ -29,13 +29,21 @@ class MerchantFeedManagePage extends StatelessWidget {
   }
 }
 
-class _MerchantFeedManageView extends StatelessWidget {
+class _MerchantFeedManageView extends StatefulWidget {
   const _MerchantFeedManageView();
+
+  @override
+  State<_MerchantFeedManageView> createState() => _MerchantFeedManageViewState();
+}
+
+class _MerchantFeedManageViewState extends State<_MerchantFeedManageView> {
+  _FeedManageFilter _filter = _FeedManageFilter.all;
 
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<MerchantFeedManageProvider>();
     final texts = context.watch<LanguageService>();
+    final filteredPosts = provider.posts.where(_matchesFilter).toList();
     return MerchantToolScaffold(
       title: texts.text('merchant.feedManage.title'),
       subtitle: texts.text('merchant.feedManage.tooltip'),
@@ -52,15 +60,90 @@ class _MerchantFeedManageView extends StatelessWidget {
                       onAction: provider.load,
                     )
                   : Column(
-                      children: provider.posts
-                          .map(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _FilterBar(
+                          selected: _filter,
+                          onSelected: (value) => setState(() => _filter = value),
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                        if (filteredPosts.isEmpty)
+                          MerchantEmptyState(
+                            title: texts.text('merchant.feedManage.emptyFilterTitle'),
+                            message: texts.text('merchant.feedManage.emptyFilterMessage'),
+                            actionLabel: texts.text('common.all'),
+                            onAction: () => setState(() => _filter = _FeedManageFilter.all),
+                          )
+                        else
+                          ...filteredPosts.map(
                             (post) => Padding(
                               padding: const EdgeInsets.only(bottom: 12),
                               child: _FeedPostCard(post: post),
                             ),
-                          )
-                          .toList(),
+                          ),
+                      ],
                     ),
+    );
+  }
+
+  bool _matchesFilter(MerchantFeedPostData post) {
+    return switch (_filter) {
+      _FeedManageFilter.all => true,
+      _FeedManageFilter.active =>
+        post.isActive && !post.isPrivate && !post.isArchived && !post.isScheduled,
+      _FeedManageFilter.scheduled => post.isScheduled && !post.isArchived,
+      _FeedManageFilter.private => post.isPrivate && !post.isArchived,
+      _FeedManageFilter.archived => post.isArchived,
+    };
+  }
+}
+
+enum _FeedManageFilter { all, active, scheduled, private, archived }
+
+class _FilterBar extends StatelessWidget {
+  const _FilterBar({
+    required this.selected,
+    required this.onSelected,
+  });
+
+  final _FeedManageFilter selected;
+  final ValueChanged<_FeedManageFilter> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final texts = context.watch<LanguageService>();
+    final options = [
+      (_FeedManageFilter.all, texts.text('common.all')),
+      (_FeedManageFilter.active, texts.text('common.active')),
+      (_FeedManageFilter.scheduled, texts.text('merchant.feedManage.scheduled')),
+      (_FeedManageFilter.private, texts.text('common.private')),
+      (_FeedManageFilter.archived, texts.text('merchant.feedManage.archived')),
+    ];
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: options
+            .map(
+              (option) => Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: ChoiceChip(
+                  label: Text(option.$2),
+                  selected: selected == option.$1,
+                  selectedColor: MerchantPremiumColors.ink,
+                  backgroundColor: MerchantPremiumColors.baseSoft,
+                  side: BorderSide(
+                    color: selected == option.$1 ? MerchantPremiumColors.gold : Colors.white.withValues(alpha: 0.12),
+                  ),
+                  labelStyle: TextStyle(
+                    color: selected == option.$1 ? Colors.white : MerchantPremiumColors.mutedLight,
+                    fontWeight: FontWeight.w900,
+                  ),
+                  onSelected: (_) => onSelected(option.$1),
+                ),
+              ),
+            )
+            .toList(),
+      ),
     );
   }
 }
@@ -74,13 +157,8 @@ class _FeedPostCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final provider = context.read<MerchantFeedManageProvider>();
     final texts = context.watch<LanguageService>();
-    return Container(
+    return MerchantPremiumCard(
       padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(AppRadius.xl),
-        border: Border.all(color: AppColors.border),
-      ),
       child: Column(
         children: [
           Row(
@@ -88,10 +166,14 @@ class _FeedPostCard extends StatelessWidget {
               Container(
                 width: 70,
                 height: 70,
-                decoration: BoxDecoration(color: AppColors.gray50, borderRadius: BorderRadius.circular(24)),
+                decoration: BoxDecoration(
+                  color: MerchantPremiumColors.surfaceAlt,
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: MerchantPremiumColors.line),
+                ),
                 clipBehavior: Clip.antiAlias,
                 child: post.imageUrl.isEmpty
-                    ? const Icon(Icons.campaign_rounded, size: 30)
+                    ? const Icon(Icons.campaign_rounded, size: 30, color: MerchantPremiumColors.ink)
                     : CachedNetworkImage(imageUrl: post.imageUrl, fit: BoxFit.cover),
               ),
               const SizedBox(width: AppSpacing.md),
@@ -99,13 +181,22 @@ class _FeedPostCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(post.title.isEmpty ? texts.text('merchant.feedManage.noTitle') : post.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                    Text(
+                      post.title.isEmpty ? texts.text('merchant.feedManage.noTitle') : post.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: MerchantPremiumColors.ink,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
                     const SizedBox(height: 4),
                     Text(
                       post.type.isEmpty
                           ? texts.text('merchant.feedManage.post')
                           : texts.text('feed.type.${post.type}'),
-                      style: const TextStyle(color: AppColors.gray700, fontWeight: FontWeight.w700),
+                      style: const TextStyle(color: MerchantPremiumColors.muted, fontWeight: FontWeight.w800),
                     ),
                     if (post.subtitle.isNotEmpty) ...[
                       const SizedBox(height: 4),
@@ -113,17 +204,37 @@ class _FeedPostCard extends StatelessWidget {
                         post.subtitle,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: AppColors.gray700),
+                        style: const TextStyle(color: MerchantPremiumColors.muted),
                       ),
                     ],
                     const SizedBox(height: 7),
                     Wrap(
                       spacing: 7,
                       children: [
-                        _StatusChip(label: post.isArchived ? texts.text('merchant.feedManage.archived') : post.isActive ? texts.text('common.active') : texts.text('merchant.feedManage.paused')),
+                        _StatusChip(
+                          label: post.isArchived
+                              ? texts.text('merchant.feedManage.archived')
+                              : post.isScheduled
+                                  ? texts.text('merchant.feedManage.scheduled')
+                                  : post.isActive
+                                      ? texts.text('common.active')
+                                      : texts.text('merchant.feedManage.paused'),
+                        ),
                         if (post.isPrivate) _StatusChip(label: texts.text('common.private')),
                       ],
                     ),
+                    if (post.viewsCount != null || post.clicksCount != null || post.redemptionsCount != null) ...[
+                      const SizedBox(height: 7),
+                      Wrap(
+                        spacing: 7,
+                        runSpacing: 7,
+                        children: [
+                          if (post.viewsCount != null) _StatusChip(label: '${texts.text('merchant.feedManage.views')}: ${post.viewsCount}'),
+                          if (post.clicksCount != null) _StatusChip(label: '${texts.text('merchant.feedManage.clicks')}: ${post.clicksCount}'),
+                          if (post.redemptionsCount != null) _StatusChip(label: '${texts.text('merchant.feedManage.redemptions')}: ${post.redemptionsCount}'),
+                        ],
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -139,14 +250,29 @@ class _FeedPostCard extends StatelessWidget {
                 icon: const Icon(Icons.edit_rounded),
                 label: Text(texts.text('common.edit')),
               ),
+              if (post.isScheduled)
+                FilledButton.icon(
+                  onPressed: () => provider.updatePost(post.postId, {
+                    'isScheduled': false,
+                    'isActive': true,
+                    'publishedAt': FieldValue.serverTimestamp(),
+                  }),
+                  icon: const Icon(Icons.rocket_launch_rounded),
+                  label: Text(texts.text('merchant.feedManage.publishNow')),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: MerchantPremiumColors.ink,
+                    foregroundColor: Colors.white,
+                  ),
+                ),
               OutlinedButton(
                 onPressed: () => provider.updatePost(post.postId, {'isPrivate': !post.isPrivate}),
                 child: Text(post.isPrivate ? texts.text('common.public') : texts.text('common.private')),
               ),
-              OutlinedButton(
-                onPressed: () => provider.updatePost(post.postId, {'isActive': !post.isActive}),
-                child: Text(post.isActive ? texts.text('merchant.feedManage.pause') : texts.text('common.activate')),
-              ),
+              if (!post.isScheduled)
+                OutlinedButton(
+                  onPressed: () => provider.updatePost(post.postId, {'isActive': !post.isActive}),
+                  child: Text(post.isActive ? texts.text('merchant.feedManage.pause') : texts.text('common.activate')),
+                ),
               TextButton(
                 onPressed: () => _confirmArchive(context, post),
                 style: TextButton.styleFrom(foregroundColor: Colors.red.shade700),
@@ -169,8 +295,19 @@ class _StatusChip extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(color: AppColors.gray50, borderRadius: BorderRadius.circular(999), border: Border.all(color: AppColors.border)),
-      child: Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
+      decoration: BoxDecoration(
+        color: MerchantPremiumColors.surfaceAlt,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: MerchantPremiumColors.line),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: MerchantPremiumColors.ink,
+          fontSize: 12,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
     );
   }
 }
@@ -199,10 +336,13 @@ void _showEditSheet(BuildContext context, MerchantFeedPostData post) {
   showModalBottomSheet<void>(
     context: context,
     showDragHandle: true,
-    backgroundColor: AppColors.background,
+    backgroundColor: MerchantPremiumColors.baseElevated,
     shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(32))),
     isScrollControlled: true,
-    builder: (_) => _FeedEditSheet(post: post, provider: provider),
+    builder: (_) => ChangeNotifierProvider<MerchantFeedManageProvider>.value(
+      value: provider,
+      child: _FeedEditSheet(post: post, provider: provider),
+    ),
   );
 }
 
@@ -250,6 +390,9 @@ class _FeedEditSheetState extends State<_FeedEditSheet> {
   @override
   Widget build(BuildContext context) {
     final texts = context.watch<LanguageService>();
+    // Provider beobachten (#17): Spinner zeigen + Button während des Speicherns
+    // sperren (Sheet wird via ChangeNotifierProvider.value re-bereitgestellt).
+    final isSaving = context.watch<MerchantFeedManageProvider>().isSaving;
     return SafeArea(
       top: false,
       child: Padding(
@@ -269,17 +412,33 @@ class _FeedEditSheetState extends State<_FeedEditSheet> {
                   Container(
                     width: 50,
                     height: 50,
-                    decoration: BoxDecoration(color: AppColors.black, borderRadius: BorderRadius.circular(20)),
-                    child: const Icon(Icons.edit_rounded, color: AppColors.white),
+                    decoration: BoxDecoration(
+                      color: MerchantPremiumColors.ink,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Icon(Icons.edit_rounded, color: Colors.white),
                   ),
                   const SizedBox(width: AppSpacing.md),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(texts.text('merchant.feedManage.editTitle'), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+                        Text(
+                          texts.text('merchant.feedManage.editTitle'),
+                          style: const TextStyle(
+                            color: MerchantPremiumColors.ink,
+                            fontSize: 22,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
                         const SizedBox(height: 4),
-                        Text(texts.text('merchant.feedManage.editTip'), style: const TextStyle(color: AppColors.gray700, fontWeight: FontWeight.w700)),
+                        Text(
+                          texts.text('merchant.feedManage.editTip'),
+                          style: const TextStyle(
+                            color: MerchantPremiumColors.muted,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -312,8 +471,9 @@ class _FeedEditSheetState extends State<_FeedEditSheet> {
               MerchantPrimaryButton(
                 label: texts.text('merchant.feedManage.saveChanges'),
                 icon: Icons.check_rounded,
-                isLoading: widget.provider.isSaving,
+                isLoading: isSaving,
                 onPressed: () async {
+                  if (widget.provider.isSaving) return; // Doppel-Submit-Schutz (#17)
                   await widget.provider.updatePost(widget.post.postId, {
                     'title': titleController.text.trim(),
                     'subtitle': subtitleController.text.trim(),
@@ -348,7 +508,13 @@ class _EditSwitch extends StatelessWidget {
   Widget build(BuildContext context) {
     return SwitchListTile.adaptive(
       contentPadding: EdgeInsets.zero,
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
+      title: Text(
+        title,
+        style: const TextStyle(
+          color: MerchantPremiumColors.ink,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
       value: value,
       onChanged: onChanged,
     );

@@ -55,7 +55,6 @@ class StampCardModel {
     required this.imageUrl,
     required this.imagePlacement,
     required this.claimLimits,
-    required this.creditCostPerWeek,
     required this.status,
     required this.isActive,
     required this.isArchived,
@@ -95,7 +94,6 @@ class StampCardModel {
   final String imageUrl;
   final String imagePlacement;
   final Map<String, dynamic> claimLimits;
-  final int creditCostPerWeek;
   final String status;
   final bool isActive;
   final bool isArchived;
@@ -141,7 +139,6 @@ class StampCardModel {
       imageUrl: '',
       imagePlacement: 'side',
       claimLimits: const {'perUser': null, 'perDay': null},
-      creditCostPerWeek: 2,
       status: StampCardStatus.draft,
       isActive: false,
       isArchived: false,
@@ -178,7 +175,6 @@ class StampCardModel {
       imageUrl: (map['imageUrl'] ?? '').toString(),
       imagePlacement: (map['imagePlacement'] ?? 'side').toString(),
       claimLimits: Map<String, dynamic>.from(map['claimLimits'] as Map? ?? const {'perUser': null, 'perDay': null}),
-      creditCostPerWeek: _readInt(map['creditCostPerWeek'], fallback: 2),
       status: (map['status'] ?? StampCardStatus.draft).toString(),
       isActive: map['isActive'] as bool? ?? false,
       isArchived: map['isArchived'] as bool? ?? false,
@@ -222,7 +218,6 @@ class StampCardModel {
       'imageUrl': imageUrl,
       'imagePlacement': imagePlacement,
       'claimLimits': claimLimits,
-      'creditCostPerWeek': creditCostPerWeek,
       'status': status,
       'isActive': isActive,
       'isArchived': isArchived,
@@ -264,7 +259,6 @@ class StampCardModel {
     String? imageUrl,
     String? imagePlacement,
     Map<String, dynamic>? claimLimits,
-    int? creditCostPerWeek,
     String? status,
     bool? isActive,
     bool? isArchived,
@@ -304,7 +298,6 @@ class StampCardModel {
       imageUrl: imageUrl ?? this.imageUrl,
       imagePlacement: imagePlacement ?? this.imagePlacement,
       claimLimits: claimLimits ?? this.claimLimits,
-      creditCostPerWeek: creditCostPerWeek ?? this.creditCostPerWeek,
       status: status ?? this.status,
       isActive: isActive ?? this.isActive,
       isArchived: isArchived ?? this.isArchived,

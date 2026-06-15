@@ -17,6 +17,7 @@ class MerchantOrdersProvider extends ChangeNotifier {
   List<OrderModel> orders = [];
   OrderModel? selectedOrder;
   StreamSubscription<List<OrderModel>>? _ordersSubscription;
+  StreamSubscription<OrderModel?>? _orderSubscription;
 
   List<OrderModel> get visibleOrders {
     return switch (filter) {
@@ -80,6 +81,35 @@ class MerchantOrdersProvider extends ChangeNotifier {
     }
   }
 
+  /// Beobachtet NUR die eine Bestellung (Detailseite, #5) – nicht die ganze
+  /// orders-Collection.
+  void watchSingle(String orderId) {
+    try {
+      isLoading = true;
+      error = null;
+      notifyListeners();
+      _ordersSubscription?.cancel();
+      _orderSubscription?.cancel();
+      _orderSubscription = service.watchOrder(orderId).listen(
+        (order) {
+          selectedOrder = order;
+          isLoading = false;
+          error = null;
+          notifyListeners();
+        },
+        onError: (Object e) {
+          error = e.toString();
+          isLoading = false;
+          notifyListeners();
+        },
+      );
+    } catch (e) {
+      error = e.toString();
+      isLoading = false;
+      notifyListeners();
+    }
+  }
+
   void setFilter(String value) {
     filter = value;
     notifyListeners();
@@ -109,6 +139,7 @@ class MerchantOrdersProvider extends ChangeNotifier {
   @override
   void dispose() {
     _ordersSubscription?.cancel();
+    _orderSubscription?.cancel();
     super.dispose();
   }
 }

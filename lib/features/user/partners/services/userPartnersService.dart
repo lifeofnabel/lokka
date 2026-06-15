@@ -1,6 +1,8 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:lokka/core/constants/firebasePaths.dart';
 import 'package:lokka/core/services/firestoreService.dart';
 import 'package:lokka/features/user/discover/models/publicMerchantUserModel.dart';
+import 'package:lokka/features/user/reviews/models/merchantRating.dart';
 
 class UserPartnersService {
   const UserPartnersService({required this.firestoreService});
@@ -70,5 +72,34 @@ class UserPartnersService {
     } catch (_) {
       return {};
     }
+  }
+
+  /// Lädt aggregierte Partner-Ratings in 10er-Blöcken (whereIn).
+  Future<Map<String, MerchantRating>> fetchMerchantRatings(
+    Iterable<String> ids,
+  ) async {
+    final list = ids.where((id) => id.isNotEmpty).toSet().toList();
+    if (list.isEmpty) return {};
+    final result = <String, MerchantRating>{};
+    try {
+      for (var i = 0; i < list.length; i += 10) {
+        final end = (i + 10 < list.length) ? i + 10 : list.length;
+        final chunk = list.sublist(i, end);
+        final snap = await firestoreService
+            .collection(FirebasePaths.merchantRatings)
+            .where(FieldPath.documentId, whereIn: chunk)
+            .get();
+        for (final doc in snap.docs) {
+          final d = doc.data();
+          result[doc.id] = MerchantRating(
+            avg: (d['avg'] as num?)?.toDouble() ?? 0,
+            count: (d['count'] as num?)?.toInt() ?? 0,
+          );
+        }
+      }
+    } catch (_) {
+      // best-effort — Social Proof darf die Liste nie blockieren
+    }
+    return result;
   }
 }

@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -15,8 +18,6 @@ import '../features/auth/pages/userLoginPage.dart';
 import '../features/auth/pages/userRegisterPage.dart';
 import '../features/dev/pages/devFoundationPage.dart';
 import '../features/landing/pages/landingPage.dart';
-import '../features/merchant/billing/pages/merchantBillingPage.dart';
-import '../features/merchant/catalog/pages/merchantCatalogDemoPage.dart';
 import '../features/merchant/catalog/pages/merchantCatalogPage.dart';
 import '../features/merchant/comingSoon/pages/merchantComingSoonPage.dart';
 import '../features/merchant/coupons/pages/merchantCouponsPage.dart';
@@ -36,6 +37,7 @@ import '../features/merchant/orders/pages/merchantOrdersPage.dart';
 import '../features/merchant/points/pages/merchantPointRewardEditPage.dart';
 import '../features/merchant/points/pages/merchantPointSystemEditPage.dart';
 import '../features/merchant/points/pages/merchantPointsPage.dart';
+import '../features/merchant/shopSettings/pages/merchantMenuSettingsPage.dart';
 import '../features/merchant/shopSettings/pages/merchantShopSettingsPage.dart';
 import '../features/merchant/stamps/pages/merchantStampEditPage.dart';
 import '../features/merchant/stamps/pages/merchantStampsPage.dart';
@@ -45,6 +47,7 @@ import '../features/placeholder/pages/foundationPlaceholderPage.dart';
 import '../features/public/shop/pages/publicShopPage.dart';
 import '../core/services/authService.dart';
 import '../core/services/firestoreService.dart';
+import '../core/theme/appTheme.dart';
 import '../features/user/discover/models/publicMerchantUserModel.dart';
 import '../features/user/feed/models/feedPostModel.dart';
 import '../features/user/feed/pages/userFeedDetailPage.dart';
@@ -52,6 +55,70 @@ import '../features/user/feed/services/userFeedService.dart';
 import '../features/user/partners/pages/userPartnerDetailPage.dart';
 import '../features/user/partners/services/userPartnersService.dart';
 import '../features/user/shell/userShellPage.dart';
+
+/// Legt das Google-Home-Dark Merchant-Theme über eine Route, damit alle
+/// Material-Widgets (Eingaben, Dialoge, Sheets) im Merchant-Bereich dunkel
+/// rendern. Nur für Merchant- und Merchant-Auth-Routen verwenden.
+Widget _merchantDark(Widget child) {
+  return Theme(data: AppTheme.merchantDark, child: child);
+}
+
+/// Gecachte Rolle + Merchant-Freigabestatus des eingeloggten Accounts, damit
+/// der Router-Guard /merchant/* prüfen kann, ohne bei jeder Navigation erneut
+/// Firestore zu lesen. Wird bei jedem Auth-Wechsel invalidiert.
+class _MerchantAccess {
+  const _MerchantAccess(this.role, this.status);
+  final String? role; // 'user' | 'merchant' | null (unbekannt)
+  final String? status; // 'approved' | 'pending' | 'rejected' | …
+}
+
+final Map<String, _MerchantAccess> _accessCache = {};
+
+/// Lässt GoRouter.redirect bei Login/Logout erneut laufen und leert dabei den
+/// Access-Cache, damit ein neuer Account neu bewertet wird.
+class _AuthRefresh extends ChangeNotifier {
+  _AuthRefresh(Stream<dynamic> stream) {
+    notifyListeners();
+    _sub = stream.listen((_) {
+      _accessCache.clear();
+      notifyListeners();
+    });
+  }
+  late final StreamSubscription<dynamic> _sub;
+
+  @override
+  void dispose() {
+    _sub.cancel();
+    super.dispose();
+  }
+}
+
+final _authRefresh = _AuthRefresh(FirebaseAuth.instance.authStateChanges());
+
+/// Lädt (gecacht) Rolle + Freigabestatus für [uid].
+Future<_MerchantAccess> _resolveMerchantAccess(
+  BuildContext context,
+  String uid,
+) async {
+  final cached = _accessCache[uid];
+  if (cached != null) return cached;
+  final firestore = context.read<FirestoreService>();
+  try {
+    final profile = await firestore.getUserProfile(uid);
+    final role = profile?['role'] as String?;
+    String? status;
+    if (role == 'merchant') {
+      final merchant = await firestore.getMerchantProfile(uid);
+      status = merchant?['verificationStatus'] as String? ?? 'pending';
+    }
+    final access = _MerchantAccess(role, status);
+    _accessCache[uid] = access;
+    return access;
+  } catch (_) {
+    // Lesefehler (offline/Rules): als unbekannt behandeln, NICHT cachen.
+    return const _MerchantAccess(null, null);
+  }
+}
 
 class AppRouter {
   const AppRouter._();
@@ -78,11 +145,30 @@ class AppRouter {
 
   static final router = GoRouter(
     initialLocation: '/',
-    redirect: (context, state) {
+    refreshListenable: _authRefresh,
+    redirect: (context, state) async {
       final authService = context.read<AuthService>();
-      final isLanding = state.matchedLocation == '/';
-      if (isLanding && authService.currentUser != null) {
+      final user = authService.currentUser;
+      final loc = state.matchedLocation;
+
+      // Landing → Rollen-Weiche (wie bisher).
+      if (loc == '/' && user != null) {
         return '/auth/roleGate';
+      }
+
+      // Guard: /merchant/* nur für eingeloggte, freigegebene Merchants.
+      // (Merchant-Auth-Routen liegen unter /auth/merchant* und sind NICHT
+      // betroffen, damit Login/Registrierung erreichbar bleiben.)
+      if (loc.startsWith('/merchant')) {
+        if (user == null) return '/auth/merchantLogin';
+        final access = await _resolveMerchantAccess(context, user.uid);
+        if (access.role != 'merchant') {
+          // Eingeloggt, aber kein Merchant → an die richtige Stelle leiten.
+          return access.role == 'user' ? '/user/discover' : '/auth/chooseRole';
+        }
+        if (access.status != 'approved') {
+          return '/auth/merchantPending?status=${access.status ?? 'pending'}';
+        }
       }
       return null;
     },
@@ -94,11 +180,11 @@ class AppRouter {
       ),
       GoRoute(
         path: '/auth/login',
-        redirect: (_, __) => '/auth/userLogin',
+        redirect: (_, _) => '/auth/userLogin',
       ),
       GoRoute(
         path: '/auth/register',
-        redirect: (_, __) => '/auth/userRegister',
+        redirect: (_, _) => '/auth/userRegister',
       ),
       GoRoute(
         path: '/auth/userLogin',
@@ -113,12 +199,13 @@ class AppRouter {
       GoRoute(
         path: '/auth/merchantLogin',
         name: merchantLogin,
-        builder: (context, state) => const MerchantLoginPage(),
+        builder: (context, state) => _merchantDark(const MerchantLoginPage()),
       ),
       GoRoute(
         path: '/auth/merchantRegister',
         name: merchantRegister,
-        builder: (context, state) => const MerchantRegisterPage(),
+        builder: (context, state) =>
+            _merchantDark(const MerchantRegisterPage()),
       ),
       GoRoute(
         path: '/auth/forgotPassword',
@@ -128,7 +215,8 @@ class AppRouter {
       GoRoute(
         path: '/auth/merchantForgotPassword',
         name: merchantForgotPassword,
-        builder: (context, state) => const MerchantForgotPasswordPage(),
+        builder: (context, state) =>
+            _merchantDark(const MerchantForgotPasswordPage()),
       ),
       GoRoute(
         path: '/auth/emailVerification',
@@ -150,8 +238,10 @@ class AppRouter {
       GoRoute(
         path: '/auth/merchantPending',
         name: merchantPending,
-        builder: (context, state) => MerchantPendingPage(
-          status: state.uri.queryParameters['status'],
+        builder: (context, state) => _merchantDark(
+          MerchantPendingPage(
+            status: state.uri.queryParameters['status'],
+          ),
         ),
       ),
       GoRoute(
@@ -165,8 +255,12 @@ class AppRouter {
         builder: (context, state) => const UserShellPage(initialIndex: 0),
       ),
       GoRoute(
-        path: '/user/partners',
+        path: '/user/explore',
         builder: (context, state) => const UserShellPage(initialIndex: 1),
+      ),
+      GoRoute(
+        path: '/user/partners',
+        builder: (context, state) => const UserShellPage(initialIndex: 3),
       ),
       GoRoute(
         path: '/user/wallet',
@@ -174,7 +268,7 @@ class AppRouter {
       ),
       GoRoute(
         path: '/user/profile',
-        builder: (context, state) => const UserShellPage(initialIndex: 3),
+        builder: (context, state) => const UserShellPage(initialIndex: 4),
       ),
       GoRoute(
         path: '/user/partners/:merchantId',
@@ -220,181 +314,222 @@ class AppRouter {
       GoRoute(
         path: '/merchant/dashboard',
         name: merchantDashboard,
-        builder: (context, state) => const MerchantDashboardPage(),
+        builder: (context, state) => _merchantDark(const MerchantDashboardPage()),
       ),
       GoRoute(
         path: '/merchant/features',
-        builder: (context, state) => const MerchantFeaturesPage(),
+        builder: (context, state) => _merchantDark(const MerchantFeaturesPage()),
       ),
       GoRoute(
         path: '/merchant/shop',
-        builder: (context, state) => const MerchantShopSettingsPage(),
+        builder: (context, state) =>
+            _merchantDark(const MerchantShopSettingsPage()),
       ),
       GoRoute(
-        path: '/merchant/billing',
-        builder: (context, state) => const MerchantBillingPage(),
+        path: '/merchant/menu',
+        builder: (context, state) =>
+            _merchantDark(const MerchantMenuSettingsPage()),
       ),
       GoRoute(
         path: '/merchant/customers',
-        builder: (context, state) => const MerchantCustomersPage(),
+        builder: (context, state) =>
+            _merchantDark(const MerchantCustomersPage()),
       ),
       GoRoute(
         path: '/merchant/stamps',
-        builder: (context, state) => const MerchantStampsPage(),
+        builder: (context, state) => _merchantDark(const MerchantStampsPage()),
       ),
       GoRoute(
         path: '/merchant/stamps/edit',
-        builder: (context, state) => MerchantStampEditPage(
-          stampCardId: state.uri.queryParameters['id'],
+        builder: (context, state) => _merchantDark(
+          MerchantStampEditPage(
+            stampCardId: state.uri.queryParameters['id'],
+          ),
         ),
       ),
       GoRoute(
         path: '/merchant/stamps/edit/:stampCardId',
-        builder: (context, state) => MerchantStampEditPage(
-          stampCardId: state.pathParameters['stampCardId'],
+        builder: (context, state) => _merchantDark(
+          MerchantStampEditPage(
+            stampCardId: state.pathParameters['stampCardId'],
+          ),
         ),
       ),
       GoRoute(
         path: '/merchant/points',
-        builder: (context, state) => const MerchantPointsPage(),
+        builder: (context, state) => _merchantDark(const MerchantPointsPage()),
       ),
       GoRoute(
         path: '/merchant/points/system/edit',
-        builder: (context, state) => MerchantPointSystemEditPage(
-          systemId: state.uri.queryParameters['id'],
+        builder: (context, state) => _merchantDark(
+          MerchantPointSystemEditPage(
+            systemId: state.uri.queryParameters['id'],
+          ),
         ),
       ),
       GoRoute(
         path: '/merchant/points/system/edit/:systemId',
-        builder: (context, state) => MerchantPointSystemEditPage(
-          systemId: state.pathParameters['systemId'],
+        builder: (context, state) => _merchantDark(
+          MerchantPointSystemEditPage(
+            systemId: state.pathParameters['systemId'],
+          ),
         ),
       ),
       GoRoute(
         path: '/merchant/points/rewards/edit',
-        builder: (context, state) => MerchantPointRewardEditPage(
-          rewardId: state.uri.queryParameters['id'],
+        builder: (context, state) => _merchantDark(
+          MerchantPointRewardEditPage(
+            rewardId: state.uri.queryParameters['id'],
+          ),
         ),
       ),
       GoRoute(
         path: '/merchant/points/rewards/edit/:rewardId',
-        builder: (context, state) => MerchantPointRewardEditPage(
-          rewardId: state.pathParameters['rewardId'],
+        builder: (context, state) => _merchantDark(
+          MerchantPointRewardEditPage(
+            rewardId: state.pathParameters['rewardId'],
+          ),
         ),
       ),
       GoRoute(
         path: '/merchant/catalog',
-        builder: (context, state) => const MerchantCatalogPage(),
+        builder: (context, state) => _merchantDark(const MerchantCatalogPage()),
       ),
       GoRoute(
         path: '/merchant/catalog/demo',
-        builder: (context, state) => const MerchantCatalogDemoPage(),
+        redirect: (_, _) => '/merchant/catalog',
       ),
       GoRoute(
         path: '/merchant/coupons',
-        builder: (context, state) => const MerchantCouponsPage(),
+        builder: (context, state) => _merchantDark(const MerchantCouponsPage()),
       ),
       GoRoute(
         path: '/merchant/coupons/edit',
-        builder: (context, state) => MerchantCouponEditPage(
-          couponId: state.uri.queryParameters['id'],
+        builder: (context, state) => _merchantDark(
+          MerchantCouponEditPage(
+            couponId: state.uri.queryParameters['id'],
+          ),
         ),
       ),
       GoRoute(
         path: '/merchant/coupons/edit/:couponId',
-        builder: (context, state) => MerchantCouponEditPage(
-          couponId: state.pathParameters['couponId'],
+        builder: (context, state) => _merchantDark(
+          MerchantCouponEditPage(
+            couponId: state.pathParameters['couponId'],
+          ),
         ),
       ),
       GoRoute(
         path: '/merchant/orders',
-        builder: (context, state) => const MerchantOrdersPage(),
+        builder: (context, state) => _merchantDark(const MerchantOrdersPage()),
       ),
       GoRoute(
         path: '/merchant/orders/:orderId',
-        builder: (context, state) => MerchantOrderDetailPage(
-          orderId: state.pathParameters['orderId'] ?? '',
+        builder: (context, state) => _merchantDark(
+          MerchantOrderDetailPage(
+            orderId: state.pathParameters['orderId'] ?? '',
+          ),
         ),
       ),
       GoRoute(
         path: '/merchant/campaigns',
-        builder: (context, state) => const MerchantComingSoonPage(
-          titleKey: 'merchant.campaigns.title',
-          subtitleKey: 'merchant.campaigns.subtitle',
-          tooltipKey: 'merchant.campaigns.tooltip',
-          icon: Icons.emoji_events_rounded,
+        builder: (context, state) => _merchantDark(
+          const MerchantComingSoonPage(
+            titleKey: 'merchant.campaigns.title',
+            subtitleKey: 'merchant.campaigns.subtitle',
+            tooltipKey: 'merchant.campaigns.tooltip',
+            icon: Icons.emoji_events_rounded,
+          ),
         ),
       ),
       GoRoute(
         path: '/merchant/shifts',
-        builder: (context, state) => const MerchantComingSoonPage(
-          titleKey: 'merchant.shifts.title',
-          subtitleKey: 'merchant.shifts.subtitle',
-          tooltipKey: 'merchant.shifts.tooltip',
-          icon: Icons.calendar_month_rounded,
+        builder: (context, state) => _merchantDark(
+          const MerchantComingSoonPage(
+            titleKey: 'merchant.shifts.title',
+            subtitleKey: 'merchant.shifts.subtitle',
+            tooltipKey: 'merchant.shifts.tooltip',
+            icon: Icons.calendar_month_rounded,
+          ),
         ),
       ),
       GoRoute(
         path: '/merchant/delivery',
-        builder: (context, state) => const MerchantComingSoonPage(
-          titleKey: 'merchant.delivery.title',
-          subtitleKey: 'merchant.delivery.subtitle',
-          tooltipKey: 'merchant.delivery.tooltip',
-          icon: Icons.delivery_dining_rounded,
+        builder: (context, state) => _merchantDark(
+          const MerchantComingSoonPage(
+            titleKey: 'merchant.delivery.title',
+            subtitleKey: 'merchant.delivery.subtitle',
+            tooltipKey: 'merchant.delivery.tooltip',
+            icon: Icons.delivery_dining_rounded,
+          ),
         ),
       ),
       GoRoute(
         path: '/merchant/reservations',
-        builder: (context, state) => const MerchantComingSoonPage(
-          titleKey: 'merchant.reservations.title',
-          subtitleKey: 'merchant.reservations.subtitle',
-          tooltipKey: 'merchant.reservations.tooltip',
-          icon: Icons.event_seat_rounded,
+        builder: (context, state) => _merchantDark(
+          const MerchantComingSoonPage(
+            titleKey: 'merchant.reservations.title',
+            subtitleKey: 'merchant.reservations.subtitle',
+            tooltipKey: 'merchant.reservations.tooltip',
+            icon: Icons.event_seat_rounded,
+          ),
         ),
       ),
       GoRoute(
         path: '/merchant/display-studio',
+        // Display Studio bleibt im hellen Look: viele Schwarz/Weiß-Werte sind
+        // Design-Canvas-Inhalt (man gestaltet In-Store-Bildschirme), kein
+        // UI-Chrome – Dunkel-Wrapping würde das Gestaltungs-Tool verfälschen.
         builder: (context, state) => const DisplayStudioPage(),
       ),
       GoRoute(
         path: '/merchant/feed/create',
-        builder: (context, state) => const MerchantFeedCreatePage(),
+        builder: (context, state) => _merchantDark(
+          MerchantFeedCreatePage(
+            kind: state.uri.queryParameters['kind'] == 'action'
+                ? FeedCreateKind.action
+                : FeedCreateKind.post,
+          ),
+        ),
       ),
       GoRoute(
         path: '/merchant/feed/manage',
-        builder: (context, state) => const MerchantFeedManagePage(),
+        builder: (context, state) =>
+            _merchantDark(const MerchantFeedManagePage()),
       ),
       GoRoute(
         path: '/merchant/tools/categories',
-        builder: (context, state) => const MerchantCategoriesPage(),
+        builder: (context, state) =>
+            _merchantDark(const MerchantCategoriesPage()),
       ),
       GoRoute(
         path: '/merchant/tools/items',
-        builder: (context, state) => const MerchantItemsPage(),
+        builder: (context, state) => _merchantDark(const MerchantItemsPage()),
       ),
       GoRoute(
         path: '/merchant/tools/itemTags',
-        builder: (context, state) => const MerchantItemTagsPage(),
+        builder: (context, state) => _merchantDark(const MerchantItemTagsPage()),
       ),
       GoRoute(
         path: '/merchant/tools/shop',
-        redirect: (_, __) => '/merchant/shop',
+        redirect: (_, _) => '/merchant/shop',
       ),
       GoRoute(
         path: '/merchant/tools/support',
-        builder: (context, state) => const MerchantSupportPage(),
+        builder: (context, state) => _merchantDark(const MerchantSupportPage()),
       ),
       GoRoute(
         path: '/merchant/tools/invite',
-        builder: (context, state) => const MerchantInvitePage(),
+        builder: (context, state) => _merchantDark(const MerchantInvitePage()),
       ),
       GoRoute(
         path: '/merchant/tools/feedManage',
-        builder: (context, state) => const MerchantFeedManagePage(),
+        builder: (context, state) =>
+            _merchantDark(const MerchantFeedManagePage()),
       ),
       GoRoute(
         path: '/merchant/tools/tables',
-        builder: (context, state) => const MerchantTablesPage(),
+        builder: (context, state) => _merchantDark(const MerchantTablesPage()),
       ),
       GoRoute(
         path: '/claim/stamp',

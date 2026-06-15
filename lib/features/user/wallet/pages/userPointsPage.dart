@@ -1,11 +1,13 @@
 import 'dart:async';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:lokka/core/constants/firebasePaths.dart';
 import 'package:lokka/core/services/authService.dart';
 import 'package:lokka/core/services/firestoreService.dart';
 import 'package:lokka/core/theme/appColors.dart';
 import 'package:lokka/core/theme/appSpacing.dart';
+import 'package:lokka/core/widgets/appEmptyState.dart';
+import 'package:lokka/core/widgets/appErrorState.dart';
+import 'package:lokka/core/widgets/appLoadingState.dart';
 import 'package:lokka/features/user/wallet/models/pointsProgressModel.dart';
 import 'package:lokka/features/user/wallet/widgets/pointsProgressCard.dart';
 import 'package:provider/provider.dart';
@@ -77,21 +79,21 @@ class _UserPointsPageState extends State<UserPointsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColors.surfaceBg,
       appBar: AppBar(
-        backgroundColor: AppColors.background,
+        backgroundColor: AppColors.surfaceBg,
         elevation: 0,
+        scrolledUnderElevation: 0,
         title: Text(
           widget.merchantName,
-          style: const TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w800,
-            color: AppColors.black,
-          ),
+          style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w600),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: AppColors.black),
+          icon: const Icon(Icons.arrow_back_rounded),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -101,120 +103,25 @@ class _UserPointsPageState extends State<UserPointsPage> {
 
   Widget _buildBody() {
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return const AppLoadingState();
     }
     if (_error != null) {
-      return const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.wifi_off_rounded, size: 48, color: AppColors.gray300),
-            SizedBox(height: AppSpacing.md),
-            Text('Laden fehlgeschlagen',
-                style: TextStyle(color: AppColors.gray500, fontSize: 16)),
-          ],
-        ),
-      );
+      return const AppErrorState(message: 'Laden fehlgeschlagen');
     }
     if (_progress == null) {
-      return const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.stars_outlined, size: 64, color: AppColors.gray300),
-            SizedBox(height: AppSpacing.md),
-            Text(
-              'Noch keine Punkte',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-                color: AppColors.gray500,
-              ),
-            ),
-            SizedBox(height: 8),
-            Text(
-              'Sammle Punkte bei deinem nächsten Einkauf.',
-              style: TextStyle(fontSize: 14, color: AppColors.gray300),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
+      return const AppEmptyState(
+        icon: Icons.stars_outlined,
+        title: 'Noch keine Punkte',
+        message: 'Sammle Punkte bei deinem nächsten Einkauf.',
       );
     }
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      child: Column(
-        children: [
-          PointsProgressCard(
-            progress: _progress!,
-            merchantName: widget.merchantName,
-          ),
-          const SizedBox(height: AppSpacing.md),
-          _PointsInfoCard(progress: _progress!),
-        ],
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: PointsProgressCard(
+        progress: _progress!,
+        merchantName: widget.merchantName,
       ),
-    );
-  }
-}
-
-class _PointsInfoCard extends StatelessWidget {
-  const _PointsInfoCard({required this.progress});
-
-  final PointsProgressModel progress;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        children: [
-          _Row('Aktuelle Punkte', '${progress.currentPoints}'),
-          const Divider(height: 20, color: AppColors.border),
-          _Row('Gesamtpunkte', '${progress.lifetimePoints}'),
-          if (progress.resetDay != null) ...[
-            const Divider(height: 20, color: AppColors.border),
-            _Row('Reset-Tag', '${progress.resetDay}. des Monats'),
-          ],
-          if (progress.status.isNotEmpty) ...[
-            const Divider(height: 20, color: AppColors.border),
-            _Row('Status', progress.status),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _Row extends StatelessWidget {
-  const _Row(this.label, this.value);
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Text(
-          label,
-          style: const TextStyle(fontSize: 14, color: AppColors.gray500),
-        ),
-        const Spacer(),
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w700,
-            color: AppColors.black,
-          ),
-        ),
-      ],
     );
   }
 }

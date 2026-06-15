@@ -11,10 +11,12 @@ class PublicShopHero extends StatelessWidget {
     super.key,
     required this.merchant,
     required this.tableLabel,
+    required this.darkMode,
   });
 
   final Map<String, dynamic> merchant;
   final String tableLabel;
+  final bool darkMode;
 
   @override
   Widget build(BuildContext context) {
@@ -22,22 +24,23 @@ class PublicShopHero extends StatelessWidget {
     final coverUrl = (merchant['coverUrl'] ?? '').toString();
     final logoUrl = (merchant['logoUrl'] ?? '').toString();
     final shopName = (merchant['shopName'] ?? merchant['businessName'] ?? texts.text('public.shop.shop')).toString();
+    final description = (merchant['description'] ?? '').toString();
     final meta = [
       (merchant['area'] ?? '').toString(),
-      (merchant['shopType'] ?? merchant['shopTypePrimary'] ?? '').toString(),
-    ].where((value) => value.trim().isNotEmpty).join(' · ');
+      (merchant['shopTypePrimary'] ?? merchant['shopType'] ?? '').toString(),
+    ].where((value) => value.trim().isNotEmpty).join(' | ');
 
     return Container(
-      height: 230,
+      height: description.trim().isEmpty ? 238 : 268,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: AppColors.black,
         borderRadius: BorderRadius.circular(34),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.16),
-            blurRadius: 28,
-            offset: const Offset(0, 14),
+            color: Colors.black.withOpacity(darkMode ? 0.28 : 0.16),
+            blurRadius: 30,
+            offset: const Offset(0, 15),
           ),
         ],
       ),
@@ -46,7 +49,13 @@ class PublicShopHero extends StatelessWidget {
           Positioned.fill(
             child: coverUrl.isEmpty
                 ? const DecoratedBox(
-                    decoration: BoxDecoration(color: AppColors.black),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [Color(0xFF282822), Color(0xFF11110F)],
+                      ),
+                    ),
                   )
                 : CachedNetworkImage(imageUrl: coverUrl, fit: BoxFit.cover),
           ),
@@ -57,8 +66,8 @@ class PublicShopHero extends StatelessWidget {
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    Colors.black.withOpacity(0.18),
-                    Colors.black.withOpacity(0.72),
+                    Colors.black.withOpacity(0.16),
+                    Colors.black.withOpacity(0.88),
                   ],
                 ),
               ),
@@ -68,58 +77,77 @@ class PublicShopHero extends StatelessWidget {
             left: 18,
             right: 18,
             bottom: 18,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Container(
-                  width: 66,
-                  height: 66,
-                  clipBehavior: Clip.antiAlias,
-                  decoration: BoxDecoration(
-                    color: AppColors.white,
-                    borderRadius: BorderRadius.circular(26),
-                    border: Border.all(color: AppColors.white, width: 2),
-                  ),
-                  child: logoUrl.isEmpty
-                      ? const Icon(Icons.storefront_rounded, color: AppColors.black)
-                      : CachedNetworkImage(imageUrl: logoUrl, fit: BoxFit.cover),
-                ),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        shopName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: AppColors.white,
-                          fontSize: 26,
-                          fontWeight: FontWeight.w900,
-                          height: 1,
-                        ),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Container(
+                      width: 68,
+                      height: 68,
+                      clipBehavior: Clip.antiAlias,
+                      decoration: BoxDecoration(
+                        color: AppColors.white,
+                        borderRadius: BorderRadius.circular(25),
+                        border: Border.all(color: AppColors.white, width: 2),
                       ),
-                      if (meta.isNotEmpty) ...[
-                        const SizedBox(height: 6),
-                        Text(
-                          meta,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: AppColors.white.withOpacity(0.72),
-                            fontWeight: FontWeight.w800,
+                      child: logoUrl.isEmpty
+                          ? const Icon(Icons.storefront_rounded, color: AppColors.black)
+                          : CachedNetworkImage(imageUrl: logoUrl, fit: BoxFit.cover),
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            shopName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: AppColors.white,
+                              fontSize: 28,
+                              fontWeight: FontWeight.w900,
+                              height: 1,
+                            ),
                           ),
-                        ),
-                      ],
-                      if (tableLabel.isNotEmpty) ...[
-                        const SizedBox(height: 10),
-                        _HeroPill(label: texts.text('public.shop.table').replaceAll('{table}', tableLabel)),
-                      ],
-                    ],
-                  ),
+                          if (meta.isNotEmpty) ...[
+                            const SizedBox(height: 7),
+                            Text(
+                              meta,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: AppColors.white.withOpacity(0.74),
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
+                if (description.trim().isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    description,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: AppColors.white.withOpacity(0.68),
+                      height: 1.3,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+                if (tableLabel.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  _HeroPill(label: texts.text('public.shop.table').replaceAll('{table}', tableLabel)),
+                ],
               ],
             ),
           ),

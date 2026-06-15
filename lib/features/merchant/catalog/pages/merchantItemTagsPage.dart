@@ -7,6 +7,7 @@ import '../../../../core/services/languageService.dart';
 import '../../../../core/theme/appColors.dart';
 import '../../../../core/theme/appRadius.dart';
 import '../../../../core/theme/appSpacing.dart';
+import '../../shared/widgets/merchantPremiumUi.dart';
 import '../../tools/providers/merchantToolsProvider.dart';
 import '../../tools/services/merchantToolsService.dart';
 import '../../tools/widgets/merchantToolUi.dart';
@@ -78,13 +79,8 @@ class _TagGroup extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final texts = context.watch<LanguageService>();
-    return Container(
+    return MerchantPremiumCard(
       padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(AppRadius.xl),
-        border: Border.all(color: AppColors.border),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -97,6 +93,10 @@ class _TagGroup extends StatelessWidget {
                 tooltip: texts.text('merchant.itemTags.add'),
                 onPressed: () => _openTagSheet(context, type: type),
                 icon: const Icon(Icons.add_rounded),
+                style: IconButton.styleFrom(
+                  backgroundColor: MerchantPremiumColors.ink,
+                  foregroundColor: Colors.white,
+                ),
               ),
             ],
           ),
@@ -121,9 +121,9 @@ class _TagRow extends StatelessWidget {
       margin: const EdgeInsets.only(top: 8),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: AppColors.gray50,
+        color: MerchantPremiumColors.surfaceAlt,
         borderRadius: BorderRadius.circular(AppRadius.large),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: MerchantPremiumColors.line),
       ),
       child: Row(
         children: [
@@ -133,10 +133,10 @@ class _TagRow extends StatelessWidget {
             alignment: Alignment.center,
             padding: const EdgeInsets.symmetric(horizontal: 8),
             decoration: BoxDecoration(
-              color: AppColors.black,
+              color: MerchantPremiumColors.ink,
               borderRadius: BorderRadius.circular(999),
             ),
-            child: Text(tag.code, style: const TextStyle(color: AppColors.white, fontWeight: FontWeight.w900)),
+            child: Text(tag.code, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900)),
           ),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
@@ -156,7 +156,7 @@ class _TagRow extends StatelessWidget {
           ] else
             Tooltip(
               message: texts.text('merchant.itemTags.standardTip'),
-              child: const Icon(Icons.lock_outline_rounded, size: 18, color: AppColors.gray500),
+              child: const Icon(Icons.lock_outline_rounded, size: 18, color: MerchantPremiumColors.muted),
             ),
         ],
       ),

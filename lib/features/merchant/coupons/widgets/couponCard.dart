@@ -2,9 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../core/services/languageService.dart';
-import '../../../../core/theme/appColors.dart';
-import '../../../../core/theme/appRadius.dart';
 import '../../../../core/theme/appSpacing.dart';
+import '../../shared/widgets/merchantPremiumUi.dart';
 import '../models/couponModel.dart';
 
 class CouponCard extends StatelessWidget {
@@ -28,20 +27,8 @@ class CouponCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final texts = context.watch<LanguageService>();
-    return Container(
+    return MerchantPremiumCard(
       padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(AppRadius.xl),
-        border: Border.all(color: AppColors.border),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 18,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -51,12 +38,12 @@ class CouponCard extends StatelessWidget {
                 width: 58,
                 height: 58,
                 decoration: BoxDecoration(
-                  color: AppColors.black,
+                  color: MerchantPremiumColors.ink,
                   borderRadius: BorderRadius.circular(22),
                 ),
                 child: const Icon(
                   Icons.confirmation_number_rounded,
-                  color: AppColors.white,
+                  color: MerchantPremiumColors.gold,
                 ),
               ),
               const SizedBox(width: AppSpacing.md),
@@ -71,6 +58,7 @@ class CouponCard extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
+                        color: MerchantPremiumColors.ink,
                         fontSize: 19,
                         fontWeight: FontWeight.w900,
                       ),
@@ -81,7 +69,7 @@ class CouponCard extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        color: AppColors.gray700,
+                        color: MerchantPremiumColors.muted,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -153,16 +141,16 @@ class _MiniAction extends StatelessWidget {
       avatar: Icon(
         icon,
         size: 17,
-        color: isDanger ? Colors.red.shade700 : AppColors.black,
+        color: isDanger ? Colors.red.shade700 : MerchantPremiumColors.ink,
       ),
       label: Text(label),
       onPressed: onTap,
       labelStyle: TextStyle(
-        color: isDanger ? Colors.red.shade700 : AppColors.black,
+        color: isDanger ? Colors.red.shade700 : MerchantPremiumColors.ink,
         fontWeight: FontWeight.w800,
       ),
-      backgroundColor: AppColors.gray50,
-      side: BorderSide(color: isDanger ? Colors.red.shade100 : AppColors.border),
+      backgroundColor: MerchantPremiumColors.surfaceAlt,
+      side: BorderSide(color: isDanger ? Colors.red.shade100 : MerchantPremiumColors.line),
     );
   }
 }
@@ -177,13 +165,17 @@ class _StatusPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
-        color: AppColors.gray50,
+        color: MerchantPremiumColors.surfaceAlt,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: MerchantPremiumColors.line),
       ),
       child: Text(
         label,
-        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900),
+        style: const TextStyle(
+          color: MerchantPremiumColors.ink,
+          fontSize: 12,
+          fontWeight: FontWeight.w900,
+        ),
       ),
     );
   }

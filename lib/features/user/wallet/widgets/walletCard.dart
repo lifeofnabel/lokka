@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:lokka/core/theme/appColors.dart';
-import 'package:lokka/core/theme/appRadius.dart';
 import 'package:lokka/core/theme/appSpacing.dart';
 import 'package:lokka/features/user/wallet/models/walletCardModel.dart';
 
+/// Calm wallet card (Google Home tone): brand + ONE quiet status line.
+/// Whole card is one tap target that opens the detail page. Big radius,
+/// generous padding, no raw code dump on the list card.
 class WalletCard extends StatelessWidget {
   const WalletCard({
     super.key,
@@ -17,214 +19,112 @@ class WalletCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        height: 190,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(AppRadius.xl),
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              _cardColor(card.merchantShopType),
-              _cardColorEnd(card.merchantShopType),
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    return Material(
+      color: AppColors.surfaceBg,
+      borderRadius: BorderRadius.circular(26),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(26),
+        child: Ink(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(26),
+            border: Border.all(color: cs.outlineVariant),
+          ),
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Row(
+            children: [
+              _buildLogo(cs),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      card.merchantName,
+                      style: tt.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    _StatusLine(card: card),
+                  ],
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Icon(
+                Icons.chevron_right_rounded,
+                color: cs.onSurfaceVariant,
+                size: 24,
+              ),
             ],
           ),
-          boxShadow: [
-            BoxShadow(
-              color: _cardColor(card.merchantShopType).withOpacity(0.4),
-              blurRadius: 24,
-              offset: const Offset(0, 10),
-            ),
-          ],
-        ),
-        child: Stack(
-          children: [
-            _buildPattern(),
-            Padding(
-              padding: const EdgeInsets.all(AppSpacing.lg),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      _buildLogo(),
-                      const SizedBox(width: AppSpacing.sm),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              card.merchantName,
-                              style: const TextStyle(
-                                fontSize: 17,
-                                fontWeight: FontWeight.w800,
-                                color: Colors.white,
-                                letterSpacing: -0.3,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            if (card.merchantShopType.isNotEmpty ||
-                                card.merchantArea.isNotEmpty)
-                              Text(
-                                [card.merchantShopType, card.merchantArea]
-                                    .where((s) => s.isNotEmpty)
-                                    .join(' · '),
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.white60,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const Spacer(),
-                  Text(
-                    card.walletCode,
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w900,
-                      color: Colors.white,
-                      letterSpacing: 2,
-                      fontFamily: 'monospace',
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  Row(
-                    children: [
-                      _StatusDot(active: card.hasStampCards, icon: Icons.loyalty_rounded, label: 'Stempel'),
-                      const SizedBox(width: AppSpacing.sm),
-                      _StatusDot(active: card.hasPoints, icon: Icons.stars_rounded, label: 'Punkte'),
-                      const SizedBox(width: AppSpacing.sm),
-                      _StatusDot(active: card.hasCoupons, icon: Icons.local_offer_rounded, label: 'Coupons'),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
         ),
       ),
     );
   }
 
-  Widget _buildLogo() {
+  Widget _buildLogo(ColorScheme cs) {
     return Container(
-      width: 44,
-      height: 44,
+      width: 56,
+      height: 56,
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.15),
-        borderRadius: BorderRadius.circular(AppRadius.small),
-        border: Border.all(color: Colors.white24),
+        color: cs.secondaryContainer,
+        borderRadius: BorderRadius.circular(16),
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(AppRadius.small - 1),
+        borderRadius: BorderRadius.circular(16),
         child: card.merchantLogoUrl.isNotEmpty
             ? CachedNetworkImage(
                 imageUrl: card.merchantLogoUrl,
                 fit: BoxFit.cover,
-                errorWidget: (_, __, ___) => _logoFallback(),
+                errorWidget: (context, url, error) => _logoFallback(cs),
               )
-            : _logoFallback(),
+            : _logoFallback(cs),
       ),
     );
   }
 
-  Widget _logoFallback() {
-    return Container(
-      color: Colors.white.withOpacity(0.1),
-      child: const Icon(Icons.store_rounded, size: 22, color: Colors.white70),
-    );
-  }
-
-  Widget _buildPattern() {
-    return Positioned(
-      right: -30,
-      top: -30,
-      child: Container(
-        width: 160,
-        height: 160,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: Colors.white.withOpacity(0.05),
-        ),
-      ),
-    );
-  }
-
-  Color _cardColor(String shopType) {
-    const map = {
-      'Food': Color(0xFF1A2B3C),
-      'Café': Color(0xFF2C1A0E),
-      'Kiosk': Color(0xFF0E2C1A),
-      'Beauty': Color(0xFF2C0E2C),
-      'Fitness': Color(0xFF0E1A2C),
-      'Bakery': Color(0xFF2C2010),
-      'Drinks': Color(0xFF1A0E2C),
-    };
-    return map[shopType] ?? const Color(0xFF171A18);
-  }
-
-  Color _cardColorEnd(String shopType) {
-    const map = {
-      'Food': Color(0xFF2E4A64),
-      'Café': Color(0xFF4A2E18),
-      'Kiosk': Color(0xFF184A2E),
-      'Beauty': Color(0xFF4A184A),
-      'Fitness': Color(0xFF182E4A),
-      'Bakery': Color(0xFF4A3620),
-      'Drinks': Color(0xFF2E184A),
-    };
-    return map[shopType] ?? const Color(0xFF2A2D2A);
+  Widget _logoFallback(ColorScheme cs) {
+    return Icon(Icons.store_rounded, size: 26, color: cs.onSecondaryContainer);
   }
 }
 
-class _StatusDot extends StatelessWidget {
-  const _StatusDot({
-    required this.active,
-    required this.icon,
-    required this.label,
-  });
+/// One quiet meta line: location/type when present, otherwise the active
+/// perks (Stempel · Punkte · Coupons). Never renders empty.
+class _StatusLine extends StatelessWidget {
+  const _StatusLine({required this.card});
 
-  final bool active;
-  final IconData icon;
-  final String label;
+  final WalletCardModel card;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: active ? Colors.white.withOpacity(0.15) : Colors.white.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: active ? Colors.white38 : Colors.white12,
-        ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            icon,
-            size: 11,
-            color: active ? Colors.white : Colors.white30,
-          ),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-              color: active ? Colors.white : Colors.white30,
-            ),
-          ),
-        ],
-      ),
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    final place = [card.merchantShopType, card.merchantArea]
+        .where((s) => s.isNotEmpty)
+        .join(' · ');
+
+    final perks = <String>[
+      if (card.hasStampCards) 'Stempel',
+      if (card.hasPoints) 'Punkte',
+      if (card.hasCoupons) 'Coupons',
+    ];
+
+    final label = place.isNotEmpty
+        ? place
+        : (perks.isNotEmpty ? perks.join(' · ') : 'Wallet-Karte');
+
+    return Text(
+      label,
+      style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
     );
   }
 }

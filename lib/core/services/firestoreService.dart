@@ -113,7 +113,7 @@ class FirestoreService {
     final data = <String, dynamic>{
       if (updateLastLogin) 'lastLoginAt': FieldValue.serverTimestamp(),
       if (updateLastSeen) 'lastSeenAt': FieldValue.serverTimestamp(),
-      if (authProvider != null) 'lastAuthProvider': authProvider,
+      'lastAuthProvider': ?authProvider,
       'updatedAt': FieldValue.serverTimestamp(),
     };
     if (data.length == 1) return Future.value();
@@ -128,11 +128,21 @@ class FirestoreService {
     return _loadChooserList(FirebasePaths.shopTypes);
   }
 
-  Future<void> addShopTypeIfMissing(String value) async {
+  /// Herkunfts-Küchen/Origins (z. B. „Italienisch", „Türkisch") aus dem
+  /// chooser/origins-Dokument, Array-Feld `name` (wie alle Chooser-Listen).
+  Future<List<String>> loadChooserOrigins() {
+    return _loadChooserList(FirebasePaths.origins);
+  }
+
+  Future<void> addShopTypeIfMissing(String value) =>
+      addChooserValue(FirebasePaths.shopTypes, value);
+
+  /// Fügt einen selbst getippten Wert im Hintergrund zu einer Chooser-Liste
+  /// hinzu (Array `name`), z. B. eine eigene Kategorie oder Herkunft.
+  Future<void> addChooserValue(String documentId, String value) async {
     final cleaned = value.trim();
     if (cleaned.isEmpty) return;
-
-    await setDocument(FirebasePaths.chooserDocument(FirebasePaths.shopTypes), {
+    await setDocument(FirebasePaths.chooserDocument(documentId), {
       'name': FieldValue.arrayUnion([cleaned]),
       'updatedAt': FieldValue.serverTimestamp(),
     });

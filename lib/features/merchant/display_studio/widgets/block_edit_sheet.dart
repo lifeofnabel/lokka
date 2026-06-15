@@ -259,7 +259,7 @@ class _DropRow extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: DropdownButtonFormField<String>(
-        value: options.containsKey(value) ? value : options.keys.first,
+        initialValue: options.containsKey(value) ? value : options.keys.first,
         decoration: InputDecoration(
           labelText: label,
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
@@ -333,7 +333,7 @@ class _SwitchRowState extends State<_SwitchRow> {
           const Spacer(),
           Switch(
             value: _val,
-            activeColor: AppColors.black,
+            activeThumbColor: AppColors.black,
             onChanged: (v) { setState(() => _val = v); widget.onChange(v); },
           ),
         ],

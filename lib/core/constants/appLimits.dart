@@ -14,5 +14,4 @@ class AppLimits {
   static const couponCodes = 0;
   static const campaigns = 0;
   static const orders = 0;
-  static const creditValueEuroMax = 1;
 }

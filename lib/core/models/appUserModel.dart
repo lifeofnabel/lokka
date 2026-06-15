@@ -25,6 +25,12 @@ class AppUserModel {
     this.birthday,
     this.profileImageUrl,
     this.profileCoverGradient = 0,
+    this.interestCategories = const [],
+    this.interestAreas = const [],
+    this.interestOrigins = const [],
+    this.interestPostTypes = const [],
+    this.interestPlaces = const [],
+    this.onboardingCompleted = false,
     this.createdAt,
     this.updatedAt,
   });
@@ -50,6 +56,19 @@ class AppUserModel {
   final DateTime? birthday;
   final String? profileImageUrl;
   final int profileCoverGradient;
+  final List<String> interestCategories;
+  final List<String> interestAreas;
+
+  /// Herkunft/Küchen-Interessen (z. B. „Italienisch", „Türkisch").
+  final List<String> interestOrigins;
+
+  /// Beitrags-Typen, die den User interessieren (z. B. „Happy Hour", „Jobs").
+  final List<String> interestPostTypes;
+
+  /// Orte, an denen sich der User aufhält – strukturierte Adress-Maps
+  /// ({label, street, postalCode, city, district, lat, lng}).
+  final List<Map<String, dynamic>> interestPlaces;
+  final bool onboardingCompleted;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -76,6 +95,28 @@ class AppUserModel {
       birthday: _date(map['birthday']),
       profileImageUrl: map['profileImageUrl'] as String?,
       profileCoverGradient: map['profileCoverGradient'] as int? ?? 0,
+      interestCategories: (map['interestCategories'] as List?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          const [],
+      interestAreas: (map['interestAreas'] as List?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          const [],
+      interestOrigins: (map['interestOrigins'] as List?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          const [],
+      interestPostTypes: (map['interestPostTypes'] as List?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          const [],
+      interestPlaces: (map['interestPlaces'] as List?)
+              ?.whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList() ??
+          const [],
+      onboardingCompleted: map['onboardingCompleted'] as bool? ?? false,
       createdAt: _date(map['createdAt']),
       updatedAt: _date(map['updatedAt']),
     );
@@ -104,6 +145,12 @@ class AppUserModel {
       'birthday': birthday?.toIso8601String(),
       'profileImageUrl': profileImageUrl,
       'profileCoverGradient': profileCoverGradient,
+      'interestCategories': interestCategories,
+      'interestAreas': interestAreas,
+      'interestOrigins': interestOrigins,
+      'interestPostTypes': interestPostTypes,
+      'interestPlaces': interestPlaces,
+      'onboardingCompleted': onboardingCompleted,
       'createdAt': createdAt?.toIso8601String(),
       'updatedAt': updatedAt?.toIso8601String(),
     };
@@ -131,6 +178,12 @@ class AppUserModel {
     DateTime? birthday,
     String? profileImageUrl,
     int? profileCoverGradient,
+    List<String>? interestCategories,
+    List<String>? interestAreas,
+    List<String>? interestOrigins,
+    List<String>? interestPostTypes,
+    List<Map<String, dynamic>>? interestPlaces,
+    bool? onboardingCompleted,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -156,6 +209,12 @@ class AppUserModel {
       birthday: birthday ?? this.birthday,
       profileImageUrl: profileImageUrl ?? this.profileImageUrl,
       profileCoverGradient: profileCoverGradient ?? this.profileCoverGradient,
+      interestCategories: interestCategories ?? this.interestCategories,
+      interestAreas: interestAreas ?? this.interestAreas,
+      interestOrigins: interestOrigins ?? this.interestOrigins,
+      interestPostTypes: interestPostTypes ?? this.interestPostTypes,
+      interestPlaces: interestPlaces ?? this.interestPlaces,
+      onboardingCompleted: onboardingCompleted ?? this.onboardingCompleted,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );

@@ -1,4 +1,6 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
+
+import '../../../core/theme/appColors.dart';
 
 class AuthLoadingPage extends StatelessWidget {
   const AuthLoadingPage({super.key});
@@ -6,10 +8,10 @@ class AuthLoadingPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const Scaffold(
+      backgroundColor: AppColors.surfaceBg,
       body: Center(
-        child: Text('auth Loading Page'),
+        child: CircularProgressIndicator(),
       ),
     );
   }
 }
-

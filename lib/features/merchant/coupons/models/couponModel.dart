@@ -36,7 +36,6 @@ class CouponModel {
     required this.isActive,
     required this.isArchived,
     required this.isPrivate,
-    required this.creditCostPerWeek,
     this.createdAt,
     this.updatedAt,
     this.publishedAt,
@@ -61,7 +60,6 @@ class CouponModel {
   final bool isActive;
   final bool isArchived;
   final bool isPrivate;
-  final int creditCostPerWeek;
   final DateTime? createdAt;
   final DateTime? updatedAt;
   final DateTime? publishedAt;
@@ -92,7 +90,6 @@ class CouponModel {
       isActive: false,
       isArchived: false,
       isPrivate: false,
-      creditCostPerWeek: 1,
     );
   }
 
@@ -114,7 +111,6 @@ class CouponModel {
       isActive: map['isActive'] as bool? ?? false,
       isArchived: map['isArchived'] as bool? ?? false,
       isPrivate: map['isPrivate'] as bool? ?? false,
-      creditCostPerWeek: (map['creditCostPerWeek'] as num?)?.toInt() ?? 1,
       createdAt: _readDateTime(map['createdAt']),
       updatedAt: _readDateTime(map['updatedAt']),
       publishedAt: _readDateTime(map['publishedAt']),
@@ -143,7 +139,6 @@ class CouponModel {
       'isActive': isActive,
       'isArchived': isArchived,
       'isPrivate': isPrivate,
-      'creditCostPerWeek': creditCostPerWeek,
       'createdAt': createdAt,
       'updatedAt': updatedAt,
       'publishedAt': publishedAt,
@@ -170,7 +165,6 @@ class CouponModel {
     bool? isActive,
     bool? isArchived,
     bool? isPrivate,
-    int? creditCostPerWeek,
     DateTime? createdAt,
     DateTime? updatedAt,
     DateTime? publishedAt,
@@ -195,7 +189,6 @@ class CouponModel {
       isActive: isActive ?? this.isActive,
       isArchived: isArchived ?? this.isArchived,
       isPrivate: isPrivate ?? this.isPrivate,
-      creditCostPerWeek: creditCostPerWeek ?? this.creditCostPerWeek,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       publishedAt: publishedAt ?? this.publishedAt,

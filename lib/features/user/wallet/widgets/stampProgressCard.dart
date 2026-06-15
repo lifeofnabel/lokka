@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:lokka/core/theme/appColors.dart';
-import 'package:lokka/core/theme/appRadius.dart';
 import 'package:lokka/core/theme/appSpacing.dart';
 import 'package:lokka/features/user/wallet/models/stampProgressModel.dart';
 
+/// Calm M3 stamp card: tonal accents, clear progress, one primary action.
 class StampProgressCard extends StatelessWidget {
   const StampProgressCard({
     super.key,
@@ -16,12 +16,18 @@ class StampProgressCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final ratio = progress.stampsRequired > 0
+        ? (progress.currentStamps / progress.stampsRequired).clamp(0.0, 1.0)
+        : 0.0;
+
     return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
+      padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(AppRadius.large),
-        border: Border.all(color: AppColors.border),
+        color: AppColors.surfaceBg,
+        borderRadius: BorderRadius.circular(26),
+        border: Border.all(color: cs.outlineVariant),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -29,16 +35,20 @@ class StampProgressCard extends StatelessWidget {
           Row(
             children: [
               Container(
-                width: 36,
-                height: 36,
+                width: 40,
+                height: 40,
                 decoration: BoxDecoration(
-                  color: progress.isCompleted ? AppColors.mintSoft : AppColors.gray50,
-                  shape: BoxShape.circle,
+                  color: progress.isCompleted
+                      ? cs.secondaryContainer
+                      : AppColors.surfaceGray,
+                  borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
                   Icons.loyalty_rounded,
-                  size: 18,
-                  color: progress.isCompleted ? AppColors.mintStrong : AppColors.gray300,
+                  size: 20,
+                  color: progress.isCompleted
+                      ? cs.onSecondaryContainer
+                      : cs.onSurfaceVariant,
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),
@@ -48,39 +58,44 @@ class StampProgressCard extends StatelessWidget {
                   children: [
                     Text(
                       'Stempelkarte',
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.black,
-                      ),
+                      style: tt.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w600),
                     ),
                     Text(
                       '${progress.currentStamps} / ${progress.stampsRequired} Stempel',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AppColors.gray500,
-                      ),
+                      style: tt.bodySmall
+                          ?.copyWith(color: cs.onSurfaceVariant),
                     ),
                   ],
                 ),
               ),
               if (progress.isCompleted && !progress.isClaimed)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
                   decoration: BoxDecoration(
-                    color: AppColors.mintSoft,
-                    borderRadius: BorderRadius.circular(20),
+                    color: cs.secondaryContainer,
+                    borderRadius: BorderRadius.circular(100),
                   ),
-                  child: const Text(
-                    'Fertig!',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.mintStrong,
+                  child: Text(
+                    'Fertig',
+                    style: tt.labelMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: cs.onSecondaryContainer,
                     ),
                   ),
                 ),
             ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(100),
+            child: LinearProgressIndicator(
+              value: ratio,
+              minHeight: 6,
+              backgroundColor: AppColors.surfaceGray,
+              valueColor: AlwaysStoppedAnimation(cs.primary),
+            ),
           ),
           const SizedBox(height: AppSpacing.md),
           _StampGrid(
@@ -91,35 +106,22 @@ class StampProgressCard extends StatelessWidget {
             const SizedBox(height: AppSpacing.md),
             SizedBox(
               width: double.infinity,
-              height: 44,
               child: FilledButton(
                 onPressed: onClaim,
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.mintStrong,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                ),
-                child: const Text(
-                  'Belohnung einlösen',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
-                  ),
-                ),
+                child: const Text('Belohnung einlösen'),
               ),
             ),
           ] else if (progress.isClaimed) ...[
             const SizedBox(height: AppSpacing.sm),
-            const Row(
+            Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.check_circle_rounded, size: 16, color: AppColors.gray300),
-                SizedBox(width: 4),
+                Icon(Icons.check_circle_rounded,
+                    size: 16, color: cs.onSurfaceVariant),
+                const SizedBox(width: 6),
                 Text(
                   'Bereits eingelöst',
-                  style: TextStyle(fontSize: 12, color: AppColors.gray300),
+                  style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                 ),
               ],
             ),
@@ -138,6 +140,7 @@ class _StampGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final count = required.clamp(1, 20);
     return Wrap(
       spacing: 6,
@@ -148,16 +151,13 @@ class _StampGrid extends StatelessWidget {
           width: 32,
           height: 32,
           decoration: BoxDecoration(
-            color: filled ? AppColors.mintStrong : AppColors.gray50,
+            color: filled ? cs.primary : AppColors.surfaceGray,
             shape: BoxShape.circle,
-            border: Border.all(
-              color: filled ? AppColors.mintStrong : AppColors.border,
-            ),
           ),
           child: Icon(
             filled ? Icons.star_rounded : Icons.star_outline_rounded,
             size: 16,
-            color: filled ? Colors.white : AppColors.gray300,
+            color: filled ? cs.onPrimary : cs.onSurfaceVariant,
           ),
         );
       }),

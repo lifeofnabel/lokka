@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import 'package:lokka/core/theme/appColors.dart';
 import 'package:lokka/core/theme/appRadius.dart';
 import 'package:lokka/core/theme/appSpacing.dart';
+import 'package:lokka/core/widgets/appEmptyState.dart';
+import 'package:lokka/core/widgets/appErrorState.dart';
 import 'package:lokka/features/user/feed/models/feedPostModel.dart';
 import 'package:lokka/features/user/feed/providers/userFeedProvider.dart';
 import 'package:lokka/features/user/feed/widgets/feedDealCard.dart';
@@ -15,6 +17,8 @@ class UserFeedPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
     return Consumer<UserFeedProvider>(
       builder: (context, provider, _) => CustomScrollView(
         slivers: [
@@ -24,18 +28,17 @@ class UserFeedPage extends StatelessWidget {
             backgroundColor: AppColors.background,
             elevation: 0,
             expandedHeight: 60,
-            flexibleSpace: const FlexibleSpaceBar(
-              titlePadding: EdgeInsets.symmetric(
+            flexibleSpace: FlexibleSpaceBar(
+              titlePadding: const EdgeInsets.symmetric(
                 horizontal: AppSpacing.md,
                 vertical: AppSpacing.sm,
               ),
               title: Text(
                 'Deals & Angebote',
-                style: TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.black,
-                  letterSpacing: -0.5,
+                style: tt.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: cs.onSurface,
+                  letterSpacing: -0.3,
                 ),
               ),
             ),
@@ -65,12 +68,16 @@ class UserFeedPage extends StatelessWidget {
           ] else if (provider.error != null) ...[
             const SliverFillRemaining(
               hasScrollBody: false,
-              child: _FeedErrorView(),
+              child: AppErrorState(message: 'Feed konnte nicht geladen werden'),
             ),
           ] else if (provider.posts.isEmpty) ...[
             const SliverFillRemaining(
               hasScrollBody: false,
-              child: _FeedEmptyView(),
+              child: AppEmptyState(
+                icon: Icons.local_offer_outlined,
+                title: 'Noch keine lokalen Angebote',
+                message: 'Ändere deine Filter oder schau später wieder rein.',
+              ),
             ),
           ] else ...[
             SliverPadding(
@@ -181,13 +188,14 @@ class _SkeletonCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.md),
       child: Container(
         decoration: BoxDecoration(
-          color: AppColors.white,
+          color: cs.surface,
           borderRadius: BorderRadius.circular(AppRadius.large),
-          border: Border.all(color: AppColors.border),
+          border: Border.all(color: cs.outlineVariant),
         ),
         child: Column(
           children: [
@@ -252,60 +260,3 @@ class _Bone extends StatelessWidget {
   }
 }
 
-// ── Empty / Error ────────────────────────────────────────────────────────────
-
-class _FeedEmptyView extends StatelessWidget {
-  const _FeedEmptyView();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Icon(Icons.local_offer_outlined, size: 64, color: AppColors.gray300),
-        SizedBox(height: AppSpacing.md),
-        Text(
-          'Noch keine lokalen Angebote.',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
-            color: AppColors.gray500,
-          ),
-        ),
-        SizedBox(height: 8),
-        Padding(
-          padding: EdgeInsets.symmetric(horizontal: 32),
-          child: Text(
-            'Ändere deine Filter oder schau später wieder rein.',
-            style: TextStyle(fontSize: 14, color: AppColors.gray300),
-            textAlign: TextAlign.center,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _FeedErrorView extends StatelessWidget {
-  const _FeedErrorView();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Icon(Icons.wifi_off_rounded, size: 56, color: AppColors.gray300),
-        SizedBox(height: AppSpacing.md),
-        Text(
-          'Feed konnte nicht geladen werden',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            color: AppColors.gray500,
-          ),
-          textAlign: TextAlign.center,
-        ),
-      ],
-    );
-  }
-}

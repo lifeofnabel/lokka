@@ -5,8 +5,8 @@ import 'package:provider/provider.dart';
 import '../../../../core/services/authService.dart';
 import '../../../../core/services/firestoreService.dart';
 import '../../../../core/services/languageService.dart';
-import '../../../../core/theme/appColors.dart';
 import '../../../../core/theme/appSpacing.dart';
+import '../../shared/widgets/merchantPremiumUi.dart';
 import '../../tools/widgets/merchantToolUi.dart';
 import '../providers/merchantOrdersProvider.dart';
 import '../services/merchantOrdersService.dart';
@@ -56,8 +56,8 @@ class _MerchantOrdersView extends StatelessWidget {
             MerchantEmptyState(
               title: texts.text('merchant.orders.emptyTitle'),
               message: texts.text('merchant.orders.emptyMessage'),
-              actionLabel: texts.text('merchant.catalog.demoTitle'),
-              onAction: () => context.push('/merchant/catalog/demo'),
+              actionLabel: texts.text('merchant.catalog.title'),
+              onAction: () => context.push('/merchant/catalog'),
             )
           else
             ...provider.visibleOrders.map(
@@ -86,15 +86,18 @@ class _OrderSummary extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: AppColors.black,
+        color: MerchantPremiumColors.ink,
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            MerchantPremiumColors.ink,
+            MerchantPremiumColors.baseElevated,
+          ],
+        ),
         borderRadius: BorderRadius.circular(28),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.12),
-            blurRadius: 22,
-            offset: const Offset(0, 12),
-          ),
-        ],
+        border: Border.all(color: MerchantPremiumColors.gold.withOpacity(0.20)),
+        boxShadow: MerchantPremiumShadows.card,
       ),
       child: Row(
         children: [
@@ -141,7 +144,7 @@ class _SummaryValue extends StatelessWidget {
         Text(
           value,
           style: const TextStyle(
-            color: AppColors.white,
+            color: MerchantPremiumColors.surface,
             fontSize: 24,
             fontWeight: FontWeight.w900,
             height: 1,
@@ -153,7 +156,7 @@ class _SummaryValue extends StatelessWidget {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
-            color: AppColors.white.withOpacity(0.66),
+            color: MerchantPremiumColors.mutedLight,
             fontSize: 12,
             fontWeight: FontWeight.w800,
           ),
@@ -172,7 +175,7 @@ class _DividerLine extends StatelessWidget {
       width: 1,
       height: 38,
       margin: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-      color: AppColors.white.withOpacity(0.12),
+      color: MerchantPremiumColors.gold.withOpacity(0.18),
     );
   }
 }
@@ -203,9 +206,13 @@ class _FilterBar extends StatelessWidget {
               label: Text(entry.value),
               selected: selected,
               onSelected: (_) => provider.setFilter(entry.key),
-              selectedColor: AppColors.black,
+              selectedColor: MerchantPremiumColors.goldSoft,
+              backgroundColor: MerchantPremiumColors.baseSoft,
+              side: BorderSide(
+                color: selected ? MerchantPremiumColors.gold : Colors.white.withOpacity(0.12),
+              ),
               labelStyle: TextStyle(
-                color: selected ? AppColors.white : AppColors.black,
+                color: selected ? MerchantPremiumColors.ink : MerchantPremiumColors.mutedLight,
                 fontWeight: FontWeight.w800,
               ),
             ),

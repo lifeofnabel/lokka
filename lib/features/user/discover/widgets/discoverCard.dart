@@ -72,7 +72,7 @@ class DiscoverCard extends StatelessWidget {
                           style: const TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
-                            color: AppColors.black,
+                            color: AppColors.onSurfaceDark,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,

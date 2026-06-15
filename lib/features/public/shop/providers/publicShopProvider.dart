@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../../merchant/catalog/models/itemCategoryData.dart';
+import '../../../merchant/catalog/models/itemTagData.dart';
 import '../../../merchant/catalog/models/merchantItemData.dart';
 import '../../../merchant/tables/models/merchantTableData.dart';
 import '../services/publicShopService.dart';
@@ -38,6 +39,7 @@ class PublicShopProvider extends ChangeNotifier {
   PublicCatalogConfig catalogConfig = PublicCatalogConfig.disabled;
   List<ItemCategoryData> categories = [];
   List<MerchantItemData> items = [];
+  List<ItemTagData> itemTags = [];
   List<PublicCartItem> cart = [];
   String? createdOrderId;
 
@@ -70,16 +72,19 @@ class PublicShopProvider extends ChangeNotifier {
       if (!catalogAvailable) {
         categories = [];
         items = [];
+        itemTags = [];
         cart = [];
         return;
       }
 
       final catalog = await Future.wait<Object?>([
         service.loadCategories(merchantId),
+        service.loadItemTags(merchantId),
         service.loadItems(merchantId),
       ]);
       categories = catalog[0] as List<ItemCategoryData>;
-      items = catalog[1] as List<MerchantItemData>;
+      itemTags = catalog[1] as List<ItemTagData>;
+      items = catalog[2] as List<MerchantItemData>;
     } catch (e) {
       error = e.toString();
     } finally {

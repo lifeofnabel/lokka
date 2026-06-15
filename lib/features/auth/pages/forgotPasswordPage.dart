@@ -44,6 +44,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
     return AuthPageShell(
       titleKey: 'auth.forgotPassword.title',
       subtitleKey: 'auth.forgotPassword.subtitle',
+      icon: Icons.lock_reset_rounded,
       children: [
         AuthErrorBox(message: _localError ?? provider.error),
         if (provider.message != null) AuthWarningBox(messageKey: 'auth.reset.sent'),
@@ -51,7 +52,11 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
           controller: _email,
           labelKey: 'auth.email',
           keyboardType: TextInputType.emailAddress,
+          textInputAction: TextInputAction.done,
+          autofillHints: const [AutofillHints.email],
+          onSubmitted: (_) => _send(),
         ),
+        const SizedBox(height: 4),
         AuthPrimaryButton(labelKey: 'auth.reset.button', onPressed: _send),
         TextButton(
           onPressed: () => context.go('/auth/userLogin'),

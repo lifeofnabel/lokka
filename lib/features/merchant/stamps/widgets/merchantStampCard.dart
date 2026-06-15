@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../core/services/languageService.dart';
-import '../../../../core/theme/appColors.dart';
 import '../../../../core/theme/appSpacing.dart';
+import '../../shared/widgets/merchantPremiumUi.dart';
 import '../models/stampCardModel.dart';
 
 class MerchantStampCard extends StatelessWidget {
@@ -29,20 +29,10 @@ class MerchantStampCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final texts = context.watch<LanguageService>();
-    return Container(
+    return MerchantPremiumCard(
       padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(30),
-        border: Border.all(color: AppColors.border),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 22,
-            offset: const Offset(0, 12),
-          ),
-        ],
-      ),
+      radius: 30,
+      borderColor: card.isLive ? MerchantPremiumColors.ink : MerchantPremiumColors.line,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -50,6 +40,22 @@ class MerchantStampCard extends StatelessWidget {
           const SizedBox(height: AppSpacing.md),
           Row(
             children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: card.isLive ? MerchantPremiumColors.ink : MerchantPremiumColors.surfaceAlt,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: card.isLive ? MerchantPremiumColors.ink : MerchantPremiumColors.line,
+                  ),
+                ),
+                child: Icon(
+                  card.isLive ? Icons.check_rounded : Icons.more_horiz_rounded,
+                  color: card.isLive ? MerchantPremiumColors.base : MerchantPremiumColors.muted,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -59,6 +65,7 @@ class MerchantStampCard extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
+                        color: MerchantPremiumColors.ink,
                         fontSize: 19,
                         fontWeight: FontWeight.w900,
                       ),
@@ -69,7 +76,7 @@ class MerchantStampCard extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        color: AppColors.gray700,
+                        color: MerchantPremiumColors.muted,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -135,10 +142,10 @@ class MerchantStampPreview extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final texts = context.watch<LanguageService>();
-    final bg = _colorFromHex(card.backgroundColor, AppColors.black);
-    final gradient = _colorFromHex(card.gradientColor, AppColors.mintStrong);
-    final fg = _colorFromHex(card.textColor, AppColors.white);
-    final accent = _colorFromHex(card.accentColor, AppColors.mint);
+    final bg = _colorFromHex(card.backgroundColor, const Color(0xFF171A18));
+    final gradient = _colorFromHex(card.gradientColor, const Color(0xFF45C9A4));
+    final fg = _colorFromHex(card.textColor, const Color(0xFFFEFFFC));
+    final accent = _colorFromHex(card.accentColor, const Color(0xFF9CE8CF));
     final slots = math.min(card.requiredStamps, compact ? 10 : 15);
     final hasBackgroundImage = card.imageUrl.isNotEmpty && card.imagePlacement == 'background';
 
@@ -159,7 +166,7 @@ class MerchantStampPreview extends StatelessWidget {
                 image: NetworkImage(card.imageUrl),
                 fit: BoxFit.cover,
                 colorFilter: ColorFilter.mode(
-                  Colors.black.withOpacity(0.42),
+                  Colors.black.withValues(alpha: 0.42),
                   BlendMode.darken,
                 ),
               )
@@ -207,7 +214,7 @@ class MerchantStampPreview extends StatelessWidget {
                           maxLines: compact ? 1 : 2,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            color: fg.withOpacity(0.72),
+                            color: fg.withValues(alpha: 0.72),
                             fontWeight: FontWeight.w800,
                             height: 1.2,
                           ),
@@ -223,7 +230,7 @@ class MerchantStampPreview extends StatelessWidget {
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
-                                color: fg.withOpacity(0.82),
+                                color: fg.withValues(alpha: 0.82),
                                 fontWeight: FontWeight.w900,
                                 height: 1.25,
                               ),
@@ -234,7 +241,7 @@ class MerchantStampPreview extends StatelessWidget {
                               message: card.description,
                               child: Icon(
                                 Icons.info_outline_rounded,
-                                color: fg.withOpacity(0.78),
+                                color: fg.withValues(alpha: 0.78),
                                 size: 19,
                               ),
                             ),
@@ -247,7 +254,7 @@ class MerchantStampPreview extends StatelessWidget {
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            color: fg.withOpacity(0.62),
+                            color: fg.withValues(alpha: 0.62),
                             fontWeight: FontWeight.w700,
                             height: 1.25,
                           ),
@@ -291,7 +298,7 @@ class MerchantStampPreview extends StatelessWidget {
                     height: compact ? 34 : 40,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      color: fg.withOpacity(0.12),
+                      color: fg.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(999),
                     ),
                     child: Text(
@@ -328,6 +335,10 @@ class _StampSlot extends StatelessWidget {
     final isSquare = shape == 'square';
     final isSoftSquare = shape == 'softSquare';
     final isDiamond = shape == 'diamond';
+    // Lesbare Glyphen-Farbe abhängig von der gewählten Stempelfarbe.
+    final onAccent = accent.computeLuminance() > 0.5
+        ? const Color(0xFF171A18)
+        : const Color(0xFFFEFFFC);
     return Container(
       width: 40,
       height: 40,
@@ -335,7 +346,7 @@ class _StampSlot extends StatelessWidget {
       decoration: BoxDecoration(
         color: accent,
         borderRadius: BorderRadius.circular(isSquare ? 8 : isSoftSquare || isDiamond ? 16 : 999),
-        border: Border.all(color: fg.withOpacity(0.16)),
+        border: Border.all(color: fg.withValues(alpha: 0.16)),
       ),
       child: Center(
         child: Transform.rotate(
@@ -344,13 +355,13 @@ class _StampSlot extends StatelessWidget {
               ? Text(
                   _stampText(iconValue),
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: AppColors.black,
+                  style: TextStyle(
+                    color: onAccent,
                     fontWeight: FontWeight.w900,
                     fontSize: 18,
                   ),
                 )
-              : Icon(_iconFor(iconValue), color: AppColors.black, size: 20),
+              : Icon(_iconFor(iconValue), color: onAccent, size: 20),
         ),
       ),
     );
@@ -373,15 +384,15 @@ class _MiniAction extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ActionChip(
-      avatar: Icon(icon, size: 17, color: isDanger ? Colors.red.shade700 : AppColors.black),
+      avatar: Icon(icon, size: 17, color: isDanger ? Colors.red.shade700 : MerchantPremiumColors.ink),
       label: Text(label),
       onPressed: onTap,
       labelStyle: TextStyle(
-        color: isDanger ? Colors.red.shade700 : AppColors.black,
+        color: isDanger ? Colors.red.shade700 : MerchantPremiumColors.ink,
         fontWeight: FontWeight.w800,
       ),
-      backgroundColor: AppColors.gray50,
-      side: BorderSide(color: isDanger ? Colors.red.shade100 : AppColors.border),
+      backgroundColor: MerchantPremiumColors.surfaceAlt,
+      side: BorderSide(color: isDanger ? Colors.red.shade100 : MerchantPremiumColors.line),
     );
   }
 }
@@ -396,13 +407,17 @@ class _StatusPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
       decoration: BoxDecoration(
-        color: AppColors.gray50,
+        color: MerchantPremiumColors.surfaceAlt,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: MerchantPremiumColors.line),
       ),
       child: Text(
         label,
-        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900),
+        style: const TextStyle(
+          color: MerchantPremiumColors.ink,
+          fontSize: 12,
+          fontWeight: FontWeight.w900,
+        ),
       ),
     );
   }
@@ -432,6 +447,7 @@ Color _colorFromHex(String value, Color fallback) {
   final parsed = int.tryParse('FF$clean', radix: 16);
   return parsed == null ? fallback : Color(parsed);
 }
+
 
 IconData _iconFor(String value) {
   return switch (value) {

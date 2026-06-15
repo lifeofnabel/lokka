@@ -5,8 +5,12 @@ import 'package:lokka/core/constants/firebasePaths.dart';
 import 'package:lokka/core/services/authService.dart';
 import 'package:lokka/core/services/firestoreService.dart';
 import 'package:lokka/core/theme/appColors.dart';
-import 'package:lokka/core/theme/appRadius.dart';
 import 'package:lokka/core/theme/appSpacing.dart';
+import 'package:lokka/core/widgets/appEmptyState.dart';
+import 'package:lokka/core/widgets/appErrorState.dart';
+import 'package:lokka/core/services/localCacheService.dart';
+import 'package:lokka/core/widgets/appLoadingState.dart';
+import 'package:lokka/features/user/gamification/widgets/celebration.dart';
 import 'package:lokka/features/user/wallet/models/stampProgressModel.dart';
 import 'package:lokka/features/user/wallet/widgets/stampProgressCard.dart';
 
@@ -76,21 +80,19 @@ class _UserStampPageState extends State<UserStampPage> {
 
   @override
   Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColors.surfaceBg,
       appBar: AppBar(
-        backgroundColor: AppColors.background,
+        backgroundColor: AppColors.surfaceBg,
         elevation: 0,
-        title: const Text(
+        scrolledUnderElevation: 0,
+        title: Text(
           'Stempelkarten',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w800,
-            color: AppColors.black,
-          ),
+          style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w600),
         ),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: AppColors.black),
+          icon: const Icon(Icons.arrow_back_rounded),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -100,45 +102,16 @@ class _UserStampPageState extends State<UserStampPage> {
 
   Widget _buildBody() {
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return const AppLoadingState();
     }
     if (_error != null) {
-      return const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.wifi_off_rounded, size: 48, color: AppColors.gray300),
-            SizedBox(height: AppSpacing.md),
-            Text(
-              'Laden fehlgeschlagen',
-              style: TextStyle(color: AppColors.gray500, fontSize: 16),
-            ),
-          ],
-        ),
-      );
+      return const AppErrorState(message: 'Laden fehlgeschlagen');
     }
     if (_cards.isEmpty) {
-      return const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.loyalty_rounded, size: 64, color: AppColors.gray300),
-            SizedBox(height: AppSpacing.md),
-            Text(
-              'Keine Stempelkarten',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-                color: AppColors.gray500,
-              ),
-            ),
-            SizedBox(height: 8),
-            Text(
-              'Sammle Stempel beim nächsten Besuch.',
-              style: TextStyle(fontSize: 14, color: AppColors.gray300),
-            ),
-          ],
-        ),
+      return const AppEmptyState(
+        icon: Icons.loyalty_rounded,
+        title: 'Keine Stempelkarten',
+        message: 'Sammle Stempel beim nächsten Besuch.',
       );
     }
 
@@ -171,15 +144,14 @@ class _UserStampPageState extends State<UserStampPage> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: List.generate(_cards.length, (i) {
+                final cs = Theme.of(context).colorScheme;
                 return AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
                   margin: const EdgeInsets.symmetric(horizontal: 3),
                   width: _page == i ? 18 : 6,
                   height: 6,
                   decoration: BoxDecoration(
-                    color: _page == i
-                        ? AppColors.mintStrong
-                        : AppColors.gray300,
+                    color: _page == i ? cs.primary : cs.outlineVariant,
                     borderRadius: BorderRadius.circular(3),
                   ),
                 );
@@ -195,16 +167,9 @@ class _UserStampPageState extends State<UserStampPage> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.large),
-        ),
-        title: const Text(
-          'Belohnung einlösen',
-          style: TextStyle(fontWeight: FontWeight.w800),
-        ),
+        title: const Text('Belohnung einlösen'),
         content: const Text(
           'Zeige diese Bestätigung dem Personal und markiere die Belohnung als erhalten.',
-          style: TextStyle(color: AppColors.gray700),
         ),
         actions: [
           TextButton(
@@ -212,12 +177,6 @@ class _UserStampPageState extends State<UserStampPage> {
             child: const Text('Abbrechen'),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: AppColors.mintStrong,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(999),
-              ),
-            ),
             onPressed: () {
               Navigator.pop(ctx);
               _markClaimed(card);
@@ -232,14 +191,23 @@ class _UserStampPageState extends State<UserStampPage> {
   Future<void> _markClaimed(StampProgressModel card) async {
     final uid = _uid;
     if (uid == null) return;
+    final cache = context.read<LocalCacheService>();
     try {
       await _firestoreService.updateDocument(
-        '$_users/$uid/$_stampProgress/${card.stampCardId}',
+        FirebasePaths.userStampProgressEntry(uid, card.stampCardId),
         {
           'status': 'claimed',
           'claimedAt': DateTime.now().toIso8601String(),
         },
       );
+      if (mounted) {
+        await Celebration.maybeShow(
+          context,
+          cache,
+          title: 'Belohnung eingelöst! 🎉',
+          subtitle: 'Viel Spaß damit!',
+        );
+      }
     } catch (_) {}
   }
 }

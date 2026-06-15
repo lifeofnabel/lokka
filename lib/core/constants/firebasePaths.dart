@@ -5,6 +5,7 @@ class FirebasePaths {
   static const chooser = 'chooser';
   static const areas = 'areas';
   static const shopTypes = 'shopTypes';
+  static const origins = 'origins';
   static const users = 'users';
   static const merchants = 'merchants';
   static const publicMerchants = 'publicMerchants';
@@ -16,7 +17,6 @@ class FirebasePaths {
   static const claimLinks = 'claimLinks';
   static const dailyClaimKeys = 'dailyClaimKeys';
   static const walletEvents = 'walletEvents';
-  static const billingEvents = 'billingEvents';
   static const auditLogs = 'auditLogs';
   static const riskEvents = 'riskEvents';
   static const supportTickets = 'supportTickets';
@@ -40,7 +40,6 @@ class FirebasePaths {
   static const itemCategories = 'itemCategories';
   static const tables = 'tables';
   static const tableAreas = 'tableAreas';
-  static const billingWeeks = 'billingWeeks';
   static const appointments = 'appointments';
   static const shifts = 'shifts';
 
@@ -56,18 +55,21 @@ class FirebasePaths {
   static const reviews = 'reviews';
   static const messages = 'messages';
   static const accountDeletionRequests = 'accountDeletionRequests';
+  static const contentReports = 'contentReports';
+  static const notifications = 'notifications';
+  static const merchantRatings = 'merchantRatings';
 
   static String user(String uid) => '$users/$uid';
   static String merchant(String merchantId) => '$merchants/$merchantId';
   static String publicMerchant(String merchantId) =>
       '$publicMerchants/$merchantId';
   static String feedPost(String postId) => '$feed/$postId';
-  static String billingEvent(String eventId) => '$billingEvents/$eventId';
   static String supportTicket(String ticketId) => '$supportTickets/$ticketId';
   static String merchantInvite(String inviteId) => '$merchantInvites/$inviteId';
   static String aiUsageEntry(String usageId) => '$aiUsage/$usageId';
   static String accountDeletionRequest(String requestId) =>
       '$accountDeletionRequests/$requestId';
+  static String contentReport(String reportId) => '$contentReports/$reportId';
   static String devCheck(String checkId) => '$devChecks/$checkId';
   static String chooserDocument(String documentId) => '$chooser/$documentId';
 
@@ -91,6 +93,9 @@ class FirebasePaths {
   static String userAvailableRewards(String uid) =>
       '${user(uid)}/$availableRewards';
   static String userOrders(String uid) => '${user(uid)}/$orders';
+  static String userNotifications(String uid) => '${user(uid)}/$notifications';
+  static String userNotification(String uid, String id) =>
+      '${userNotifications(uid)}/$id';
 
   static String merchantFeatureConfigs(String merchantId) =>
       '${merchant(merchantId)}/$featureConfigs';
@@ -146,10 +151,6 @@ class FirebasePaths {
       '${merchant(merchantId)}/$tableAreas';
   static String merchantTableArea(String merchantId, String areaId) =>
       '${merchantTableAreas(merchantId)}/$areaId';
-  static String merchantBillingWeeks(String merchantId) =>
-      '${merchant(merchantId)}/$billingWeeks';
-  static String merchantBillingWeek(String merchantId, String weekId) =>
-      '${merchantBillingWeeks(merchantId)}/$weekId';
   static String merchantOpeningHours(String merchantId) =>
       '${merchant(merchantId)}/$openingHours';
   static String merchantAppointments(String merchantId) =>
@@ -197,6 +198,12 @@ class FirebasePaths {
   static String feedReviews(String postId) => '${feedPost(postId)}/$reviews';
   static String feedReview(String postId, String reviewId) =>
       '${feedReviews(postId)}/$reviewId';
+  static String merchantReviews(String merchantId) =>
+      '${publicMerchant(merchantId)}/$reviews';
+  static String merchantReview(String merchantId, String uid) =>
+      '${merchantReviews(merchantId)}/$uid';
+  static String merchantRating(String merchantId) =>
+      '$merchantRatings/$merchantId';
   static String feedViews(String postId) => '${feedPost(postId)}/$views';
   static String feedClicks(String postId) => '${feedPost(postId)}/$clicks';
 

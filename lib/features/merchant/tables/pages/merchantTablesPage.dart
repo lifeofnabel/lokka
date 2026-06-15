@@ -7,8 +7,8 @@ import '../../../../core/services/authService.dart';
 import '../../../../core/services/firestoreService.dart';
 import '../../../../core/services/languageService.dart';
 import '../../../../core/theme/appColors.dart';
-import '../../../../core/theme/appRadius.dart';
 import '../../../../core/theme/appSpacing.dart';
+import '../../shared/widgets/merchantPremiumUi.dart';
 import '../../tools/providers/merchantToolsProvider.dart';
 import '../../tools/services/merchantToolsService.dart';
 import '../../tools/widgets/merchantToolUi.dart';
@@ -151,8 +151,15 @@ class _AreaChip extends StatelessWidget {
           label: Text(label),
           selected: selected,
           onSelected: (_) => onTap(),
-          selectedColor: AppColors.black,
-          labelStyle: TextStyle(color: selected ? AppColors.white : AppColors.black, fontWeight: FontWeight.w800),
+          selectedColor: MerchantPremiumColors.surface,
+          backgroundColor: MerchantPremiumColors.baseSoft,
+          side: BorderSide(
+            color: selected ? MerchantPremiumColors.gold : Colors.white.withOpacity(0.12),
+          ),
+          labelStyle: TextStyle(
+            color: selected ? MerchantPremiumColors.ink : MerchantPremiumColors.mutedLight,
+            fontWeight: FontWeight.w800,
+          ),
         ),
       ),
     );
@@ -168,13 +175,8 @@ class _TableCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final provider = context.read<MerchantTablesProvider>();
     final texts = context.watch<LanguageService>();
-    return Container(
+    return MerchantPremiumCard(
       padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(AppRadius.xl),
-        border: Border.all(color: AppColors.border),
-      ),
       child: Column(
         children: [
           Row(
@@ -182,19 +184,30 @@ class _TableCard extends StatelessWidget {
               Container(
                 width: 54,
                 height: 54,
-                decoration: BoxDecoration(color: AppColors.gray50, borderRadius: BorderRadius.circular(20)),
-                child: const Icon(Icons.table_bar_rounded),
+                decoration: BoxDecoration(
+                  color: MerchantPremiumColors.surfaceAlt,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: MerchantPremiumColors.line),
+                ),
+                child: const Icon(Icons.table_bar_rounded, color: MerchantPremiumColors.ink),
               ),
               const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(table.label, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                    Text(
+                      table.label,
+                      style: const TextStyle(
+                        color: MerchantPremiumColors.ink,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
                     const SizedBox(height: 4),
                     Text(
                       [table.areaName, if (table.seats != null) texts.text('merchant.tables.seatsValue').replaceAll('{count}', table.seats.toString())].join(' | '),
-                      style: const TextStyle(color: AppColors.gray700, fontWeight: FontWeight.w700),
+                      style: const TextStyle(color: MerchantPremiumColors.muted, fontWeight: FontWeight.w800),
                     ),
                   ],
                 ),
@@ -246,8 +259,19 @@ class _StatusPill extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(color: AppColors.gray50, borderRadius: BorderRadius.circular(999)),
-      child: Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900)),
+      decoration: BoxDecoration(
+        color: MerchantPremiumColors.surfaceAlt,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: MerchantPremiumColors.line),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: MerchantPremiumColors.ink,
+          fontSize: 12,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
     );
   }
 }
@@ -335,7 +359,7 @@ Future<void> _openTableSheet(BuildContext context, {TableData? table}) async {
               Text(table == null ? texts.text('merchant.tables.addTable') : texts.text('merchant.tables.editTable'), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900)),
               const SizedBox(height: AppSpacing.md),
               DropdownButtonFormField<String>(
-                value: areaId,
+                initialValue: areaId,
                 decoration: InputDecoration(labelText: texts.text('merchant.tables.area')),
                 items: provider.areas.map((area) => DropdownMenuItem(value: area.areaId, child: Text(area.name))).toList(),
                 onChanged: (value) => setState(() => areaId = value ?? areaId),

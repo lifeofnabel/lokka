@@ -69,8 +69,7 @@ class MerchantStampsService {
       isArchived: card.status == StampCardStatus.archived,
     );
     final data = prepared.toMap()
-      ..['updatedAt'] = FieldValue.serverTimestamp()
-      ..['creditCostPerWeek'] = 2;
+      ..['updatedAt'] = FieldValue.serverTimestamp();
     if (isNew) data['createdAt'] = FieldValue.serverTimestamp();
 
     await firestoreService.setDocument(
@@ -88,18 +87,12 @@ class MerchantStampsService {
             .doc()
             .id;
     final isNew = card.id.isEmpty;
-    var wasAlreadyActive = false;
-    if (card.id.isNotEmpty) {
-      final existing = await loadStampCard(stampCardId);
-      wasAlreadyActive = existing?.status == StampCardStatus.active && existing?.isActive == true;
-    }
     final prepared = card.copyWith(
       id: stampCardId,
       merchantId: merchantId,
       status: StampCardStatus.active,
       isActive: true,
       isArchived: false,
-      creditCostPerWeek: 2,
     );
     final cardData = prepared.toMap()
       ..['updatedAt'] = FieldValue.serverTimestamp()
@@ -107,42 +100,11 @@ class MerchantStampsService {
       ..['activatedAt'] = FieldValue.serverTimestamp();
     if (isNew) cardData['createdAt'] = FieldValue.serverTimestamp();
 
-    final batch = firestoreService.batch();
-    batch.set(
-      firestoreService.document(
-        FirebasePaths.merchantStampCard(merchantId, stampCardId),
-      ),
+    await firestoreService.setDocument(
+      FirebasePaths.merchantStampCard(merchantId, stampCardId),
       cardData,
-      SetOptions(merge: true),
+      merge: true,
     );
-
-    if (!wasAlreadyActive) {
-      final eventId = firestoreService
-          .collection(FirebasePaths.billingEvents)
-          .doc()
-          .id;
-      final periodStart = DateTime.now();
-      final periodEnd = periodStart.add(const Duration(days: 7));
-      batch.set(
-        firestoreService.document(FirebasePaths.billingEvent(eventId)),
-        {
-          'eventId': eventId,
-          'merchantId': merchantId,
-          'featureType': 'stamps',
-          'actionType': 'stampCardActivated',
-          'targetId': stampCardId,
-          'creditAmount': 2,
-          'billingType': 'weekly',
-          'status': 'committed',
-          'periodStart': Timestamp.fromDate(periodStart),
-          'periodEnd': Timestamp.fromDate(periodEnd),
-          'createdAt': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
-      );
-    }
-
-    await batch.commit();
     return stampCardId;
   }
 

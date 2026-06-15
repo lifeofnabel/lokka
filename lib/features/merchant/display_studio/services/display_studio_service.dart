@@ -24,6 +24,7 @@ class DisplayStudioService {
   Stream<DisplayStudioConfig?> configStream() {
     final id = _merchantId;
     if (id == null) return const Stream.empty();
+
     return firestoreService
         .document(FirebasePaths.merchantDisplayStudioMain(id))
         .snapshots()
@@ -36,9 +37,11 @@ class DisplayStudioService {
   Future<DisplayStudioConfig?> loadConfig() async {
     final id = _merchantId;
     if (id == null) return null;
+
     final data = await firestoreService.readDocument(
       FirebasePaths.merchantDisplayStudioMain(id),
     );
+
     if (data == null) return null;
     return DisplayStudioConfig.fromMap(data);
   }
@@ -46,8 +49,10 @@ class DisplayStudioService {
   Future<void> initConfig() async {
     final id = _merchantId;
     if (id == null) return;
+
     final path = FirebasePaths.merchantDisplayStudioMain(id);
     final existing = await firestoreService.readDocument(path);
+
     if (existing == null) {
       await firestoreService.setDocument(
         path,
@@ -62,6 +67,7 @@ class DisplayStudioService {
   Stream<List<DisplayLayout>> layoutsStream() {
     final id = _merchantId;
     if (id == null) return const Stream.empty();
+
     return firestoreService
         .collection(FirebasePaths.merchantDisplayLayouts(id))
         .orderBy('updatedAt', descending: true)
@@ -72,9 +78,11 @@ class DisplayStudioService {
   Future<DisplayLayout?> getLayoutById(String layoutId) async {
     final id = _merchantId;
     if (id == null) return null;
+
     final snap = await firestoreService
         .document(FirebasePaths.merchantDisplayLayout(id, layoutId))
         .get();
+
     if (!snap.exists) return null;
     return DisplayLayout.fromFirestore(snap);
   }
@@ -82,23 +90,29 @@ class DisplayStudioService {
   Future<String> createLayout(DisplayLayout layout) async {
     final id = _merchantId;
     if (id == null) throw Exception('Kein Benutzer');
+
     final ref = firestoreService
         .collection(FirebasePaths.merchantDisplayLayouts(id))
         .doc();
+
     final withId = layout.copyWith(id: ref.id);
+
     await ref.set(withId.toMap());
+
     await _writeLog(
       type: 'create',
       deviceId: '',
       layoutId: ref.id,
       message: 'Layout "${layout.title}" erstellt',
     );
+
     return ref.id;
   }
 
   Future<void> updateLayout(DisplayLayout layout) async {
     final id = _merchantId;
     if (id == null) return;
+
     await firestoreService.setDocument(
       FirebasePaths.merchantDisplayLayout(id, layout.id),
       layout.toMap(),
@@ -113,6 +127,7 @@ class DisplayStudioService {
   }) async {
     final id = _merchantId;
     if (id == null) return;
+
     await firestoreService.updateDocument(
       FirebasePaths.merchantDisplayLayout(id, layoutId),
       {
@@ -135,15 +150,18 @@ class DisplayStudioService {
   }) async {
     final id = _merchantId;
     if (id == null) return;
+
     final data = <String, dynamic>{
       'updatedAt': FieldValue.serverTimestamp(),
     };
+
     if (title != null) data['title'] = title;
     if (orientation != null) data['orientation'] = orientation;
     if (screenSizeTarget != null) data['screenSizeTarget'] = screenSizeTarget;
     if (mode != null) data['mode'] = mode;
     if (animation != null) data['animation'] = animation;
     if (backgroundStyle != null) data['backgroundStyle'] = backgroundStyle;
+
     await firestoreService.updateDocument(
       FirebasePaths.merchantDisplayLayout(id, layoutId),
       data,
@@ -153,9 +171,11 @@ class DisplayStudioService {
   Future<void> deleteLayout(String layoutId) async {
     final id = _merchantId;
     if (id == null) return;
+
     await firestoreService
         .document(FirebasePaths.merchantDisplayLayout(id, layoutId))
         .delete();
+
     await _writeLog(
       type: 'delete',
       deviceId: '',
@@ -167,19 +187,25 @@ class DisplayStudioService {
   Future<String> duplicateLayout(DisplayLayout layout) async {
     final id = _merchantId;
     if (id == null) throw Exception('Kein Benutzer');
+
     final copy = layout.copyWith(
       title: 'Kopie von ${layout.title}',
       isDraft: true,
     );
+
     return createLayout(copy);
   }
 
   Future<void> renameLayout(String layoutId, String newTitle) async {
     final id = _merchantId;
     if (id == null) return;
+
     await firestoreService.updateDocument(
       FirebasePaths.merchantDisplayLayout(id, layoutId),
-      {'title': newTitle, 'updatedAt': FieldValue.serverTimestamp()},
+      {
+        'title': newTitle,
+        'updatedAt': FieldValue.serverTimestamp(),
+      },
     );
   }
 
@@ -188,6 +214,7 @@ class DisplayStudioService {
   Stream<List<DisplayDevice>> devicesStream() {
     final id = _merchantId;
     if (id == null) return const Stream.empty();
+
     return firestoreService
         .collection(FirebasePaths.merchantDisplayDevices(id))
         .snapshots()
@@ -197,15 +224,20 @@ class DisplayStudioService {
   Future<void> renameDevice(String deviceId, String newName) async {
     final id = _merchantId;
     if (id == null) return;
+
     await firestoreService.updateDocument(
       FirebasePaths.merchantDisplayDevice(id, deviceId),
-      {'name': newName, 'updatedAt': FieldValue.serverTimestamp()},
+      {
+        'name': newName,
+        'updatedAt': FieldValue.serverTimestamp(),
+      },
     );
   }
 
   Future<void> stopDevice(String deviceId) async {
     final id = _merchantId;
     if (id == null) return;
+
     await firestoreService.updateDocument(
       FirebasePaths.merchantDisplayDevice(id, deviceId),
       {
@@ -214,6 +246,7 @@ class DisplayStudioService {
         'updatedAt': FieldValue.serverTimestamp(),
       },
     );
+
     await _writeLog(
       type: 'stop',
       deviceId: deviceId,
@@ -225,6 +258,7 @@ class DisplayStudioService {
   Future<void> unlinkDevice(String deviceId) async {
     final id = _merchantId;
     if (id == null) return;
+
     await firestoreService.updateDocument(
       FirebasePaths.merchantDisplayDevice(id, deviceId),
       {
@@ -233,6 +267,7 @@ class DisplayStudioService {
         'updatedAt': FieldValue.serverTimestamp(),
       },
     );
+
     await _writeLog(
       type: 'command',
       deviceId: deviceId,
@@ -248,6 +283,7 @@ class DisplayStudioService {
   }) async {
     final id = _merchantId;
     if (id == null) return;
+
     await firestoreService.updateDocument(
       FirebasePaths.merchantDisplayDevice(id, deviceId),
       {
@@ -258,10 +294,14 @@ class DisplayStudioService {
         'updatedAt': FieldValue.serverTimestamp(),
       },
     );
+
     await firestoreService.updateDocument(
       FirebasePaths.merchantDisplayLayout(id, layoutId),
-      {'lastUsedAt': FieldValue.serverTimestamp()},
+      {
+        'lastUsedAt': FieldValue.serverTimestamp(),
+      },
     );
+
     await _writeLog(
       type: 'start',
       deviceId: deviceId,
@@ -275,6 +315,7 @@ class DisplayStudioService {
   Stream<List<DisplayRoutine>> routinesStream() {
     final id = _merchantId;
     if (id == null) return const Stream.empty();
+
     return firestoreService
         .collection(FirebasePaths.merchantDisplayRoutines(id))
         .orderBy('createdAt', descending: true)
@@ -285,9 +326,11 @@ class DisplayStudioService {
   Future<String> createRoutine(DisplayRoutine routine) async {
     final id = _merchantId;
     if (id == null) throw Exception('Kein Benutzer');
+
     final ref = firestoreService
         .collection(FirebasePaths.merchantDisplayRoutines(id))
         .doc();
+
     final withId = DisplayRoutine(
       id: ref.id,
       title: routine.title,
@@ -301,47 +344,73 @@ class DisplayStudioService {
       createdAt: null,
       updatedAt: null,
     );
+
     await ref.set(withId.toMap());
-    await _writeLog(type: 'routineCreated', deviceId: '', layoutId: '',
-        message: 'Routine "${routine.title}" erstellt');
+
+    await _writeLog(
+      type: 'routineCreated',
+      deviceId: '',
+      layoutId: '',
+      message: 'Routine "${routine.title}" erstellt',
+    );
+
     return ref.id;
   }
 
   Future<void> updateRoutine(DisplayRoutine routine) async {
     final id = _merchantId;
     if (id == null) return;
+
     await firestoreService.setDocument(
       FirebasePaths.merchantDisplayRoutine(id, routine.id),
       routine.toMap(),
     );
-    await _writeLog(type: 'routineUpdated', deviceId: '', layoutId: '',
-        message: 'Routine "${routine.title}" aktualisiert');
+
+    await _writeLog(
+      type: 'routineUpdated',
+      deviceId: '',
+      layoutId: '',
+      message: 'Routine "${routine.title}" aktualisiert',
+    );
   }
 
   Future<void> deleteRoutine(String routineId) async {
     final id = _merchantId;
     if (id == null) return;
+
     await firestoreService
         .document(FirebasePaths.merchantDisplayRoutine(id, routineId))
         .delete();
-    await _writeLog(type: 'routineDeleted', deviceId: '', layoutId: '',
-        message: 'Routine gelöscht');
+
+    await _writeLog(
+      type: 'routineDeleted',
+      deviceId: '',
+      layoutId: '',
+      message: 'Routine gelöscht',
+    );
   }
 
   Future<void> toggleRoutine(String routineId, bool isActive) async {
     final id = _merchantId;
     if (id == null) return;
+
     await firestoreService.updateDocument(
       FirebasePaths.merchantDisplayRoutine(id, routineId),
-      {'isActive': isActive, 'updatedAt': FieldValue.serverTimestamp()},
+      {
+        'isActive': isActive,
+        'updatedAt': FieldValue.serverTimestamp(),
+      },
     );
   }
 
   // ── Pairing ───────────────────────────────────────────────────────────────
 
   Future<Map<String, dynamic>?> getPairingSession(String pairingId) async {
+    if (pairingId.trim().isEmpty) return null;
+
     return firestoreService.readDocument(
-        FirebasePaths.displayPairingSession(pairingId));
+      FirebasePaths.displayPairingSession(pairingId),
+    );
   }
 
   Future<String> claimPairingAndCreateDevice({
@@ -354,42 +423,122 @@ class DisplayStudioService {
     required String resolution,
   }) async {
     final merchantId = _merchantId;
-    if (merchantId == null) throw Exception('Kein Benutzer');
 
-    // Mark pairing session as claimed
-    await firestoreService.setDocument(
-      FirebasePaths.displayPairingSession(pairingId),
-      {
-        'claimed': true,
-        'claimedAt': FieldValue.serverTimestamp(),
-        'claimedByMerchant': merchantId,
-      },
+    if (merchantId == null) {
+      throw Exception('Kein Benutzer');
+    }
+
+    final cleanPairingId = pairingId.trim();
+    final cleanToken = token.trim();
+    final cleanName = deviceName.trim();
+
+    if (cleanPairingId.isEmpty) {
+      throw Exception('Pairing-ID fehlt.');
+    }
+
+    if (cleanToken.isEmpty) {
+      throw Exception('Sicherheits-Token fehlt.');
+    }
+
+    if (cleanName.isEmpty) {
+      throw Exception('Display-Name fehlt.');
+    }
+
+    final sessionRef = firestoreService.document(
+      FirebasePaths.displayPairingSession(cleanPairingId),
     );
 
-    // Create device under merchant
-    final ref = firestoreService
+    final deviceRef = firestoreService
         .collection(FirebasePaths.merchantDisplayDevices(merchantId))
         .doc();
-    await ref.set({
-      'id': ref.id,
-      'name': deviceName,
-      'deviceType': deviceType,
-      'orientation': orientation,
-      'screenSizeInch': screenSizeInch,
-      'resolution': resolution,
-      'activeLayoutId': '',
-      'activeLayoutTitle': '',
-      'status': 'offline',
-      'lastSeenAt': null,
-      'pairedAt': FieldValue.serverTimestamp(),
-      'isLinked': true,
-      'command': null,
-      'pairingId': pairingId,
+
+    await FirebaseFirestore.instance.runTransaction((transaction) async {
+      final sessionSnap = await transaction.get(sessionRef);
+
+      if (!sessionSnap.exists || sessionSnap.data() == null) {
+        throw Exception('Pairing-Session nicht gefunden.');
+      }
+
+      final session = Map<String, dynamic>.from(sessionSnap.data()!);
+
+      final sessionType = session['type']?.toString() ?? '';
+      if (sessionType.isNotEmpty && sessionType != 'lokkaDisplayPairing') {
+        throw Exception('Ungültiger Pairing-Typ.');
+      }
+
+      final sessionToken = session['token']?.toString() ?? '';
+      if (sessionToken.isEmpty || sessionToken != cleanToken) {
+        throw Exception('Sicherheits-Token stimmt nicht überein.');
+      }
+
+      final status = session['status']?.toString() ?? '';
+      final claimed = session['claimed'] as bool? ?? false;
+
+      if (claimed || status == 'claimed') {
+        throw Exception('Dieser Code wurde bereits verwendet.');
+      }
+
+      final expiresAt = _parseDateTime(session['expiresAt']);
+      if (expiresAt != null && DateTime.now().isAfter(expiresAt)) {
+        throw Exception(
+          'Code ist abgelaufen. Bitte am Fernseher einen neuen QR anzeigen.',
+        );
+      }
+
+      final deviceData = <String, dynamic>{
+        'id': deviceRef.id,
+        'name': cleanName,
+        'deviceType': deviceType,
+        'orientation': orientation,
+        'screenSizeInch': screenSizeInch,
+        'resolution': resolution,
+
+        // Pairing
+        'pairingId': cleanPairingId,
+        'merchantId': merchantId,
+        'pairedAt': FieldValue.serverTimestamp(),
+        'isLinked': true,
+
+        // Playback
+        'activeLayoutId': '',
+        'activeLayoutTitle': '',
+        'status': 'offline',
+        'command': null,
+
+        // Presence
+        'lastSeenAt': null,
+
+        // Meta
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+
+      transaction.set(deviceRef, deviceData);
+
+      transaction.update(sessionRef, {
+        'status': 'claimed',
+        'claimed': true,
+        'claimedAt': FieldValue.serverTimestamp(),
+
+        // neue saubere Felder
+        'claimedByMerchantId': merchantId,
+        'claimedDeviceId': deviceRef.id,
+
+        // fallback / alte Kompatibilität
+        'claimedByMerchant': merchantId,
+
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
     });
 
-    await _writeLog(type: 'devicePaired', deviceId: ref.id, layoutId: '',
-        message: 'Display "$deviceName" gekoppelt');
-    return ref.id;
+    await _writeLog(
+      type: 'devicePaired',
+      deviceId: deviceRef.id,
+      layoutId: '',
+      message: 'Display "$cleanName" gekoppelt',
+    );
+
+    return deviceRef.id;
   }
 
   // ── Logs ──────────────────────────────────────────────────────────────────
@@ -399,7 +548,14 @@ class DisplayStudioService {
     required String deviceId,
     required String layoutId,
     required String message,
-  }) => _writeLog(type: type, deviceId: deviceId, layoutId: layoutId, message: message);
+  }) {
+    return _writeLog(
+      type: type,
+      deviceId: deviceId,
+      layoutId: layoutId,
+      message: message,
+    );
+  }
 
   Future<void> _writeLog({
     required String type,
@@ -409,9 +565,11 @@ class DisplayStudioService {
   }) async {
     final id = _merchantId;
     if (id == null) return;
+
     final ref = firestoreService
         .collection(FirebasePaths.merchantDisplayLogs(id))
         .doc();
+
     await ref.set({
       'id': ref.id,
       'type': type,
@@ -421,4 +579,33 @@ class DisplayStudioService {
       'createdAt': FieldValue.serverTimestamp(),
     });
   }
+}
+
+DateTime? _parseDateTime(dynamic value) {
+  if (value == null) return null;
+
+  if (value is DateTime) {
+    return value;
+  }
+
+  if (value is Timestamp) {
+    return value.toDate();
+  }
+
+  if (value is String) {
+    return DateTime.tryParse(value);
+  }
+
+  try {
+    final dynamic dynamicValue = value;
+    final converted = dynamicValue.toDate();
+
+    if (converted is DateTime) {
+      return converted;
+    }
+  } catch (_) {
+    return null;
+  }
+
+  return null;
 }

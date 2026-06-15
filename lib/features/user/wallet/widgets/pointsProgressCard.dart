@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:lokka/core/theme/appColors.dart';
-import 'package:lokka/core/theme/appRadius.dart';
 import 'package:lokka/core/theme/appSpacing.dart';
 import 'package:lokka/features/user/wallet/models/pointsProgressModel.dart';
 
+/// Calm M3 points card: tonal icon, clear current/lifetime hierarchy.
 class PointsProgressCard extends StatelessWidget {
   const PointsProgressCard({
     super.key,
@@ -16,12 +16,15 @@ class PointsProgressCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
     return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
+      padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(AppRadius.large),
-        border: Border.all(color: AppColors.border),
+        color: AppColors.surfaceBg,
+        borderRadius: BorderRadius.circular(26),
+        border: Border.all(color: cs.outlineVariant),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -29,16 +32,16 @@ class PointsProgressCard extends StatelessWidget {
           Row(
             children: [
               Container(
-                width: 36,
-                height: 36,
-                decoration: const BoxDecoration(
-                  color: AppColors.mintSoft,
-                  shape: BoxShape.circle,
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: cs.secondaryContainer,
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.stars_rounded,
-                  size: 18,
-                  color: AppColors.mintStrong,
+                  size: 20,
+                  color: cs.onSecondaryContainer,
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),
@@ -48,17 +51,15 @@ class PointsProgressCard extends StatelessWidget {
                   children: [
                     Text(
                       merchantName ?? 'Punktekonto',
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.black,
-                      ),
+                      style: tt.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w600),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    const Text(
+                    Text(
                       'Aktuelle Punkte',
-                      style: TextStyle(fontSize: 12, color: AppColors.gray500),
+                      style: tt.bodySmall
+                          ?.copyWith(color: cs.onSurfaceVariant),
                     ),
                   ],
                 ),
@@ -71,22 +72,19 @@ class PointsProgressCard extends StatelessWidget {
             children: [
               Text(
                 '${progress.currentPoints}',
-                style: const TextStyle(
-                  fontSize: 40,
-                  fontWeight: FontWeight.w900,
-                  color: AppColors.black,
+                style: tt.displaySmall?.copyWith(
+                  fontWeight: FontWeight.w700,
                   height: 1,
                   letterSpacing: -1,
+                  color: cs.primary,
                 ),
               ),
-              const Padding(
-                padding: EdgeInsets.only(bottom: 4, left: 6),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6, left: 6),
                 child: Text(
                   'Punkte',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.gray500,
+                  style: tt.titleMedium?.copyWith(
+                    color: cs.onSurfaceVariant,
                   ),
                 ),
               ),
@@ -94,37 +92,41 @@ class PointsProgressCard extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  const Text(
+                  Text(
                     'Gesamt',
-                    style: TextStyle(fontSize: 11, color: AppColors.gray300),
+                    style: tt.labelSmall
+                        ?.copyWith(color: cs.onSurfaceVariant),
                   ),
                   Text(
                     '${progress.lifetimePoints}',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.gray700,
-                    ),
+                    style: tt.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w700),
                   ),
                 ],
               ),
             ],
           ),
           if (progress.resetDay != null) ...[
-            const SizedBox(height: AppSpacing.sm),
+            const SizedBox(height: AppSpacing.md),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: AppColors.gray50,
-                borderRadius: BorderRadius.circular(20),
+                color: AppColors.surfaceGray,
+                borderRadius: BorderRadius.circular(100),
               ),
-              child: Text(
-                'Reset am ${progress.resetDay}. jeden Monats',
-                style: const TextStyle(
-                  fontSize: 11,
-                  color: AppColors.gray500,
-                  fontWeight: FontWeight.w500,
-                ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.event_repeat_rounded,
+                      size: 14, color: cs.onSurfaceVariant),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Reset am ${progress.resetDay}. jeden Monats',
+                    style: tt.labelMedium
+                        ?.copyWith(color: cs.onSurfaceVariant),
+                  ),
+                ],
               ),
             ),
           ],

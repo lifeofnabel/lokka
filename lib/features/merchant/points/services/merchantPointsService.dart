@@ -89,7 +89,6 @@ class MerchantPointsService {
       isActive: system.status == PointsStatus.active,
       isArchived: system.status == PointsStatus.archived,
       existingParticipantsCanContinue: true,
-      creditCostPerWeek: 1,
     );
     final data = prepared.toMap()..['updatedAt'] = FieldValue.serverTimestamp();
     if (isNew) data['createdAt'] = FieldValue.serverTimestamp();
@@ -107,9 +106,6 @@ class MerchantPointsService {
             .collection(FirebasePaths.merchantPointsSystems(merchantId))
             .doc()
             .id;
-    final existing = system.id.isEmpty ? null : await loadSystem(systemId);
-    final wasAlreadyActive =
-        existing?.status == PointsStatus.active && existing?.isActive == true;
     final currentSystems = await loadSystems();
     final batch = firestoreService.batch();
 
@@ -137,7 +133,6 @@ class MerchantPointsService {
       isActive: true,
       isArchived: false,
       existingParticipantsCanContinue: true,
-      creditCostPerWeek: 1,
     );
     final data = prepared.toMap()
       ..['publishedAt'] = FieldValue.serverTimestamp()
@@ -151,15 +146,6 @@ class MerchantPointsService {
       data,
       SetOptions(merge: true),
     );
-
-    if (!wasAlreadyActive) {
-      _addBillingEvent(
-        batch: batch,
-        featureType: 'points',
-        actionType: 'pointsSystemActivated',
-        targetId: systemId,
-      );
-    }
 
     await batch.commit();
     return systemId;
@@ -178,7 +164,6 @@ class MerchantPointsService {
       merchantId: merchantId,
       isActive: reward.status == PointsStatus.active,
       isArchived: reward.status == PointsStatus.archived,
-      creditCostPerWeek: 1,
     );
     final data = prepared.toMap()..['updatedAt'] = FieldValue.serverTimestamp();
     if (isNew) data['createdAt'] = FieldValue.serverTimestamp();
@@ -196,16 +181,12 @@ class MerchantPointsService {
             .collection(FirebasePaths.merchantPointsRewards(merchantId))
             .doc()
             .id;
-    final existing = reward.id.isEmpty ? null : await loadReward(rewardId);
-    final wasAlreadyActive =
-        existing?.status == PointsStatus.active && existing?.isActive == true;
     final prepared = reward.copyWith(
       id: rewardId,
       merchantId: merchantId,
       status: PointsStatus.active,
       isActive: true,
       isArchived: false,
-      creditCostPerWeek: 1,
     );
     final batch = firestoreService.batch();
     final data = prepared.toMap()
@@ -220,14 +201,6 @@ class MerchantPointsService {
       data,
       SetOptions(merge: true),
     );
-    if (!wasAlreadyActive) {
-      _addBillingEvent(
-        batch: batch,
-        featureType: 'pointsReward',
-        actionType: 'pointsRewardActivated',
-        targetId: rewardId,
-      );
-    }
     await batch.commit();
     return rewardId;
   }
@@ -293,34 +266,6 @@ class MerchantPointsService {
     return firestoreService
         .document(FirebasePaths.merchantPointsReward(merchantId, rewardId))
         .delete();
-  }
-
-  void _addBillingEvent({
-    required WriteBatch batch,
-    required String featureType,
-    required String actionType,
-    required String targetId,
-  }) {
-    final eventId = firestoreService.collection(FirebasePaths.billingEvents).doc().id;
-    final periodStart = DateTime.now();
-    final periodEnd = periodStart.add(const Duration(days: 7));
-    batch.set(
-      firestoreService.document(FirebasePaths.billingEvent(eventId)),
-      {
-        'eventId': eventId,
-        'merchantId': merchantId,
-        'featureType': featureType,
-        'actionType': actionType,
-        'targetId': targetId,
-        'creditAmount': 1,
-        'billingType': 'weekly',
-        'status': 'committed',
-        'periodStart': Timestamp.fromDate(periodStart),
-        'periodEnd': Timestamp.fromDate(periodEnd),
-        'createdAt': FieldValue.serverTimestamp(),
-      },
-      SetOptions(merge: true),
-    );
   }
 
   int _sortStatus(String status) {

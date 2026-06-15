@@ -1,8 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../models/walletCardModel.dart';
-import '../models/stampProgressModel.dart';
-import '../models/pointsProgressModel.dart';
 import '../services/userWalletService.dart';
 
 class UserWalletProvider extends ChangeNotifier {

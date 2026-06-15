@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:lokka/core/theme/appColors.dart';
 import 'package:lokka/core/theme/appSpacing.dart';
 
 class FeedFilterBar extends StatelessWidget {
@@ -53,24 +52,29 @@ class _Chip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected ? AppColors.black : AppColors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: isSelected ? AppColors.black : AppColors.border,
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    return Material(
+      color: isSelected ? cs.secondaryContainer : cs.surface,
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: isSelected ? cs.secondaryContainer : cs.outlineVariant,
+            ),
           ),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: isSelected ? AppColors.white : AppColors.gray700,
+          child: Text(
+            label,
+            style: tt.labelLarge?.copyWith(
+              fontWeight: FontWeight.w600,
+              color: isSelected ? cs.onSecondaryContainer : cs.onSurfaceVariant,
+            ),
           ),
         ),
       ),

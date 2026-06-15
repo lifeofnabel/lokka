@@ -41,7 +41,7 @@ class UploadService {
   final CloudinaryService cloudinaryService;
 
   Future<PickedUploadFile?> pickImageWithFilePicker() async {
-    final result = await FilePicker.pickFiles(
+    final result = await FilePicker.platform.pickFiles(
       type: FileType.image,
       withData: true,
     );
@@ -75,6 +75,22 @@ class UploadService {
     final prepared = _prepareImage(
       bytes: file.bytes,
       fileName: file.fileName,
+      type: type,
+    );
+    return cloudinaryService.uploadBytes(
+      bytes: prepared.bytes,
+      fileName: prepared.fileName,
+    );
+  }
+
+  Future<UploadedMediaModel> uploadOptimizedImageBytes({
+    required Uint8List bytes,
+    required String fileName,
+    required UploadImageType type,
+  }) {
+    final prepared = _prepareImage(
+      bytes: bytes,
+      fileName: fileName,
       type: type,
     );
     return cloudinaryService.uploadBytes(
@@ -190,11 +206,11 @@ class UploadService {
         ),
       UploadImageType.feedPost => const _ImageSpec(
           width: 1200,
-          height: 1500,
-          aspectWidth: 4,
-          aspectHeight: 5,
+          height: 1200,
+          aspectWidth: 1,
+          aspectHeight: 1,
           quality: 84,
-          maxBytes: 1800 * 1024,
+          maxBytes: 1600 * 1024,
         ),
       UploadImageType.stampCard => const _ImageSpec(
           width: 1200,
@@ -279,6 +295,7 @@ class _ImageSpec {
     required this.aspectHeight,
     required this.quality,
     required this.maxBytes,
+    // ignore: unused_element_parameter — Tuning-Untergrenze, bewusst fix bei 62
     this.minQuality = 62,
   });
 

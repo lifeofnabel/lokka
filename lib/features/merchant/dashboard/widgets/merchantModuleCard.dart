@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../core/services/languageService.dart';
-import '../../../../core/theme/appColors.dart';
 import '../../../../core/theme/appRadius.dart';
 import '../../../../core/theme/appSpacing.dart';
+import '../../shared/widgets/merchantPremiumUi.dart';
 
 class MerchantModuleCard extends StatelessWidget {
   const MerchantModuleCard({
@@ -27,8 +27,8 @@ class MerchantModuleCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final texts = context.watch<LanguageService>();
-    final foreground = isActive ? AppColors.white : AppColors.black;
-    final muted = isActive ? const Color(0xFFC9D1CB) : AppColors.gray500;
+    const foreground = MerchantPremiumColors.ink;
+    const muted = MerchantPremiumColors.muted;
 
     return InkWell(
       onTap: onTap,
@@ -36,17 +36,16 @@ class MerchantModuleCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.md),
         decoration: BoxDecoration(
-          color: isActive ? AppColors.black : AppColors.surface,
+          color: isActive
+              ? MerchantPremiumColors.goldSoft
+              : MerchantPremiumColors.surface,
           borderRadius: BorderRadius.circular(AppRadius.large),
-          border: Border.all(color: isActive ? AppColors.black : AppColors.border),
-          boxShadow: [
-            if (isActive)
-              const BoxShadow(
-                color: Color(0x24171A18),
-                blurRadius: 24,
-                offset: Offset(0, 12),
-              ),
-          ],
+          border: Border.all(
+            color: isActive
+                ? MerchantPremiumColors.gold.withValues(alpha: 0.45)
+                : MerchantPremiumColors.line,
+          ),
+          boxShadow: isActive ? MerchantPremiumShadows.soft : null,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -58,10 +57,15 @@ class MerchantModuleCard extends StatelessWidget {
                   width: 45,
                   height: 45,
                   decoration: BoxDecoration(
-                    color: isActive ? AppColors.mint.withOpacity(0.16) : AppColors.gray50,
+                    color: isActive
+                        ? MerchantPremiumColors.gold.withValues(alpha: 0.22)
+                        : MerchantPremiumColors.surfaceAlt,
                     borderRadius: BorderRadius.circular(18),
                   ),
-                  child: Icon(icon, color: isActive ? AppColors.mint : AppColors.gray700),
+                  child: Icon(
+                    icon,
+                    color: MerchantPremiumColors.gold,
+                  ),
                 ),
                 const Spacer(),
                 Tooltip(
@@ -69,7 +73,7 @@ class MerchantModuleCard extends StatelessWidget {
                   child: Icon(
                     Icons.info_outline_rounded,
                     size: 18,
-                    color: isActive ? AppColors.white.withOpacity(0.72) : AppColors.gray500,
+                    color: isActive ? MerchantPremiumColors.mutedLight : MerchantPremiumColors.muted,
                   ),
                 ),
                 const SizedBox(width: 6),
@@ -110,22 +114,24 @@ class _StatusPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final background = isBadge
-        ? AppColors.mint
+        ? MerchantPremiumColors.gold
         : isActive
-            ? AppColors.white.withOpacity(0.12)
-            : AppColors.gray50;
+            ? MerchantPremiumColors.gold.withValues(alpha: 0.16)
+            : MerchantPremiumColors.surfaceAlt;
     final color = isBadge
-        ? AppColors.black
+        ? MerchantPremiumColors.goldSoft
         : isActive
-            ? AppColors.white
-            : AppColors.gray700;
+            ? MerchantPremiumColors.gold
+            : MerchantPremiumColors.muted;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
       decoration: BoxDecoration(
         color: background,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: isActive ? AppColors.white.withOpacity(0.12) : AppColors.border),
+        border: Border.all(
+          color: isActive ? MerchantPremiumColors.gold.withValues(alpha: 0.22) : MerchantPremiumColors.line,
+        ),
       ),
       child: Text(
         label,

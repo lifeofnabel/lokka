@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../../core/constants/firebasePaths.dart';
 import '../../../../core/services/firestoreService.dart';
 import '../../../merchant/catalog/models/itemCategoryData.dart';
+import '../../../merchant/catalog/models/itemTagData.dart';
 import '../../../merchant/catalog/models/merchantItemData.dart';
 import '../../../merchant/tables/models/merchantTableData.dart';
 
@@ -76,6 +77,17 @@ class PublicShopService {
         .toList();
     items.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
     return items;
+  }
+
+  Future<List<ItemTagData>> loadItemTags(String merchantId) async {
+    final snapshot = await firestoreService
+        .collection(FirebasePaths.merchantItemTags(merchantId))
+        .get();
+    final customTags = snapshot.docs
+        .map((doc) => ItemTagData.fromMap({'id': doc.id, ...doc.data()}))
+        .where((tag) => tag.isActive)
+        .toList();
+    return [...defaultItemTags(merchantId), ...customTags];
   }
 
   Future<String> createOrder({

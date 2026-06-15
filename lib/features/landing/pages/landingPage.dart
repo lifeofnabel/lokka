@@ -4,9 +4,10 @@ import 'package:provider/provider.dart';
 
 import '../../../core/services/languageService.dart';
 import '../../../core/theme/appColors.dart';
-import '../../../core/theme/appShadows.dart';
 import '../services/landingCookieStorage.dart';
 
+/// Landing (Page 1) – Google-Home / Material 3. Zentriert, ruhig, eine klare
+/// Primäraktion. Marke: Lokka (Produkt von Jajehelp).
 class LandingPage extends StatefulWidget {
   const LandingPage({super.key});
 
@@ -32,7 +33,6 @@ class _LandingPageState extends State<LandingPage> {
   void _openHowItWorksSheet() {
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (_) => const _HowItWorksSheet(),
     );
@@ -41,7 +41,6 @@ class _LandingPageState extends State<LandingPage> {
   void _openAboutSheet() {
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (_) => const _AboutSheet(),
     );
@@ -58,7 +57,7 @@ class _LandingPageState extends State<LandingPage> {
     final texts = context.read<LanguageService>();
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColors.surfaceBg,
       body: SafeArea(
         child: Stack(
           children: [
@@ -68,61 +67,55 @@ class _LandingPageState extends State<LandingPage> {
 
                 return Center(
                   child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 480),
+                    constraints: const BoxConstraints(maxWidth: 460),
                     child: SingleChildScrollView(
-                      physics: const BouncingScrollPhysics(),
+                      physics: const ClampingScrollPhysics(),
                       child: ConstrainedBox(
                         constraints: BoxConstraints(
                           minHeight: constraints.maxHeight,
                         ),
                         child: Padding(
-                          padding: const EdgeInsets.fromLTRB(18, 16, 18, 14),
+                          padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
                           child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              _TopBar(
-                                appName: texts.text('app.name'),
-                                onDevTap: () => context.go('/dev/foundation'),
+                              _BrandHeader(appName: texts.text('app.name')),
+                              SizedBox(height: compact ? 26 : 40),
+                              const _Hero(),
+                              SizedBox(height: compact ? 24 : 36),
+                              _PrimaryActions(
+                                loginText: texts.text('landing.login'),
+                                onRegister: () =>
+                                    context.go('/auth/userRegister'),
+                                onLogin: () => context.go('/auth/userLogin'),
                               ),
-                              SizedBox(height: compact ? 22 : 34),
-                              const _HeroText(),
-                              SizedBox(height: compact ? 20 : 30),
-                              _InfoBox(
+                              SizedBox(height: compact ? 24 : 32),
+                              const _SectionLabel('Mehr erfahren'),
+                              const SizedBox(height: 10),
+                              _LinkTile(
                                 title: 'So funktioniert Lokka',
-                                subtitle: 'Deals, Stempel und Punkte in einer Wallet.',
+                                subtitle:
+                                    'Deals, Stempel und Punkte in einer Wallet.',
                                 icon: Icons.auto_awesome_rounded,
                                 onTap: _openHowItWorksSheet,
                               ),
-                              const SizedBox(height: 12),
-                              _ActionBoxes(
-                                loginText: texts.text('landing.login'),
-                                onLogin: () => context.go('/auth/userLogin'),
-                                onRegister: () => context.go('/auth/userRegister'),
-                              ),
-                              const SizedBox(height: 12),
-                              _InfoBox(
-                                title: 'Demo ansehen',
-                                subtitle: 'Kurzer Blick auf das Lokka Gef\u00fchl.',
-                                icon: Icons.play_circle_rounded,
-                                onTap: () => context.go('/auth/demoComingSoon'),
-                              ),
-                              const SizedBox(height: 12),
-                              _InfoBox(
-                                title: '\u00dcber Lokka',
-                                subtitle: 'Gebaut f\u00fcr lokale Shops und echte N\u00e4he.',
-                                icon: Icons.groups_rounded,
+                              const SizedBox(height: 8),
+                              _LinkTile(
+                                title: 'Über Lokka',
+                                subtitle:
+                                    'Gebaut für lokale Shops und echte Nähe.',
+                                icon: Icons.favorite_outline_rounded,
                                 onTap: _openAboutSheet,
                               ),
-                              const SizedBox(height: 18),
+                              SizedBox(height: compact ? 22 : 30),
                               const _PlatformLine(),
-                              SizedBox(height: compact ? 20 : 46),
+                              SizedBox(height: compact ? 20 : 36),
                               _BusinessLink(
                                 onTap: () => context.go('/auth/merchantLogin'),
                               ),
-                              const SizedBox(height: 8),
-                              _Footer(
-                                onTap: () => context.go('/dev/foundation'),
-                              ),
-                              const SizedBox(height: 116),
+                              const SizedBox(height: 4),
+                              const _Footer(),
+                              const SizedBox(height: 96),
                             ],
                           ),
                         ),
@@ -144,59 +137,95 @@ class _LandingPageState extends State<LandingPage> {
   }
 }
 
-class _TopBar extends StatelessWidget {
-  const _TopBar({
-    required this.appName,
-    required this.onDevTap,
-  });
+// ── Brand header (zentriert: Logo + Lokka + von Jajehelp) ────────────────────
+
+class _BrandHeader extends StatelessWidget {
+  const _BrandHeader({required this.appName});
 
   final String appName;
-  final VoidCallback onDevTap;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    return Column(
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Jajehelp-Logo, grün getintet als Marken-Glyph.
+            Image.asset(
+              'assets/logo.png',
+              height: 40,
+              color: cs.primary,
+              colorBlendMode: BlendMode.srcIn,
+              errorBuilder: (_, __, ___) => Icon(
+                Icons.local_activity_rounded,
+                color: cs.primary,
+                size: 36,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              appName.isEmpty ? 'Lokka' : appName,
+              style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'von Jajehelp',
+          style: tt.labelMedium?.copyWith(color: cs.onSurfaceVariant),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Hero (zentriert) ─────────────────────────────────────────────────────────
+
+class _Hero extends StatelessWidget {
+  const _Hero();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Container(
-          width: 42,
-          height: 42,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
           decoration: BoxDecoration(
-            color: AppColors.black,
-            borderRadius: BorderRadius.circular(16),
+            color: cs.secondaryContainer,
+            borderRadius: BorderRadius.circular(100),
           ),
-          child: const Icon(
-            Icons.local_activity_rounded,
-            color: AppColors.white,
-            size: 23,
+          child: Text(
+            'Lokal · Digital · Kostenlos',
+            style: tt.labelMedium?.copyWith(
+              color: cs.onSecondaryContainer,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
-        const SizedBox(width: 12),
+        const SizedBox(height: 20),
         Text(
-          appName.isEmpty ? 'Lokka' : appName,
-          style: const TextStyle(
-            color: AppColors.black,
-            fontSize: 24,
-            fontWeight: FontWeight.w900,
-            letterSpacing: 0,
+          'Lokale Deals,\ndirekt in deiner Wallet.',
+          textAlign: TextAlign.center,
+          style: tt.displaySmall?.copyWith(
+            fontWeight: FontWeight.w700,
+            height: 1.08,
+            letterSpacing: -0.5,
+            color: cs.onSurface,
           ),
         ),
-        const Spacer(),
-        GestureDetector(
-          onTap: onDevTap,
-          behavior: HitTestBehavior.opaque,
-          child: Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(color: AppColors.border),
-            ),
-            child: const Icon(
-              Icons.tune_rounded,
-              size: 17,
-              color: AppColors.black,
-            ),
+        const SizedBox(height: 14),
+        Text(
+          'Entdecke Shops in deiner Nähe, sammle Stempel und sichere dir Vorteile – alles an einem Ort.',
+          textAlign: TextAlign.center,
+          style: tt.bodyLarge?.copyWith(
+            color: cs.onSurfaceVariant,
+            height: 1.45,
           ),
         ),
       ],
@@ -204,42 +233,64 @@ class _TopBar extends StatelessWidget {
   }
 }
 
-class _HeroText extends StatelessWidget {
-  const _HeroText();
+// ── Primary actions ──────────────────────────────────────────────────────────
+
+class _PrimaryActions extends StatelessWidget {
+  const _PrimaryActions({
+    required this.loginText,
+    required this.onRegister,
+    required this.onLogin,
+  });
+
+  final String loginText;
+  final VoidCallback onRegister;
+  final VoidCallback onLogin;
 
   @override
   Widget build(BuildContext context) {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Text(
-          'LOKALE DEALS.\nDIREKT IN DEINER\nWALLET.',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            color: AppColors.black,
-            fontSize: 36,
-            height: 0.98,
-            fontWeight: FontWeight.w900,
-            letterSpacing: 0,
-          ),
+        FilledButton(
+          onPressed: onRegister,
+          child: const Text('Konto erstellen'),
         ),
-        const SizedBox(height: 13),
-        Text(
-          'Entdecke Shops, sammle Stempel und sichere dir Vorteile in deiner N\u00e4he.',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            color: AppColors.black.withOpacity(0.54),
-            fontSize: 15,
-            height: 1.35,
-            fontWeight: FontWeight.w700,
-          ),
+        const SizedBox(height: 10),
+        OutlinedButton(
+          onPressed: onLogin,
+          child: Text(loginText.isEmpty ? 'Anmelden' : loginText),
         ),
       ],
     );
   }
 }
 
-class _InfoBox extends StatelessWidget {
-  const _InfoBox({
+// ── Section label (zentriert) ────────────────────────────────────────────────
+
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
+    return Text(
+      text,
+      textAlign: TextAlign.center,
+      style: tt.labelLarge?.copyWith(
+        color: cs.onSurfaceVariant,
+        fontWeight: FontWeight.w600,
+      ),
+    );
+  }
+}
+
+// ── Link tile ────────────────────────────────────────────────────────────────
+
+class _LinkTile extends StatelessWidget {
+  const _LinkTile({
     required this.title,
     required this.subtitle,
     required this.icon,
@@ -253,240 +304,109 @@ class _InfoBox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(17),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(28),
-          border: Border.all(color: AppColors.border),
-          boxShadow: AppShadows.card,
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 46,
-              height: 46,
-              decoration: BoxDecoration(
-                color: AppColors.black,
-                borderRadius: BorderRadius.circular(18),
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    return Material(
+      color: AppColors.surfaceBg,
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Ink(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: cs.outlineVariant),
+          ),
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: cs.secondaryContainer,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(icon, color: cs.onSecondaryContainer, size: 22),
               ),
-              child: Icon(icon, color: AppColors.white, size: 23),
-            ),
-            const SizedBox(width: 13),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: AppColors.black,
-                      fontSize: 17,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 0,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: AppColors.black.withOpacity(0.48),
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: tt.titleMedium),
+                    const SizedBox(height: 2),
+                    Text(subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: tt.bodySmall
+                            ?.copyWith(color: cs.onSurfaceVariant)),
+                  ],
+                ),
               ),
-            ),
-            Icon(
-              Icons.arrow_forward_ios_rounded,
-              color: AppColors.black.withOpacity(0.35),
-              size: 15,
-            ),
-          ],
+              Icon(Icons.chevron_right_rounded,
+                  color: cs.onSurfaceVariant, size: 22),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-class _ActionBoxes extends StatelessWidget {
-  const _ActionBoxes({
-    required this.loginText,
-    required this.onLogin,
-    required this.onRegister,
-  });
-
-  final String loginText;
-  final VoidCallback onLogin;
-  final VoidCallback onRegister;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: _ActionBox(
-            title: loginText,
-            subtitle: 'Zur\u00fcck in deine Wallet',
-            icon: Icons.login_rounded,
-            isDark: true,
-            onTap: onLogin,
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _ActionBox(
-            title: 'Registrieren',
-            subtitle: 'Noch kein Konto?',
-            icon: Icons.person_add_alt_1_rounded,
-            isDark: false,
-            onTap: onRegister,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _ActionBox extends StatelessWidget {
-  const _ActionBox({
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-    required this.isDark,
-    required this.onTap,
-  });
-
-  final String title;
-  final String subtitle;
-  final IconData icon;
-  final bool isDark;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final bg = isDark ? AppColors.black : AppColors.surface;
-    final fg = isDark ? AppColors.white : AppColors.black;
-    final sub = isDark
-        ? AppColors.white.withOpacity(0.58)
-        : AppColors.black.withOpacity(0.48);
-
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        height: 142,
-        padding: const EdgeInsets.all(17),
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(30),
-          border: Border.all(color: isDark ? AppColors.black : AppColors.border),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(isDark ? 0.16 : 0.06),
-              blurRadius: 20,
-              offset: const Offset(0, 10),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, color: fg, size: 27),
-            const Spacer(),
-            Text(
-              title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: fg,
-                fontSize: 20,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 0,
-              ),
-            ),
-            const SizedBox(height: 5),
-            Text(
-              subtitle,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: sub,
-                fontSize: 12.5,
-                height: 1.2,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
+// ── Platform chips (App Store / Play Store öffnen Hinweis-Sheet) ─────────────
 
 class _PlatformLine extends StatelessWidget {
   const _PlatformLine();
 
   @override
   Widget build(BuildContext context) {
-    return const Wrap(
+    return Wrap(
       alignment: WrapAlignment.center,
       spacing: 8,
       runSpacing: 8,
       children: [
-        _PlatformChip(icon: Icons.language_rounded, text: 'Web'),
-        _PlatformChip(icon: Icons.apple_rounded, text: 'App Store'),
-        _PlatformChip(icon: Icons.android_rounded, text: 'Play Store'),
+        const _PlatformChip(icon: Icons.language_rounded, text: 'Web'),
+        _PlatformChip(
+          icon: Icons.apple_rounded,
+          text: 'App Store',
+          onTap: () => _showStoreSheet(context),
+        ),
+        _PlatformChip(
+          icon: Icons.android_rounded,
+          text: 'Play Store',
+          onTap: () => _showStoreSheet(context),
+        ),
       ],
     );
   }
 }
 
 class _PlatformChip extends StatelessWidget {
-  const _PlatformChip({
-    required this.icon,
-    required this.text,
-  });
+  const _PlatformChip({required this.icon, required this.text, this.onTap});
 
   final IconData icon;
   final String text;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: AppColors.black, size: 15),
-          const SizedBox(width: 6),
-          Text(
-            text,
-            style: const TextStyle(
-              color: AppColors.black,
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ],
-      ),
+    final cs = Theme.of(context).colorScheme;
+    return ActionChip(
+      avatar: Icon(icon, size: 16, color: cs.onSurfaceVariant),
+      label: Text(text),
+      backgroundColor: AppColors.surfaceGray,
+      side: BorderSide(color: cs.outlineVariant),
+      visualDensity: VisualDensity.compact,
+      onPressed: onTap ?? () {},
     );
   }
 }
+
+// ── Business link + footer ───────────────────────────────────────────────────
 
 class _BusinessLink extends StatelessWidget {
   const _BusinessLink({required this.onTap});
@@ -495,28 +415,26 @@ class _BusinessLink extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: RichText(
-        textAlign: TextAlign.center,
-        text: TextSpan(
-          style: TextStyle(
-            color: AppColors.black.withOpacity(0.45),
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
-          ),
-          children: const [
-            TextSpan(text: 'Gesch\u00e4ftlich? '),
-            TextSpan(
-              text: 'F\u00fcr H\u00e4ndler einloggen',
-              style: TextStyle(
-                color: AppColors.black,
-                fontWeight: FontWeight.w900,
-                decoration: TextDecoration.underline,
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    return Center(
+      child: TextButton(
+        onPressed: onTap,
+        child: RichText(
+          textAlign: TextAlign.center,
+          text: TextSpan(
+            style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+            children: [
+              const TextSpan(text: 'Geschäftlich?  '),
+              TextSpan(
+                text: 'Für Händler einloggen',
+                style: tt.bodyMedium?.copyWith(
+                  color: cs.primary,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -524,136 +442,72 @@ class _BusinessLink extends StatelessWidget {
 }
 
 class _Footer extends StatelessWidget {
-  const _Footer({required this.onTap});
-
-  final VoidCallback onTap;
+  const _Footer();
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        child: Text(
-          'powered by Jajehelp',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            color: AppColors.black.withOpacity(0.36),
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    return Center(
+      child: Text(
+        'powered by Jajehelp',
+        style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
       ),
     );
   }
 }
 
-class _HowItWorksSheet extends StatelessWidget {
-  const _HowItWorksSheet();
+// ── Store-Hinweis-Sheet ──────────────────────────────────────────────────────
 
-  @override
-  Widget build(BuildContext context) {
-    return _BaseSheet(
-      title: 'So l\u00e4uft Lokka',
-      subtitle: 'Ein QR, eine Wallet, echte lokale Vorteile.',
-      child: Column(
-        children: [
-          const Row(
-            children: [
-              Expanded(
-                child: _MiniVisualStep(
-                  icon: Icons.local_fire_department_rounded,
-                  title: 'Deals',
-                ),
-              ),
-              SizedBox(width: 8),
-              Expanded(
-                child: _MiniVisualStep(
-                  icon: Icons.confirmation_number_rounded,
-                  title: 'Stempel',
-                ),
-              ),
-              SizedBox(width: 8),
-              Expanded(
-                child: _MiniVisualStep(
-                  icon: Icons.stars_rounded,
-                  title: 'Punkte',
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 18),
-          Text(
-            'Lokka zeigt dir lokale Angebote aus deiner N\u00e4he. Du kannst Deals entdecken, digitale Stempelkarten nutzen und bei teilnehmenden Shops Vorteile sammeln.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: AppColors.white.withOpacity(0.62),
-              fontSize: 13.5,
-              height: 1.45,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 18),
-          _SheetCloseButton(
-            text: 'Verstanden',
-            onTap: () => Navigator.pop(context),
-          ),
-        ],
-      ),
-    );
-  }
+void _showStoreSheet(BuildContext context) {
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    builder: (_) => const _StoreSheet(),
+  );
 }
 
-class _AboutSheet extends StatelessWidget {
-  const _AboutSheet();
+class _StoreSheet extends StatelessWidget {
+  const _StoreSheet();
 
   @override
   Widget build(BuildContext context) {
-    return _BaseSheet(
-      title: '\u00dcber Lokka',
-      subtitle: 'Gemacht f\u00fcr kleine L\u00e4den, die sichtbar bleiben wollen.',
+    final tt = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
+    return _SheetScaffold(
+      title: 'Bald in den Stores',
+      subtitle: 'Ende 2026 offiziell im App Store & Play Store.',
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Container(
-            width: 78,
-            height: 78,
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: AppColors.white,
-              borderRadius: BorderRadius.circular(30),
+              color: AppColors.surfaceGray,
+              borderRadius: BorderRadius.circular(20),
             ),
-            child: const Icon(
-              Icons.storefront_rounded,
-              color: AppColors.black,
-              size: 42,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'Lokka verbindet Kunden mit lokalen Shops. Ohne Papierkarten, ohne Chaos, ohne Umwege.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: AppColors.white.withOpacity(0.62),
-              fontSize: 13.5,
-              height: 1.45,
-              fontWeight: FontWeight.w700,
+            child: Text(
+              'Bis dahin läuft Lokka als Web-App auf jedem Gerät – ganz ohne Installation. Für ein App-Gefühl kannst du Lokka zum Startbildschirm hinzufügen:',
+              style: tt.bodyMedium
+                  ?.copyWith(color: cs.onSurfaceVariant, height: 1.5),
             ),
           ),
           const SizedBox(height: 12),
-          const Text(
-            'Mehr Wiederkommen. Mehr N\u00e4he. Mehr Lokka.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: AppColors.white,
-              fontSize: 14,
-              height: 1.4,
-              fontWeight: FontWeight.w900,
-            ),
+          _HowToRow(
+            icon: Icons.ios_share_rounded,
+            title: 'iPhone (Safari)',
+            body: 'Teilen-Symbol antippen → „Zum Home-Bildschirm".',
           ),
-          const SizedBox(height: 18),
-          _SheetCloseButton(
-            text: 'Schlie\u00dfen',
-            onTap: () => Navigator.pop(context),
+          const SizedBox(height: 10),
+          _HowToRow(
+            icon: Icons.more_vert_rounded,
+            title: 'Android (Chrome)',
+            body: 'Menü ⋮ → „Zum Startbildschirm hinzufügen".',
+          ),
+          const SizedBox(height: 22),
+          FilledButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Verstanden'),
           ),
         ],
       ),
@@ -661,47 +515,54 @@ class _AboutSheet extends StatelessWidget {
   }
 }
 
-class _MiniVisualStep extends StatelessWidget {
-  const _MiniVisualStep({
+class _HowToRow extends StatelessWidget {
+  const _HowToRow({
     required this.icon,
     required this.title,
+    required this.body,
   });
 
   final IconData icon;
   final String title;
+  final String body;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 104,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.white.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppColors.white.withOpacity(0.12)),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, color: AppColors.white, size: 28),
-          const SizedBox(height: 10),
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: AppColors.white,
-              fontSize: 12,
-              fontWeight: FontWeight.w900,
-            ),
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: cs.secondaryContainer,
+            borderRadius: BorderRadius.circular(12),
           ),
-        ],
-      ),
+          child: Icon(icon, color: cs.onSecondaryContainer, size: 20),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: tt.titleSmall),
+              const SizedBox(height: 2),
+              Text(body,
+                  style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
 
-class _BaseSheet extends StatelessWidget {
-  const _BaseSheet({
+// ── Bottom sheets (hell, Material 3) ─────────────────────────────────────────
+
+class _SheetScaffold extends StatelessWidget {
+  const _SheetScaffold({
     required this.title,
     required this.subtitle,
     required this.child,
@@ -713,56 +574,20 @@ class _BaseSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.all(14),
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
-      decoration: BoxDecoration(
-        color: AppColors.black,
-        borderRadius: BorderRadius.circular(34),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.25),
-            blurRadius: 28,
-            offset: const Offset(0, 14),
-          ),
-        ],
-      ),
-      child: SafeArea(
-        top: false,
+    final tt = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 4, 24, 24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Container(
-              width: 42,
-              height: 4,
-              decoration: BoxDecoration(
-                color: AppColors.white.withOpacity(0.22),
-                borderRadius: BorderRadius.circular(99),
-              ),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: AppColors.white,
-                fontSize: 28,
-                height: 1,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 0,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              subtitle,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: AppColors.white.withOpacity(0.58),
-                fontSize: 13,
-                height: 1.3,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
+            Text(title, style: tt.headlineSmall),
+            const SizedBox(height: 6),
+            Text(subtitle,
+                style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant)),
             const SizedBox(height: 20),
             child,
           ],
@@ -772,69 +597,178 @@ class _BaseSheet extends StatelessWidget {
   }
 }
 
-class _SheetCloseButton extends StatelessWidget {
-  const _SheetCloseButton({
-    required this.text,
-    required this.onTap,
-  });
+class _HowItWorksSheet extends StatelessWidget {
+  const _HowItWorksSheet();
 
-  final String text;
-  final VoidCallback onTap;
+  static const _live = [
+    ('Lokale Deals & Feed', Icons.local_fire_department_rounded),
+    ('Digitale Stempelkarten', Icons.confirmation_number_rounded),
+    ('Punkte & Prämien', Icons.stars_rounded),
+    ('Wallet – alles an einem Ort', Icons.account_balance_wallet_rounded),
+    ('Partner folgen & bewerten', Icons.storefront_rounded),
+    ('Favoriten speichern', Icons.favorite_rounded),
+  ];
+
+  static const _soon = [
+    ('Native Apps (App Store & Play Store)', Icons.phone_iphone_rounded),
+    ('Speisekarten & Tischwahl', Icons.restaurant_menu_rounded),
+    ('Catering-Anfragen', Icons.room_service_rounded),
+    ('Mehrsprachigkeit', Icons.translate_rounded),
+  ];
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        decoration: BoxDecoration(
-          color: AppColors.white,
-          borderRadius: BorderRadius.circular(999),
-        ),
-        child: Text(
-          text,
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            color: AppColors.black,
-            fontSize: 14,
-            fontWeight: FontWeight.w900,
+    return _SheetScaffold(
+      title: 'So läuft Lokka',
+      subtitle: 'Ein QR, eine Wallet, echte lokale Vorteile.',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const _FeatureGroup(
+            label: 'Jetzt verfügbar',
+            items: _live,
+            available: true,
           ),
-        ),
+          const SizedBox(height: 18),
+          const _FeatureGroup(
+            label: 'Bald · bis Ende 2026',
+            items: _soon,
+            available: false,
+          ),
+          const SizedBox(height: 22),
+          FilledButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Verstanden'),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _CookieBox extends StatelessWidget {
-  const _CookieBox({
-    required this.onAccept,
-    required this.onReject,
+class _FeatureGroup extends StatelessWidget {
+  const _FeatureGroup({
+    required this.label,
+    required this.items,
+    required this.available,
   });
+
+  final String label;
+  final List<(String, IconData)> items;
+  final bool available;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final accent = available ? cs.primary : cs.onSurfaceVariant;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: tt.labelLarge?.copyWith(
+            color: accent,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 10),
+        ...items.map(
+          (it) => Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Row(
+              children: [
+                Icon(
+                  available ? Icons.check_circle_rounded : Icons.schedule_rounded,
+                  size: 20,
+                  color: accent,
+                ),
+                const SizedBox(width: 12),
+                Icon(it.$2, size: 18, color: cs.onSurfaceVariant),
+                const SizedBox(width: 8),
+                Expanded(child: Text(it.$1, style: tt.bodyMedium)),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AboutSheet extends StatelessWidget {
+  const _AboutSheet();
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
+    return _SheetScaffold(
+      title: 'Über Lokka',
+      subtitle: 'Für kleine Läden, die sichtbar bleiben wollen.',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Center(
+            child: Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                color: cs.secondaryContainer,
+                borderRadius: BorderRadius.circular(22),
+              ),
+              child: Icon(Icons.storefront_rounded,
+                  color: cs.onSecondaryContainer, size: 38),
+            ),
+          ),
+          const SizedBox(height: 18),
+          Text(
+            'Lokka verbindet Kunden mit lokalen Shops – ohne Papierkarten, ohne Chaos, ohne Umwege. Mehr Wiederkommen, mehr Nähe. Ein Produkt von Jajehelp.',
+            textAlign: TextAlign.center,
+            style: tt.bodyMedium
+                ?.copyWith(color: cs.onSurfaceVariant, height: 1.5),
+          ),
+          const SizedBox(height: 22),
+          FilledButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Schließen'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Cookie consent ───────────────────────────────────────────────────────────
+
+class _CookieBox extends StatelessWidget {
+  const _CookieBox({required this.onAccept, required this.onReject});
 
   final VoidCallback onAccept;
   final VoidCallback onReject;
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
     return Positioned(
       left: 14,
       right: 14,
       bottom: 14,
       child: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 480),
+          constraints: const BoxConstraints(maxWidth: 460),
           child: Container(
-            padding: const EdgeInsets.fromLTRB(16, 15, 16, 16),
+            padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
             decoration: BoxDecoration(
-              color: AppColors.black,
-              borderRadius: BorderRadius.circular(28),
+              color: AppColors.surfaceBg,
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: cs.outlineVariant),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.26),
-                  blurRadius: 26,
-                  offset: const Offset(0, 12),
+                  color: Colors.black.withValues(alpha: 0.10),
+                  blurRadius: 24,
+                  offset: const Offset(0, 8),
                 ),
               ],
             ),
@@ -844,107 +778,42 @@ class _CookieBox extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    Container(
-                      width: 38,
-                      height: 38,
-                      decoration: BoxDecoration(
-                        color: AppColors.white.withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(15),
-                      ),
-                      child: const Icon(
-                        Icons.cookie_rounded,
-                        color: AppColors.white,
-                        size: 21,
-                      ),
-                    ),
-                    const SizedBox(width: 11),
-                    const Expanded(
-                      child: Text(
-                        'Cookies',
-                        style: TextStyle(
-                          color: AppColors.white,
-                          fontSize: 17,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 0,
-                        ),
-                      ),
-                    ),
+                    Icon(Icons.cookie_rounded, color: cs.primary, size: 22),
+                    const SizedBox(width: 10),
+                    Text('Cookies', style: tt.titleMedium),
                   ],
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 8),
                 Text(
-                  'Wir nutzen Cookies, damit Lokka sauber l\u00e4uft und besser wird.',
-                  style: TextStyle(
-                    color: AppColors.white.withOpacity(0.62),
-                    fontSize: 12.5,
-                    height: 1.35,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  'Wir nutzen Cookies, damit Lokka sauber läuft und besser wird.',
+                  style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                 ),
-                const SizedBox(height: 13),
+                const SizedBox(height: 14),
                 Row(
                   children: [
                     Expanded(
-                      child: _CookieButton(
-                        text: 'Ablehnen',
-                        isPrimary: false,
-                        onTap: onReject,
+                      child: OutlinedButton(
+                        onPressed: onReject,
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size.fromHeight(44),
+                        ),
+                        child: const Text('Ablehnen'),
                       ),
                     ),
-                    const SizedBox(width: 9),
+                    const SizedBox(width: 10),
                     Expanded(
-                      child: _CookieButton(
-                        text: 'Akzeptieren',
-                        isPrimary: true,
-                        onTap: onAccept,
+                      child: FilledButton(
+                        onPressed: onAccept,
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size.fromHeight(44),
+                        ),
+                        child: const Text('Akzeptieren'),
                       ),
                     ),
                   ],
                 ),
               ],
             ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _CookieButton extends StatelessWidget {
-  const _CookieButton({
-    required this.text,
-    required this.isPrimary,
-    required this.onTap,
-  });
-
-  final String text;
-  final bool isPrimary;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final bg = isPrimary ? AppColors.white : AppColors.white.withOpacity(0.10);
-    final fg = isPrimary ? AppColors.black : AppColors.white;
-
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(
-            color: AppColors.white.withOpacity(isPrimary ? 0 : 0.12),
-          ),
-        ),
-        child: Text(
-          text,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            color: fg,
-            fontSize: 13,
-            fontWeight: FontWeight.w900,
           ),
         ),
       ),

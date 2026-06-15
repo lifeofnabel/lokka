@@ -109,6 +109,30 @@ class UserProfileService {
     );
   }
 
+  /// Speichert die Survey-Interessen. [origins], [postTypes] und [places]
+  /// sind optional, damit bestehende Aufrufer kompatibel bleiben – bei null
+  /// bleibt das jeweilige Feld in Firestore unangetastet.
+  Future<void> saveInterests({
+    required List<String> categories,
+    required List<String> areas,
+    List<String>? origins,
+    List<String>? postTypes,
+    List<Map<String, dynamic>>? places,
+  }) async {
+    final uid = _uid;
+    if (uid == null) return;
+    await firestoreService.updateDocument(FirebasePaths.user(uid), {
+      'interestCategories': categories,
+      'interestAreas': areas,
+      'interestOrigins': ?origins,
+      'interestPostTypes': ?postTypes,
+      'interestPlaces': ?places,
+      'onboardingCompleted': true,
+      'onboardingCompletedAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
   Future<void> createDeletionRequest() async {
     final uid = _uid;
     if (uid == null) return;

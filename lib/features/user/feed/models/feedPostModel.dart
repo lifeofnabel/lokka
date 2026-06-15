@@ -25,11 +25,19 @@ class FeedPostModel {
     this.buttonText,
     this.buttonLink,
     this.buttonActionType,
+    this.ctaLabel,
+    this.ctaLinkType,
+    this.ctaTargetId,
+    this.ctaUrl,
+    this.ctaRoute,
+    this.targetAudience,
+    this.isScheduled = false,
     this.validFrom,
     this.validUntil,
     this.createdAt,
     this.updatedAt,
     this.publishedAt,
+    this.scheduledAt,
   });
 
   final String postId;
@@ -57,11 +65,19 @@ class FeedPostModel {
   final String? buttonText;
   final String? buttonLink;
   final String? buttonActionType;
+  final String? ctaLabel;
+  final String? ctaLinkType;
+  final String? ctaTargetId;
+  final String? ctaUrl;
+  final String? ctaRoute;
+  final String? targetAudience;
+  final bool isScheduled;
   final DateTime? validFrom;
   final DateTime? validUntil;
   final DateTime? createdAt;
   final DateTime? updatedAt;
   final DateTime? publishedAt;
+  final DateTime? scheduledAt;
 
   factory FeedPostModel.fromMap(Map<String, dynamic> map) {
     return FeedPostModel(
@@ -86,15 +102,23 @@ class FeedPostModel {
       oldPrice: (map['oldPrice'] as num?)?.toDouble(),
       newPrice: (map['newPrice'] as num?)?.toDouble(),
       discountPercent: (map['discountPercent'] as num?)?.toInt(),
-      categoryId: map['categoryId'] as String?,
-      buttonText: map['buttonText'] as String?,
-      buttonLink: map['buttonLink'] as String?,
-      buttonActionType: map['buttonActionType'] as String?,
+      categoryId: _optionalString(map['categoryId']),
+      buttonText: _optionalString(map['buttonText']),
+      buttonLink: _optionalString(map['buttonLink']),
+      buttonActionType: _optionalString(map['buttonActionType']),
+      ctaLabel: _optionalString(map['ctaLabel'] ?? map['buttonText']),
+      ctaLinkType: _optionalString(map['ctaLinkType']),
+      ctaTargetId: _optionalString(map['ctaTargetId']),
+      ctaUrl: _optionalString(map['ctaUrl'] ?? map['buttonLink']),
+      ctaRoute: _optionalString(map['ctaRoute']),
+      targetAudience: _optionalString(map['targetAudience']),
+      isScheduled: map['isScheduled'] as bool? ?? false,
       validFrom: _tsToDate(map['validFrom']),
       validUntil: _tsToDate(map['validUntil']),
       createdAt: _tsToDate(map['createdAt']),
       updatedAt: _tsToDate(map['updatedAt']),
       publishedAt: _tsToDate(map['publishedAt']),
+      scheduledAt: _tsToDate(map['scheduledAt'] ?? map['startDate']),
     );
   }
 
@@ -125,17 +149,41 @@ class FeedPostModel {
       'buttonText': buttonText,
       'buttonLink': buttonLink,
       'buttonActionType': buttonActionType,
+      'ctaLabel': ctaLabel,
+      'ctaLinkType': ctaLinkType,
+      'ctaTargetId': ctaTargetId,
+      'ctaUrl': ctaUrl,
+      'ctaRoute': ctaRoute,
+      'targetAudience': targetAudience,
+      'isScheduled': isScheduled,
       'validFrom': validFrom?.toIso8601String(),
       'validUntil': validUntil?.toIso8601String(),
       'createdAt': createdAt?.toIso8601String(),
       'updatedAt': updatedAt?.toIso8601String(),
       'publishedAt': publishedAt?.toIso8601String(),
+      'scheduledAt': scheduledAt?.toIso8601String(),
     };
   }
 
   bool get hasPriceInfo => newPrice != null || discountPercent != null;
   bool get hasDiscount => discountPercent != null && discountPercent! > 0;
-  bool get hasButton => buttonText != null && buttonText!.isNotEmpty;
+  String get effectiveButtonText {
+    final current = ctaLabel ?? buttonText ?? '';
+    return current.trim();
+  }
+
+  String get effectiveButtonUrl {
+    final current = ctaUrl ?? buttonLink ?? '';
+    return current.trim();
+  }
+
+  String get effectiveCtaType {
+    final current = ctaLinkType ?? buttonActionType ?? '';
+    return current.trim();
+  }
+
+  bool get isForRegulars => targetAudience?.trim() == 'regulars';
+  bool get hasButton => effectiveButtonText.isNotEmpty;
 
   bool get isCurrentlyValid {
     final now = DateTime.now();
@@ -153,4 +201,10 @@ DateTime? _tsToDate(dynamic v) {
   } catch (_) {
     return DateTime.tryParse(v.toString());
   }
+}
+
+String? _optionalString(dynamic value) {
+  if (value == null) return null;
+  final text = value.toString();
+  return text.isEmpty ? null : text;
 }

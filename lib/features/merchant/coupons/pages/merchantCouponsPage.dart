@@ -6,8 +6,8 @@ import '../../../../core/services/authService.dart';
 import '../../../../core/services/firestoreService.dart';
 import '../../../../core/services/languageService.dart';
 import '../../../../core/services/uploadService.dart';
-import '../../../../core/theme/appColors.dart';
 import '../../../../core/theme/appSpacing.dart';
+import '../../shared/widgets/merchantPremiumUi.dart';
 import '../../tools/widgets/merchantToolUi.dart';
 import '../models/couponModel.dart';
 import '../providers/merchantCouponsProvider.dart';
@@ -126,7 +126,7 @@ Future<bool?> _confirm({
   return showModalBottomSheet<bool>(
     context: context,
     showDragHandle: true,
-    backgroundColor: AppColors.surface,
+    backgroundColor: MerchantPremiumColors.surface,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
     ),
@@ -141,14 +141,18 @@ Future<bool?> _confirm({
             Text(
               texts.text(titleKey),
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900),
+              style: const TextStyle(
+                color: MerchantPremiumColors.ink,
+                fontSize: 24,
+                fontWeight: FontWeight.w900,
+              ),
             ),
             const SizedBox(height: AppSpacing.sm),
             Text(
               texts.text(messageKey),
               textAlign: TextAlign.center,
               style: const TextStyle(
-                color: AppColors.gray700,
+                color: MerchantPremiumColors.muted,
                 fontWeight: FontWeight.w700,
                 height: 1.35,
               ),
@@ -160,8 +164,8 @@ Future<bool?> _confirm({
                 if (sheetContext.mounted) Navigator.of(sheetContext).pop(true);
               },
               style: FilledButton.styleFrom(
-                backgroundColor: danger ? Colors.red.shade700 : AppColors.black,
-                foregroundColor: AppColors.white,
+                backgroundColor: danger ? MerchantPremiumColors.danger : MerchantPremiumColors.ink,
+                foregroundColor: Colors.white,
                 minimumSize: const Size.fromHeight(54),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(999),

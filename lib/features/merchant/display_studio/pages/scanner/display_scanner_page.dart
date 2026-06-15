@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
@@ -8,6 +10,7 @@ import 'display_pairing_setup_page.dart';
 
 class DisplayScannerPage extends StatefulWidget {
   const DisplayScannerPage({super.key, required this.service});
+
   final DisplayStudioService service;
 
   @override
@@ -16,6 +19,7 @@ class DisplayScannerPage extends StatefulWidget {
 
 class _DisplayScannerPageState extends State<DisplayScannerPage> {
   final MobileScannerController _ctrl = MobileScannerController();
+
   bool _processing = false;
   String? _errorMessage;
 
@@ -33,8 +37,13 @@ class _DisplayScannerPageState extends State<DisplayScannerPage> {
         backgroundColor: Colors.black,
         foregroundColor: AppColors.white,
         elevation: 0,
-        title: const Text('TV-QR scannen',
-            style: TextStyle(fontWeight: FontWeight.w900, color: AppColors.white)),
+        title: const Text(
+          'TV-QR scannen',
+          style: TextStyle(
+            fontWeight: FontWeight.w900,
+            color: AppColors.white,
+          ),
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.flash_on_rounded, color: AppColors.white),
@@ -53,11 +62,11 @@ class _DisplayScannerPageState extends State<DisplayScannerPage> {
             controller: _ctrl,
             onDetect: _onDetect,
           ),
-          // Viewfinder overlay
+
           Positioned.fill(
             child: CustomPaint(painter: _ViewfinderPainter()),
           ),
-          // Hint text
+
           Positioned(
             bottom: 0,
             left: 0,
@@ -85,11 +94,14 @@ class _DisplayScannerPageState extends State<DisplayScannerPage> {
                         Text(
                           'Richte die Kamera auf den QR-Code am Fernseher.',
                           textAlign: TextAlign.center,
-                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                         SizedBox(height: 6),
                         Text(
-                          'Der QR-Code am Fernseher wechselt regelmäßig.',
+                          'Der QR-Code enthält eine sichere Lokka-Pairing-Session.',
                           textAlign: TextAlign.center,
                           style: TextStyle(color: Colors.white60, fontSize: 12),
                         ),
@@ -111,34 +123,48 @@ class _DisplayScannerPageState extends State<DisplayScannerPage> {
 
   void _showManualInput(BuildContext context) {
     final ctrl = TextEditingController();
+
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
       backgroundColor: const Color(0xFF1A1A1A),
       shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
       builder: (ctx) => Padding(
         padding: EdgeInsets.only(
-            left: 22, right: 22, top: 8,
-            bottom: MediaQuery.of(ctx).viewInsets.bottom + 28),
+          left: 22,
+          right: 22,
+          top: 8,
+          bottom: MediaQuery.of(ctx).viewInsets.bottom + 28,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text('Code manuell eingeben',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900,
-                    color: AppColors.white)),
+            const Text(
+              'Code manuell eingeben',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
+                color: AppColors.white,
+              ),
+            ),
             const SizedBox(height: 6),
-            const Text('Gib den vollständigen Lokka-Code oder die URL ein.',
-                style: TextStyle(color: Colors.white54, fontSize: 13)),
+            const Text(
+              'Füge den vollständigen QR-Inhalt ein.',
+              style: TextStyle(color: Colors.white54, fontSize: 13),
+            ),
             const SizedBox(height: AppSpacing.md),
             TextField(
               controller: ctrl,
               autofocus: true,
+              maxLines: 4,
+              minLines: 1,
               style: const TextStyle(color: AppColors.white),
               decoration: InputDecoration(
-                hintText: 'lokka://display?id=…  oder nur die ID',
+                hintText: '{"type":"lokkaDisplayPairing", ...}',
                 hintStyle: const TextStyle(color: Colors.white30),
                 filled: true,
                 fillColor: const Color(0xFF2A2A2A),
@@ -147,7 +173,7 @@ class _DisplayScannerPageState extends State<DisplayScannerPage> {
                   borderSide: BorderSide.none,
                 ),
                 contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               ),
             ),
             const SizedBox(height: AppSpacing.md),
@@ -155,12 +181,9 @@ class _DisplayScannerPageState extends State<DisplayScannerPage> {
               onPressed: () {
                 final raw = ctrl.text.trim();
                 if (raw.isEmpty) return;
+
                 Navigator.of(ctx).pop();
-                // Normalize: if user typed just the pairingId, build URL
-                final payload = raw.startsWith('lokka://')
-                    ? raw
-                    : 'lokka://display?id=$raw&t=';
-                _processPayload(payload);
+                _processPayload(raw);
               },
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.mint,
@@ -169,10 +192,13 @@ class _DisplayScannerPageState extends State<DisplayScannerPage> {
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14)),
+                  borderRadius: BorderRadius.circular(14),
+                ),
               ),
-              child: const Text('Bestätigen',
-                  style: TextStyle(fontWeight: FontWeight.w900)),
+              child: const Text(
+                'Bestätigen',
+                style: TextStyle(fontWeight: FontWeight.w900),
+              ),
             ),
           ],
         ),
@@ -182,14 +208,18 @@ class _DisplayScannerPageState extends State<DisplayScannerPage> {
 
   Future<void> _onDetect(BarcodeCapture capture) async {
     if (_processing) return;
-    final raw = capture.barcodes.firstOrNull?.rawValue;
-    if (raw == null) return;
 
-    if (!raw.startsWith('lokka://display')) {
-      setState(() => _errorMessage = 'Ungültiger QR-Code. Bitte einen Lokka TV-QR scannen.');
-      await _ctrl.stop();
-      return;
+    String? raw;
+
+    for (final barcode in capture.barcodes) {
+      final value = barcode.rawValue;
+      if (value != null && value.trim().isNotEmpty) {
+        raw = value.trim();
+        break;
+      }
     }
+
+    if (raw == null) return;
 
     await _ctrl.stop();
     await _processPayload(raw);
@@ -197,64 +227,234 @@ class _DisplayScannerPageState extends State<DisplayScannerPage> {
 
   Future<void> _processPayload(String raw) async {
     if (_processing) return;
-    setState(() { _processing = true; _errorMessage = null; });
+
+    setState(() {
+      _processing = true;
+      _errorMessage = null;
+    });
 
     try {
+      final payload = _DisplayPairingPayload.parse(raw);
+
+      final qrExpiresAt = payload.expiresAt;
+      if (qrExpiresAt != null && DateTime.now().isAfter(qrExpiresAt)) {
+        throw Exception(
+          'QR-Code ist abgelaufen. Bitte am Fernseher einen neuen QR-Code anzeigen.',
+        );
+      }
+
+      final session = await widget.service.getPairingSession(payload.pairingId);
+
+      if (session == null) {
+        throw Exception(
+          'Pairing-Session nicht gefunden. Code abgelaufen oder ungültig.',
+        );
+      }
+
+      final status = session['status']?.toString();
+      final claimed = session['claimed'] as bool? ?? false;
+
+      if (claimed || status == 'claimed') {
+        throw Exception('Dieser Code wurde bereits verwendet.');
+      }
+
+      final sessionToken = session['token']?.toString() ?? '';
+      if (sessionToken.isNotEmpty && sessionToken != payload.token) {
+        throw Exception('Sicherheits-Token stimmt nicht überein.');
+      }
+
+      final sessionCode = session['code']?.toString() ?? '';
+      if (sessionCode.isNotEmpty && sessionCode != payload.code) {
+        throw Exception('Pairing-Code stimmt nicht überein.');
+      }
+
+      final sessionExpiresAt = _parseDateTime(session['expiresAt']);
+      if (sessionExpiresAt != null &&
+          DateTime.now().isAfter(sessionExpiresAt)) {
+        throw Exception(
+          'Code ist abgelaufen. Bitte am Fernseher einen neuen QR anzeigen.',
+        );
+      }
+
+      if (!mounted) return;
+
+      final paired = await Navigator.of(context).push<bool>(
+        MaterialPageRoute<bool>(
+          builder: (_) => DisplayPairingSetupPage(
+            service: widget.service,
+            pairingId: payload.pairingId,
+            token: payload.token,
+            sessionData: session,
+          ),
+        ),
+      );
+      if (!mounted) return;
+
+      if (paired == true) {
+        // Nur bei echtem Erfolg den Scanner schließen (#12).
+        Navigator.of(context).pop(true);
+      } else {
+        // Setup abgebrochen (z. B. System-Back): Scanner NICHT schließen, sondern
+        // _processing zurücksetzen und Kamera neu starten (#12/#13).
+        setState(() => _processing = false);
+        await _ctrl.start();
+      }
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _processing = false;
+        _errorMessage = e.toString().replaceFirst('Exception: ', '');
+      });
+    }
+  }
+}
+
+class _DisplayPairingPayload {
+  const _DisplayPairingPayload({
+    required this.type,
+    required this.pairingId,
+    required this.code,
+    required this.token,
+    required this.createdAt,
+    required this.expiresAt,
+  });
+
+  final String type;
+  final String pairingId;
+  final String code;
+  final String token;
+  final DateTime? createdAt;
+  final DateTime? expiresAt;
+
+  static _DisplayPairingPayload parse(String raw) {
+    final value = raw.trim();
+
+    if (value.isEmpty) {
+      throw Exception('QR-Code ist leer.');
+    }
+
+    if (value.startsWith('{')) {
+      return _parseJsonPayload(value);
+    }
+
+    if (value.startsWith('lokka://display')) {
+      return _parseLegacyUrlPayload(value);
+    }
+
+    throw Exception(
+      'Ungültiger QR-Code. Bitte einen Lokka Display-Pairing-QR scannen.',
+    );
+  }
+
+  static _DisplayPairingPayload _parseJsonPayload(String raw) {
+    dynamic decoded;
+
+    try {
+      decoded = jsonDecode(raw);
+    } catch (_) {
+      throw Exception('QR-Code konnte nicht gelesen werden.');
+    }
+
+    if (decoded is! Map) {
+      throw Exception('QR-Code hat ein ungültiges Format.');
+    }
+
+    final data = Map<String, dynamic>.from(decoded);
+
+    final type = data['type']?.toString().trim() ?? '';
+    final pairingId = data['pairingId']?.toString().trim() ?? '';
+    final code = data['code']?.toString().trim() ?? '';
+    final token = data['token']?.toString().trim() ?? '';
+    final createdAt = _parseDateTime(data['createdAt']);
+    final expiresAt = _parseDateTime(data['expiresAt']);
+
+    if (type != 'lokkaDisplayPairing') {
+      throw Exception('Das ist kein Lokka Display-Pairing-Code.');
+    }
+
+    if (pairingId.isEmpty) {
+      throw Exception('QR-Code ist unvollständig: pairingId fehlt.');
+    }
+
+    if (token.isEmpty) {
+      throw Exception('QR-Code ist unvollständig: token fehlt.');
+    }
+
+    if (!RegExp(r'^\d{6}$').hasMatch(code)) {
+      throw Exception('QR-Code ist unvollständig: code ist ungültig.');
+    }
+
+    if (expiresAt == null) {
+      throw Exception('QR-Code ist unvollständig: expiresAt fehlt.');
+    }
+
+    return _DisplayPairingPayload(
+      type: type,
+      pairingId: pairingId,
+      code: code,
+      token: token,
+      createdAt: createdAt,
+      expiresAt: expiresAt,
+    );
+  }
+
+  static _DisplayPairingPayload _parseLegacyUrlPayload(String raw) {
+    try {
       final uri = Uri.parse(raw.replaceFirst('lokka://', 'https://lokka.app/'));
-      final pairingId = uri.queryParameters['id'] ?? '';
-      final token = uri.queryParameters['t'] ?? '';
+
+      final pairingId = uri.queryParameters['id']?.trim() ?? '';
+      final token = uri.queryParameters['t']?.trim() ?? '';
 
       if (pairingId.isEmpty) {
         throw Exception('Code ist unvollständig oder ungültig.');
       }
 
-      final session = await widget.service.getPairingSession(pairingId);
-
-      if (session == null) {
-        throw Exception('Pairing-Session nicht gefunden. Code abgelaufen oder ungültig.');
-      }
-
-      final claimed = session['claimed'] as bool? ?? false;
-      if (claimed) {
-        throw Exception('Dieser Code wurde bereits verwendet.');
-      }
-
-      final expiresAt = session['expiresAt'];
-      if (expiresAt != null) {
-        DateTime? expiry;
-        try { expiry = (expiresAt as dynamic).toDate() as DateTime?; } catch (_) {}
-        if (expiry != null && DateTime.now().isAfter(expiry)) {
-          throw Exception('Code ist abgelaufen. Bitte am Fernseher einen neuen QR anzeigen.');
-        }
-      }
-
-      if (!mounted) return;
-
-      await Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) => DisplayPairingSetupPage(
-            service: widget.service,
-            pairingId: pairingId,
-            token: token,
-            sessionData: session,
-          ),
-        ),
+      return _DisplayPairingPayload(
+        type: 'lokkaDisplayPairingLegacy',
+        pairingId: pairingId,
+        code: '',
+        token: token,
+        createdAt: null,
+        expiresAt: null,
       );
-
-      if (mounted) Navigator.of(context).pop();
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _processing = false;
-          _errorMessage = e.toString().replaceFirst('Exception: ', '');
-        });
-      }
+    } catch (_) {
+      throw Exception('Code ist unvollständig oder ungültig.');
     }
   }
 }
 
+DateTime? _parseDateTime(dynamic value) {
+  if (value == null) return null;
+
+  if (value is DateTime) {
+    return value;
+  }
+
+  if (value is String) {
+    return DateTime.tryParse(value);
+  }
+
+  try {
+    final dynamic dynamicValue = value;
+    final converted = dynamicValue.toDate();
+
+    if (converted is DateTime) {
+      return converted;
+    }
+  } catch (_) {
+    return null;
+  }
+
+  return null;
+}
+
 class _ErrorCard extends StatelessWidget {
-  const _ErrorCard({required this.message, required this.onRetry});
+  const _ErrorCard({
+    required this.message,
+    required this.onRetry,
+  });
+
   final String message;
   final VoidCallback onRetry;
 
@@ -270,16 +470,27 @@ class _ErrorCard extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.error_outline_rounded, color: Color(0xFFEF4444), size: 28),
+          const Icon(
+            Icons.error_outline_rounded,
+            color: Color(0xFFEF4444),
+            size: 28,
+          ),
           const SizedBox(height: 8),
-          Text(message,
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.white70, fontSize: 13)),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: Colors.white70, fontSize: 13),
+          ),
           const SizedBox(height: 12),
           TextButton(
             onPressed: onRetry,
-            child: const Text('Erneut versuchen',
-                style: TextStyle(color: AppColors.mint, fontWeight: FontWeight.w800)),
+            child: const Text(
+              'Erneut versuchen',
+              style: TextStyle(
+                color: AppColors.mint,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
           ),
         ],
       ),
@@ -287,7 +498,6 @@ class _ErrorCard extends StatelessWidget {
   }
 }
 
-/// Simple viewfinder overlay
 class _ViewfinderPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
@@ -301,7 +511,10 @@ class _ViewfinderPainter extends CustomPainter {
       Path.combine(
         PathOperation.difference,
         Path()..addRect(Rect.fromLTWH(0, 0, size.width, size.height)),
-        Path()..addRRect(RRect.fromRectAndRadius(rect, const Radius.circular(16))),
+        Path()
+          ..addRRect(
+            RRect.fromRectAndRadius(rect, const Radius.circular(16)),
+          ),
       ),
       overlay,
     );
@@ -314,17 +527,31 @@ class _ViewfinderPainter extends CustomPainter {
     const cornerLen = 24.0;
     final r = rect;
 
-    for (final (dx, dy) in [
-      (0.0, 0.0), (1.0, 0.0), (0.0, 1.0), (1.0, 1.0)
+    for (final corner in [
+      (0.0, 0.0),
+      (1.0, 0.0),
+      (0.0, 1.0),
+      (1.0, 1.0),
     ]) {
+      final dx = corner.$1;
+      final dy = corner.$2;
+
       final cx = r.left + dx * r.width;
       final cy = r.top + dy * r.height;
       final sx = dx == 0 ? 1 : -1;
       final sy = dy == 0 ? 1 : -1;
+
       canvas.drawLine(
-          Offset(cx, cy), Offset(cx + sx * cornerLen, cy), border);
+        Offset(cx, cy),
+        Offset(cx + sx * cornerLen, cy),
+        border,
+      );
+
       canvas.drawLine(
-          Offset(cx, cy), Offset(cx, cy + sy * cornerLen), border);
+        Offset(cx, cy),
+        Offset(cx, cy + sy * cornerLen),
+        border,
+      );
     }
   }
 

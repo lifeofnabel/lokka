@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:lokka/core/theme/appColors.dart';
-import 'package:lokka/core/theme/appRadius.dart';
 import 'package:lokka/core/theme/appSpacing.dart';
 import 'package:lokka/features/user/discover/models/publicMerchantUserModel.dart';
 
+/// Ruhiger M3-Hero für die Partner-Detailseite:
+/// Cover, Logo, Name, Typ/Gebiet als Chips, optionale Beschreibung.
 class PartnerHeroCard extends StatelessWidget {
   const PartnerHeroCard({
     super.key,
@@ -15,16 +16,19 @@ class PartnerHeroCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
     return Column(
       children: [
         Stack(
           clipBehavior: Clip.none,
           children: [
-            _buildCover(),
+            _buildCover(context),
             Positioned(
               bottom: -28,
               left: AppSpacing.md,
-              child: _buildLogo(),
+              child: _buildLogo(context),
             ),
           ],
         ),
@@ -36,31 +40,33 @@ class PartnerHeroCard extends StatelessWidget {
             children: [
               Text(
                 merchant.shopName,
-                style: const TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.black,
+                style: tt.headlineMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
                   letterSpacing: -0.5,
+                  color: cs.onSurface,
                 ),
               ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 6,
-                children: [
-                  if (merchant.shopType.isNotEmpty)
-                    _Tag(merchant.shopType, primary: true),
-                  if (merchant.area.isNotEmpty)
-                    _Tag(merchant.area),
-                ],
-              ),
+              if (merchant.shopType.isNotEmpty || merchant.area.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  children: [
+                    if (merchant.shopType.isNotEmpty)
+                      _Tag(merchant.shopType, primary: true),
+                    if (merchant.area.isNotEmpty)
+                      _Tag(merchant.area, icon: Icons.place_outlined),
+                  ],
+                ),
+              ],
               if (merchant.description.isNotEmpty) ...[
-                const SizedBox(height: 12),
+                const SizedBox(height: 14),
                 Text(
                   merchant.description,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    color: AppColors.gray700,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: tt.bodyMedium?.copyWith(
+                    color: cs.onSurfaceVariant,
                     height: 1.5,
                   ),
                 ),
@@ -72,87 +78,104 @@ class PartnerHeroCard extends StatelessWidget {
     );
   }
 
-  Widget _buildCover() {
+  Widget _buildCover(BuildContext context) {
     return merchant.coverUrl.isNotEmpty
         ? CachedNetworkImage(
             imageUrl: merchant.coverUrl,
-            height: 220,
+            height: 248,
             width: double.infinity,
             fit: BoxFit.cover,
-            placeholder: (_, __) => _coverPlaceholder(),
-            errorWidget: (_, __, ___) => _coverPlaceholder(),
+            placeholder: (_, __) => _coverPlaceholder(context),
+            errorWidget: (_, __, ___) => _coverPlaceholder(context),
           )
-        : _coverPlaceholder();
+        : _coverPlaceholder(context);
   }
 
-  Widget _coverPlaceholder() {
+  Widget _coverPlaceholder(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Container(
-      height: 220,
-      color: AppColors.mintSoft,
-      child: const Center(
-        child: Icon(Icons.store_rounded, size: 56, color: AppColors.mintStrong),
+      height: 248,
+      color: cs.secondaryContainer,
+      child: Center(
+        child: Icon(Icons.storefront_rounded,
+            size: 56, color: cs.onSecondaryContainer),
       ),
     );
   }
 
-  Widget _buildLogo() {
+  Widget _buildLogo(BuildContext context) {
     return Container(
-      width: 60,
-      height: 60,
+      width: 76,
+      height: 76,
       decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(AppRadius.medium),
-        border: Border.all(color: AppColors.white, width: 3),
+        color: AppColors.surfaceBg,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: AppColors.surfaceBg, width: 4),
         boxShadow: [
           BoxShadow(
-            color: AppColors.black.withOpacity(0.12),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
+            color: Colors.black.withValues(alpha: 0.12),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(AppRadius.medium - 3),
+        borderRadius: BorderRadius.circular(18),
         child: merchant.logoUrl.isNotEmpty
             ? CachedNetworkImage(
                 imageUrl: merchant.logoUrl,
                 fit: BoxFit.cover,
-                errorWidget: (_, __, ___) => _logoFallback(),
+                errorWidget: (_, __, ___) => _logoFallback(context),
               )
-            : _logoFallback(),
+            : _logoFallback(context),
       ),
     );
   }
 
-  Widget _logoFallback() {
+  Widget _logoFallback(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Container(
-      color: AppColors.mintSoft,
-      child: const Icon(Icons.store_rounded, size: 28, color: AppColors.mintStrong),
+      color: cs.secondaryContainer,
+      child: Icon(Icons.storefront_rounded,
+          size: 30, color: cs.onSecondaryContainer),
     );
   }
 }
 
 class _Tag extends StatelessWidget {
-  const _Tag(this.label, {this.primary = false});
+  const _Tag(this.label, {this.primary = false, this.icon});
 
   final String label;
   final bool primary;
+  final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final fg = primary ? cs.onSecondaryContainer : cs.onSurfaceVariant;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: primary ? AppColors.mintSoft : AppColors.gray50,
-        borderRadius: BorderRadius.circular(AppRadius.small),
+        color: primary ? cs.secondaryContainer : AppColors.surfaceGray,
+        borderRadius: BorderRadius.circular(100),
+        border: primary ? null : Border.all(color: cs.outlineVariant),
       ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w600,
-          color: primary ? AppColors.mintStrong : AppColors.gray700,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 14, color: fg),
+            const SizedBox(width: 5),
+          ],
+          Text(
+            label,
+            style: tt.labelMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+              color: fg,
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import 'appColors.dart';
 
 class AppShadows {
   const AppShadows._();

@@ -1,7 +1,8 @@
 import 'dart:async';
-import 'dart:math';
+import 'package:lokka/core/utils/locationUtils.dart';
 import 'package:flutter/foundation.dart';
 import 'package:lokka/features/user/discover/models/publicMerchantUserModel.dart';
+import 'package:lokka/features/user/reviews/models/merchantRating.dart';
 import '../services/userPartnersService.dart';
 
 class UserPartnersProvider extends ChangeNotifier {
@@ -17,6 +18,8 @@ class UserPartnersProvider extends ChangeNotifier {
   List<PublicMerchantUserModel> _allPartners = [];
   Set<String> _walletIds = {};
   Map<String, int> _beliebtScores = {};
+  Map<String, MerchantRating> _ratings = {};
+  bool _ratingsLoaded = false;
 
   // Filter state
   String _searchQuery = '';
@@ -43,6 +46,7 @@ class UserPartnersProvider extends ChangeNotifier {
   double? get userLat => _userLat;
   double? get userLng => _userLng;
   Set<String> get walletIds => _walletIds;
+  MerchantRating? ratingFor(String merchantId) => _ratings[merchantId];
   int get totalCount => _allPartners.length;
 
   bool get hasActiveFilters =>
@@ -95,7 +99,8 @@ class UserPartnersProvider extends ChangeNotifier {
       list = list
           .where((m) =>
               m.hasCoordinates &&
-              _distanceKm(_userLat!, _userLng!, m.lat!, m.lng!) <= _radiusKm!)
+              LocationUtils.distanceKm(_userLat!, _userLng!, m.lat!, m.lng!) <=
+                  _radiusKm!)
           .toList();
     }
     return list;
@@ -206,6 +211,10 @@ class UserPartnersProvider extends ChangeNotifier {
         _allPartners = list;
         _isLoading = false;
         notifyListeners();
+        if (!_ratingsLoaded && list.isNotEmpty) {
+          _ratingsLoaded = true;
+          _loadRatings(list);
+        }
       },
       onError: (e) {
         _error = e.toString();
@@ -215,18 +224,13 @@ class UserPartnersProvider extends ChangeNotifier {
     );
   }
 
-  /// Haversine distance in km.
-  double _distanceKm(double lat1, double lng1, double lat2, double lng2) {
-    const r = 6371.0;
-    final dLat = _deg2rad(lat2 - lat1);
-    final dLng = _deg2rad(lng2 - lng1);
-    final a = sin(dLat / 2) * sin(dLat / 2) +
-        cos(_deg2rad(lat1)) * cos(_deg2rad(lat2)) *
-            sin(dLng / 2) * sin(dLng / 2);
-    return r * 2 * atan2(sqrt(a), sqrt(1 - a));
+  Future<void> _loadRatings(List<PublicMerchantUserModel> partners) async {
+    final ratings =
+        await _service.fetchMerchantRatings(partners.map((m) => m.merchantId));
+    if (ratings.isEmpty) return;
+    _ratings = ratings;
+    notifyListeners();
   }
-
-  double _deg2rad(double deg) => deg * (pi / 180);
 
   @override
   void dispose() {

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../../../core/services/authService.dart';
 import '../../../../core/services/firestoreService.dart';
 import '../../../../core/theme/appColors.dart';
+import '../../../../core/widgets/appErrorState.dart';
 import '../providers/display_studio_provider.dart';
 import '../services/display_studio_service.dart';
 import 'display_devices_tab.dart';
@@ -37,6 +38,34 @@ class _DisplayStudioView extends StatefulWidget {
 
 class _DisplayStudioViewState extends State<_DisplayStudioView> {
   int _selectedIndex = 0;
+  DisplayStudioProvider? _provider;
+
+  @override
+  void initState() {
+    super.initState();
+    _provider = context.read<DisplayStudioProvider>()
+      ..addListener(_onProviderChanged);
+  }
+
+  @override
+  void dispose() {
+    _provider?.removeListener(_onProviderChanged);
+    super.dispose();
+  }
+
+  // Aktions-Fehler (#8) als SnackBar zeigen statt still zu verschlucken. Per
+  // Post-Frame, damit kein Re-Entrancy/Build-Konflikt entsteht.
+  void _onProviderChanged() {
+    final err = _provider?.error;
+    if (err == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(err.replaceFirst('Exception: ', ''))),
+      );
+      _provider?.clearError();
+    });
+  }
 
   static const _tabs = [
     _TabEntry(icon: Icons.tv_rounded, label: 'Displays'),
@@ -54,7 +83,9 @@ class _DisplayStudioViewState extends State<_DisplayStudioView> {
 
   @override
   Widget build(BuildContext context) {
-    final isLoading = context.watch<DisplayStudioProvider>().isLoading;
+    final provider = context.watch<DisplayStudioProvider>();
+    final isLoading = provider.isLoading;
+    final loadError = provider.loadError;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -71,7 +102,7 @@ class _DisplayStudioViewState extends State<_DisplayStudioView> {
           style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18),
         ),
         actions: [
-          if (context.watch<DisplayStudioProvider>().isBusy)
+          if (provider.isBusy)
             const Padding(
               padding: EdgeInsets.only(right: 16),
               child: Center(
@@ -87,7 +118,12 @@ class _DisplayStudioViewState extends State<_DisplayStudioView> {
       body: SafeArea(
         child: isLoading
             ? const Center(child: CircularProgressIndicator())
-            : Row(
+            : loadError != null
+                ? AppErrorState(
+                    message: 'Display Studio konnte nicht geladen werden.',
+                    onRetry: provider.retry,
+                  )
+                : Row(
                 children: [
                   _StudioRail(
                     selectedIndex: _selectedIndex,

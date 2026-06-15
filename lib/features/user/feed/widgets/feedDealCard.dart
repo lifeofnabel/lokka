@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:lokka/core/theme/appColors.dart';
 import 'package:lokka/core/theme/appRadius.dart';
-import 'package:lokka/core/theme/appShadows.dart';
 import 'package:lokka/core/theme/appSpacing.dart';
 import 'package:lokka/features/user/feed/models/feedPostModel.dart';
 
@@ -65,11 +64,12 @@ class _FeedDealCardState extends State<FeedDealCard>
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: cs.surface,
         borderRadius: BorderRadius.circular(AppRadius.large),
-        boxShadow: AppShadows.card,
+        border: Border.all(color: cs.outlineVariant),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(AppRadius.large),
@@ -172,7 +172,7 @@ class _FeedDealCardState extends State<FeedDealCard>
               width: 36,
               height: 4,
               decoration: BoxDecoration(
-                color: AppColors.gray300,
+                color: Theme.of(ctx).colorScheme.outlineVariant,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -212,6 +212,8 @@ class _MerchantHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
     return InkWell(
       onTap: onMerchantTap,
       child: Padding(
@@ -231,10 +233,8 @@ class _MerchantHeader extends StatelessWidget {
                 children: [
                   Text(
                     post.merchantName,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.black,
+                    style: tt.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w600,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -246,9 +246,8 @@ class _MerchantHeader extends StatelessWidget {
                         post.merchantArea,
                         _typeLabel(post.merchantShopType),
                       ].where((s) => s.isNotEmpty).join(' · '),
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AppColors.gray500,
+                      style: tt.bodySmall?.copyWith(
+                        color: cs.onSurfaceVariant,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -259,10 +258,10 @@ class _MerchantHeader extends StatelessWidget {
             Tooltip(
               message: 'Weitere Optionen',
               child: IconButton(
-                icon: const Icon(
+                icon: Icon(
                   Icons.more_vert_rounded,
                   size: 20,
-                  color: AppColors.gray500,
+                  color: cs.onSurfaceVariant,
                 ),
                 onPressed: onMenuTap,
                 splashRadius: 20,
@@ -299,31 +298,31 @@ class _LogoAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Container(
-      width: 36,
-      height: 36,
+      width: 38,
+      height: 38,
       decoration: BoxDecoration(
-        color: AppColors.mintSoft,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.border),
+        color: cs.secondaryContainer,
+        borderRadius: BorderRadius.circular(10),
       ),
       child: logoUrl.isNotEmpty
           ? ClipRRect(
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(10),
               child: CachedNetworkImage(
                 imageUrl: logoUrl,
                 fit: BoxFit.cover,
-                errorWidget: (_, __, ___) => const Icon(
+                errorWidget: (_, __, ___) => Icon(
                   Icons.store_rounded,
                   size: 18,
-                  color: AppColors.mintStrong,
+                  color: cs.onSecondaryContainer,
                 ),
               ),
             )
-          : const Icon(
+          : Icon(
               Icons.store_rounded,
               size: 18,
-              color: AppColors.mintStrong,
+              color: cs.onSecondaryContainer,
             ),
     );
   }
@@ -336,12 +335,15 @@ class _Badge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
     final label = post.hasDiscount
         ? '-${post.discountPercent}%'
         : _typeLabel(post.type);
     final bg = post.hasDiscount
-        ? AppColors.mintStrong
+        ? cs.primary
         : Colors.black.withValues(alpha: 0.6);
+    final fg = post.hasDiscount ? cs.onPrimary : Colors.white;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
@@ -350,10 +352,9 @@ class _Badge extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: const TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w800,
-          color: Colors.white,
+        style: tt.labelMedium?.copyWith(
+          fontWeight: FontWeight.w700,
+          color: fg,
         ),
       ),
     );
@@ -389,10 +390,12 @@ class _ActionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
     return Padding(
       padding: const EdgeInsets.fromLTRB(
-        AppSpacing.md,
         AppSpacing.sm,
+        4,
         AppSpacing.md,
         AppSpacing.sm,
       ),
@@ -400,28 +403,36 @@ class _ActionRow extends StatelessWidget {
         children: [
           Tooltip(
             message: isLiked ? 'Gefällt mir nicht mehr' : 'Gefällt mir',
-            child: GestureDetector(
-              onTap: onLikeTap,
-              behavior: HitTestBehavior.opaque,
-              child: Row(
-                children: [
-                  Icon(
-                    isLiked
-                        ? Icons.favorite_rounded
-                        : Icons.favorite_border_rounded,
-                    size: 22,
-                    color: isLiked ? Colors.redAccent : AppColors.gray500,
+            child: Material(
+              color: Colors.transparent,
+              borderRadius: BorderRadius.circular(20),
+              child: InkWell(
+                onTap: onLikeTap,
+                borderRadius: BorderRadius.circular(20),
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                  child: Row(
+                    children: [
+                      Icon(
+                        isLiked
+                            ? Icons.favorite_rounded
+                            : Icons.favorite_border_rounded,
+                        size: 22,
+                        color:
+                            isLiked ? AppColors.googleRed : cs.onSurfaceVariant,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        '${post.likesCount}',
+                        style: tt.labelLarge?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: cs.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 5),
-                  Text(
-                    '${post.likesCount}',
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.gray700,
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ),
@@ -430,24 +441,7 @@ class _ActionRow extends StatelessWidget {
             message: 'Details anzeigen',
             child: TextButton(
               onPressed: onReadMore,
-              style: TextButton.styleFrom(
-                foregroundColor: AppColors.mintStrong,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                minimumSize: Size.zero,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                  side: const BorderSide(color: AppColors.mint),
-                ),
-              ),
-              child: const Text(
-                'Mehr lesen',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+              child: const Text('Mehr lesen'),
             ),
           ),
         ],
@@ -469,14 +463,13 @@ class _MenuTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
     return ListTile(
-      leading: Icon(icon, color: AppColors.gray700, size: 22),
+      leading: Icon(icon, color: cs.onSurfaceVariant, size: 22),
       title: Text(
         label,
-        style: const TextStyle(
-          fontSize: 15,
-          fontWeight: FontWeight.w500,
-        ),
+        style: tt.bodyLarge?.copyWith(fontWeight: FontWeight.w500),
       ),
       onTap: onTap,
     );

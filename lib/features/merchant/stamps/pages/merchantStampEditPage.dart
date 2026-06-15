@@ -6,10 +6,10 @@ import '../../../../core/services/authService.dart';
 import '../../../../core/services/firestoreService.dart';
 import '../../../../core/services/languageService.dart';
 import '../../../../core/services/uploadService.dart';
-import '../../../../core/theme/appColors.dart';
-import '../../../../core/theme/appRadius.dart';
 import '../../../../core/theme/appSpacing.dart';
 import '../../catalog/models/merchantItemData.dart';
+import '../../shared/widgets/merchantPremiumUi.dart';
+import '../../shared/widgets/merchantUiComponents.dart';
 import '../../tools/widgets/merchantToolUi.dart';
 import '../models/stampCardModel.dart';
 import '../providers/merchantStampsProvider.dart';
@@ -55,6 +55,9 @@ class _MerchantStampEditViewState extends State<_MerchantStampEditView> {
   final _rewardDescription = TextEditingController();
   final _stampContent = TextEditingController();
 
+  static const int _stepCount = 6;
+
+  int _step = 0;
   String? _hydratedId;
   bool _isHydrating = false;
   bool _showAdvancedDesign = false;
@@ -141,7 +144,9 @@ class _MerchantStampEditViewState extends State<_MerchantStampEditView> {
     _hydrate(card);
 
     return MerchantToolScaffold(
-      title: widget.stampCardId == null ? texts.text('merchant.stamps.create') : texts.text('merchant.stamps.editTitle'),
+      title: widget.stampCardId == null
+          ? texts.text('merchant.stamps.create')
+          : texts.text('merchant.stamps.editTitle'),
       subtitle: texts.text('merchant.stamps.editSubtitle'),
       backPath: '/merchant/stamps',
       trailing: MerchantInfoTooltip(message: texts.text('merchant.stamps.editTooltip')),
@@ -155,304 +160,185 @@ class _MerchantStampEditViewState extends State<_MerchantStampEditView> {
             ),
             const SizedBox(height: AppSpacing.md),
           ],
-          _SectionCard(
-            title: texts.text('merchant.stamps.section.name'),
-            tooltip: texts.text('merchant.stamps.section.nameTip'),
-            child: Column(
-              children: [
-                MerchantTextField(
-                  controller: _title,
-                  label: texts.text('merchant.stamps.field.title'),
-                ),
-                const SizedBox(height: AppSpacing.md),
-                MerchantTextField(
-                  controller: _subtitle,
-                  label: texts.text('merchant.stamps.field.subtitle'),
-                ),
-                const SizedBox(height: AppSpacing.md),
-                MerchantTextField(
-                  controller: _description,
-                  label: texts.text('common.description'),
-                  maxLines: 3,
-                ),
-              ],
-            ),
+          _StepDots(step: _step, total: _stepCount, labels: _stepLabels),
+          const SizedBox(height: AppSpacing.md),
+          // Vorschau-Popout ganz oben: öffnet eine Live-Vorschau der Karte.
+          _PreviewLauncher(
+            onTap: () => _showPreviewDialog(context, provider, card),
           ),
-          _SectionCard(
-            title: texts.text('merchant.stamps.section.condition'),
-            tooltip: texts.text('merchant.stamps.section.conditionTip'),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _ChipWrap(
-                  options: [
-                    _ChipOption(StampConditionType.visit, texts.text('merchant.stamps.condition.visit')),
-                    _ChipOption(StampConditionType.minimumAmount, texts.text('merchant.stamps.condition.minimumAmount')),
-                    _ChipOption(StampConditionType.item, texts.text('merchant.stamps.condition.item')),
-                    _ChipOption(StampConditionType.custom, texts.text('merchant.stamps.condition.custom')),
-                  ],
-                  selected: _conditionType,
-                  onSelected: (value) => setState(() => _conditionType = value),
-                ),
-                if (_conditionType == StampConditionType.minimumAmount) ...[
-                  const SizedBox(height: AppSpacing.md),
-                  MerchantTextField(
-                    controller: _minimumAmount,
-                    label: texts.text('merchant.stamps.field.minimumAmount'),
-                    keyboardType: TextInputType.number,
-                  ),
-                ],
-                if (_conditionType == StampConditionType.item) ...[
-                  const SizedBox(height: AppSpacing.md),
-                  _ItemDropdown(
-                    label: texts.text('merchant.stamps.field.requiredItem'),
-                    items: provider.items,
-                    value: _requiredItemId,
-                    onChanged: (item) => setState(() {
-                      _requiredItemId = item?.id ?? '';
-                      _requiredItemName = item?.name ?? '';
-                    }),
-                  ),
-                ],
-                if (_conditionType == StampConditionType.custom) ...[
-                  const SizedBox(height: AppSpacing.md),
-                  MerchantTextField(
-                    controller: _conditionText,
-                    label: texts.text('merchant.stamps.field.conditionText'),
-                    maxLines: 2,
-                  ),
-                ],
-              ],
-            ),
+          const SizedBox(height: AppSpacing.md),
+          _stepContent(context, provider, texts, card),
+          const SizedBox(height: AppSpacing.sm),
+          _NavigationRow(
+            step: _step,
+            isLast: _step == _stepCount - 1,
+            isSaving: provider.isSaving,
+            onBack: _step == 0 ? null : () => setState(() => _step--),
+            onNext: _step == _stepCount - 1
+                ? () => _publish(context, provider, card)
+                : () => setState(() => _step++),
           ),
-          _SectionCard(
-            title: texts.text('merchant.stamps.section.stamps'),
-            tooltip: texts.text('merchant.stamps.section.stampsTip'),
-            child: _ChipWrap(
-              options: [
-                ...[5, 8, 10, 12, 15].map((count) => _ChipOption(count.toString(), count.toString())),
-                _ChipOption('custom', texts.text('merchant.stamps.custom')),
-              ],
-              selected: [5, 8, 10, 12, 15].contains(_requiredStamps) ? _requiredStamps.toString() : 'custom',
-              onSelected: (value) async {
-                if (value != 'custom') {
-                  setState(() => _requiredStamps = int.parse(value));
-                  return;
-                }
-                final custom = await _askCustomStampCount(context, _requiredStamps);
-                if (custom != null) setState(() => _requiredStamps = custom);
-              },
-            ),
-          ),
-          _SectionCard(
-            title: texts.text('merchant.stamps.section.reward'),
-            tooltip: texts.text('merchant.stamps.section.rewardTip'),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _ChipWrap(
-                  options: [
-                    _ChipOption(StampRewardType.custom, texts.text('merchant.stamps.reward.custom')),
-                    _ChipOption(StampRewardType.item, texts.text('merchant.stamps.reward.item')),
-                  ],
-                  selected: _rewardType,
-                  onSelected: (value) => setState(() => _rewardType = value),
-                ),
-                if (_rewardType == StampRewardType.item) ...[
-                  const SizedBox(height: AppSpacing.md),
-                  _ItemDropdown(
-                    label: texts.text('merchant.stamps.field.rewardItem'),
-                    items: provider.items,
-                    value: _rewardItemId,
-                    onChanged: (item) => setState(() {
-                      _rewardItemId = item?.id ?? '';
-                      _rewardItemName = item?.name ?? '';
-                      if (item != null && _rewardTitle.text.trim().isEmpty) {
-                        _rewardTitle.text = item.name;
-                      }
-                    }),
-                  ),
-                ],
-                const SizedBox(height: AppSpacing.md),
-                MerchantTextField(
-                  controller: _rewardTitle,
-                  label: texts.text('merchant.stamps.field.rewardTitle'),
-                ),
-                const SizedBox(height: AppSpacing.md),
-                MerchantTextField(
-                  controller: _rewardDescription,
-                  label: texts.text('merchant.stamps.field.rewardDescription'),
-                  maxLines: 3,
-                ),
-              ],
-            ),
-          ),
-          _SectionCard(
-            title: texts.text('merchant.stamps.section.design'),
-            tooltip: texts.text('merchant.stamps.section.designTip'),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _StyleSelector(
-                  selected: _styleName,
-                  onSelected: _setStyle,
-                ),
-                const SizedBox(height: AppSpacing.md),
-                OutlinedButton.icon(
-                  onPressed: () => setState(() => _showAdvancedDesign = !_showAdvancedDesign),
-                  icon: Icon(_showAdvancedDesign ? Icons.expand_less_rounded : Icons.tune_rounded),
-                  label: Text(texts.text('merchant.stamps.advancedDesign')),
-                ),
-                if (_showAdvancedDesign) ...[
-                  const SizedBox(height: AppSpacing.md),
-                  SwitchListTile(
-                    value: _gradientEnabled,
-                    onChanged: (value) => setState(() => _gradientEnabled = value),
-                    title: Text(texts.text('merchant.stamps.gradient')),
-                    contentPadding: EdgeInsets.zero,
-                  ),
-                  _ColorSelector(
-                    title: texts.text('merchant.stamps.backgroundColor'),
-                    selected: _backgroundColor,
-                    colors: const ['#171A18', '#E9FAF3', '#FFF5E6', '#301824', '#1F3A52', '#F5F6F2'],
-                    onSelected: (value) => setState(() => _backgroundColor = value),
-                  ),
-                  if (_gradientEnabled)
-                    _ColorSelector(
-                      title: texts.text('merchant.stamps.gradientColor'),
-                      selected: _gradientColor,
-                      colors: const ['#45C9A4', '#9CE8CF', '#FFD6E7', '#CFE4FF', '#FFF1A5', '#FFB36C'],
-                      onSelected: (value) => setState(() => _gradientColor = value),
-                    ),
-                  _ColorSelector(
-                    title: texts.text('merchant.stamps.accentColor'),
-                    selected: _accentColor,
-                    colors: const ['#9CE8CF', '#171A18', '#FEFFFC', '#FFD6E7', '#FFF1A5', '#CFE4FF'],
-                    onSelected: (value) => setState(() => _accentColor = value),
-                  ),
-                  _ColorSelector(
-                    title: texts.text('merchant.stamps.textColor'),
-                    selected: _textColor,
-                    colors: const ['#FEFFFC', '#171A18', '#4A4A4A', '#FFF5E6'],
-                    onSelected: (value) => setState(() => _textColor = value),
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  _ChipWrap(
-                    options: [
-                      _ChipOption('circle', texts.text('merchant.stamps.shape.circle')),
-                      _ChipOption('square', texts.text('merchant.stamps.shape.square')),
-                      _ChipOption('softSquare', texts.text('merchant.stamps.shape.softSquare')),
-                      _ChipOption('diamond', texts.text('merchant.stamps.shape.diamond')),
-                    ],
-                    selected: _stampShape,
-                    onSelected: (value) => setState(() => _stampShape = value),
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  _ChipWrap(
-                    options: [
-                      _ChipOption('icon', texts.text('merchant.stamps.content.icon')),
-                      _ChipOption('char', texts.text('merchant.stamps.content.char')),
-                    ],
-                    selected: _stampIconType,
-                    onSelected: (value) => setState(() => _stampIconType = value),
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  if (_stampIconType == 'icon')
-                    _ChipWrap(
-                      options: [
-                        _ChipOption('star', texts.text('merchant.stamps.icon.star')),
-                        _ChipOption('gift', texts.text('merchant.stamps.icon.gift')),
-                        _ChipOption('coffee', texts.text('merchant.stamps.icon.coffee')),
-                        _ChipOption('food', texts.text('merchant.stamps.icon.food')),
-                        _ChipOption('heart', texts.text('merchant.stamps.icon.heart')),
-                        _ChipOption('local', texts.text('merchant.stamps.icon.local')),
-                      ],
-                      selected: _stampIconValue,
-                      onSelected: (value) => setState(() => _stampIconValue = value),
-                    )
-                  else
-                    MerchantTextField(
-                      controller: _stampContent,
-                      label: texts.text('merchant.stamps.field.stampContent'),
-                    ),
-                ],
-                const SizedBox(height: AppSpacing.md),
-                if (_imageUrl.isEmpty)
-                  _ChipWrap(
-                    options: [
-                      _ChipOption('side', texts.text('merchant.stamps.image.side')),
-                      _ChipOption('top', texts.text('merchant.stamps.image.top')),
-                      _ChipOption('background', texts.text('merchant.stamps.image.background')),
-                    ],
-                    selected: _imagePlacement,
-                    onSelected: (value) => setState(() => _imagePlacement = value),
-                  )
-                else
-                  _LockedImagePlacement(
-                    label: texts.text('merchant.stamps.imageLocked')
-                        .replaceAll('{placement}', texts.text('merchant.stamps.image.$_imagePlacement')),
-                    onRemove: () => setState(() => _imageUrl = ''),
-                  ),
-                const SizedBox(height: AppSpacing.md),
-                OutlinedButton.icon(
-                  onPressed: provider.isSaving
-                      ? null
-                      : () async {
-                          final uploaded = await provider.uploadImage(
-                            type: _uploadTypeForPlacement(_imagePlacement),
-                          );
-                          if (uploaded != null && uploaded.isNotEmpty) {
-                            setState(() => _imageUrl = uploaded);
-                          }
-                        },
-                  icon: const Icon(Icons.image_rounded),
-                  label: Text(
-                    _imageUrl.isEmpty ? texts.text('common.uploadImage') : texts.text('common.replaceImage'),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          _SectionCard(
-            title: texts.text('merchant.stamps.section.preview'),
-            tooltip: texts.text('merchant.stamps.section.previewTip'),
-            child: MerchantStampPreview(card: _cardFromForm(provider, card)),
-          ),
-          _SectionCard(
-            title: texts.text('merchant.stamps.section.publish'),
-            tooltip: texts.text('merchant.stamps.section.publishTip'),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  texts.text('merchant.stamps.publishInfo'),
-                  style: const TextStyle(
-                    color: AppColors.gray700,
-                    fontWeight: FontWeight.w700,
-                    height: 1.35,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.md),
-                MerchantPrimaryButton(
-                  label: texts.text('merchant.stamps.saveDraft'),
-                  icon: Icons.save_rounded,
-                  isLoading: provider.isSaving,
-                  onPressed: () => _saveDraft(context, provider, card),
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                OutlinedButton.icon(
-                  onPressed: provider.isSaving ? null : () => _publish(context, provider, card),
-                  icon: const Icon(Icons.rocket_launch_rounded),
-                  label: Text(texts.text('merchant.stamps.publish')),
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: const Size.fromHeight(54),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
-                  ),
-                ),
-              ],
+          const SizedBox(height: AppSpacing.sm),
+          OutlinedButton.icon(
+            onPressed: provider.isSaving ? null : () => _saveDraft(context, provider, card),
+            icon: const Icon(Icons.save_rounded),
+            label: Text(texts.text('merchant.stamps.saveDraft')),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: MerchantPremiumColors.ink,
+              minimumSize: const Size.fromHeight(52),
+              side: const BorderSide(color: MerchantPremiumColors.line),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  List<String> get _stepLabels => const [
+        'merchant.stamps.section.name',
+        'merchant.stamps.section.condition',
+        'merchant.stamps.section.stamps',
+        'merchant.stamps.section.reward',
+        'merchant.stamps.section.design',
+        'merchant.stamps.section.publish',
+      ];
+
+  Widget _stepContent(
+    BuildContext context,
+    MerchantStampsProvider provider,
+    LanguageService texts,
+    StampCardModel card,
+  ) {
+    return switch (_step) {
+      0 => _NameStep(
+          title: _title,
+          subtitle: _subtitle,
+          description: _description,
+        ),
+      1 => _ConditionStep(
+          conditionType: _conditionType,
+          minimumAmount: _minimumAmount,
+          conditionText: _conditionText,
+          items: provider.items,
+          requiredItemId: _requiredItemId,
+          onConditionType: (value) => setState(() => _conditionType = value),
+          onItem: (item) => setState(() {
+            _requiredItemId = item?.id ?? '';
+            _requiredItemName = item?.name ?? '';
+          }),
+        ),
+      2 => _StampsStep(
+          requiredStamps: _requiredStamps,
+          onCount: (value) => setState(() => _requiredStamps = value),
+          onCustom: () async {
+            final custom = await _askCustomStampCount(context, _requiredStamps);
+            if (custom != null) setState(() => _requiredStamps = custom);
+          },
+        ),
+      3 => _RewardStep(
+          rewardType: _rewardType,
+          items: provider.items,
+          rewardItemId: _rewardItemId,
+          rewardTitle: _rewardTitle,
+          rewardDescription: _rewardDescription,
+          onRewardType: (value) => setState(() => _rewardType = value),
+          onItem: (item) => setState(() {
+            _rewardItemId = item?.id ?? '';
+            _rewardItemName = item?.name ?? '';
+            if (item != null && _rewardTitle.text.trim().isEmpty) {
+              _rewardTitle.text = item.name;
+            }
+          }),
+        ),
+      4 => _DesignStep(
+          styleName: _styleName,
+          showAdvanced: _showAdvancedDesign,
+          gradientEnabled: _gradientEnabled,
+          backgroundColor: _backgroundColor,
+          gradientColor: _gradientColor,
+          accentColor: _accentColor,
+          textColor: _textColor,
+          stampShape: _stampShape,
+          stampIconType: _stampIconType,
+          stampIconValue: _stampIconValue,
+          stampContent: _stampContent,
+          imageUrl: _imageUrl,
+          imagePlacement: _imagePlacement,
+          isSaving: provider.isSaving,
+          onStyle: _setStyle,
+          onToggleAdvanced: () => setState(() => _showAdvancedDesign = !_showAdvancedDesign),
+          onGradient: (value) => setState(() => _gradientEnabled = value),
+          onBackgroundColor: (value) => setState(() => _backgroundColor = value),
+          onGradientColor: (value) => setState(() => _gradientColor = value),
+          onAccentColor: (value) => setState(() => _accentColor = value),
+          onTextColor: (value) => setState(() => _textColor = value),
+          onShape: (value) => setState(() => _stampShape = value),
+          onIconType: (value) => setState(() => _stampIconType = value),
+          onIconValue: (value) => setState(() => _stampIconValue = value),
+          onPlacement: (value) => setState(() => _imagePlacement = value),
+          onRemoveImage: () => setState(() => _imageUrl = ''),
+          onUpload: () async {
+            final uploaded = await provider.uploadImage(
+              type: _uploadTypeForPlacement(_imagePlacement),
+            );
+            if (uploaded != null && uploaded.isNotEmpty) {
+              setState(() => _imageUrl = uploaded);
+            }
+          },
+        ),
+      _ => _PublishStep(card: _cardFromForm(provider, card)),
+    };
+  }
+
+  Future<void> _showPreviewDialog(
+    BuildContext context,
+    MerchantStampsProvider provider,
+    StampCardModel existing,
+  ) async {
+    final texts = context.read<LanguageService>();
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(18),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 460),
+          child: MerchantPremiumCard(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            radius: 34,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        texts.text('merchant.stamps.section.preview'),
+                        style: const TextStyle(
+                          color: MerchantPremiumColors.ink,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.of(dialogContext).pop(),
+                      icon: const Icon(Icons.close_rounded, color: MerchantPremiumColors.ink),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Flexible(
+                  child: SingleChildScrollView(
+                    child: MerchantStampPreview(card: _cardFromForm(provider, existing)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -531,7 +417,6 @@ class _MerchantStampEditViewState extends State<_MerchantStampEditView> {
       imageUrl: _imageUrl,
       imagePlacement: _imagePlacement,
       claimLimits: const {'perUser': null, 'perDay': null},
-      creditCostPerWeek: 2,
       status: status,
       isActive: status == StampCardStatus.active,
       isArchived: status == StampCardStatus.archived,
@@ -577,18 +462,25 @@ class _MerchantStampEditViewState extends State<_MerchantStampEditView> {
   bool _validate(BuildContext context, MerchantStampsProvider provider) {
     final texts = context.read<LanguageService>();
     String? message;
+    int? jumpTo;
     if (_title.text.trim().isEmpty) {
       message = texts.text('merchant.stamps.error.title');
-    } else if (_rewardTitle.text.trim().isEmpty) {
-      message = texts.text('merchant.stamps.error.reward');
+      jumpTo = 0;
     } else if (_conditionType == StampConditionType.minimumAmount && _parseAmount(_minimumAmount.text) == null) {
       message = texts.text('merchant.stamps.error.minimumAmount');
+      jumpTo = 1;
     } else if (_conditionType == StampConditionType.item && _findItem(provider.items, _requiredItemId) == null) {
       message = texts.text('merchant.stamps.error.item');
+      jumpTo = 1;
+    } else if (_rewardTitle.text.trim().isEmpty) {
+      message = texts.text('merchant.stamps.error.reward');
+      jumpTo = 3;
     } else if (_rewardType == StampRewardType.item && _findItem(provider.items, _rewardItemId) == null) {
       message = texts.text('merchant.stamps.error.rewardItem');
+      jumpTo = 3;
     }
     if (message == null) return true;
+    if (jumpTo != null && jumpTo != _step) setState(() => _step = jumpTo!);
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
     return false;
   }
@@ -605,55 +497,601 @@ class _MerchantStampEditViewState extends State<_MerchantStampEditView> {
   }
 }
 
-class _SectionCard extends StatelessWidget {
-  const _SectionCard({
+// ─── Survey steps ──────────────────────────────────────────────────────────
+
+class _NameStep extends StatelessWidget {
+  const _NameStep({
     required this.title,
-    required this.tooltip,
-    required this.child,
+    required this.subtitle,
+    required this.description,
   });
 
-  final String title;
-  final String tooltip;
-  final Widget child;
+  final TextEditingController title;
+  final TextEditingController subtitle;
+  final TextEditingController description;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: AppSpacing.md),
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(AppRadius.xl),
-        border: Border.all(color: AppColors.border),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 18,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
+    final texts = context.watch<LanguageService>();
+    return MerchantFormSection(
+      title: texts.text('merchant.stamps.section.name'),
+      tooltip: texts.text('merchant.stamps.section.nameTip'),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  title,
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
-                ),
-              ),
-              MerchantInfoTooltip(message: tooltip),
-            ],
-          ),
+          MerchantTextField(controller: title, label: texts.text('merchant.stamps.field.title')),
           const SizedBox(height: AppSpacing.md),
-          child,
+          MerchantTextField(controller: subtitle, label: texts.text('merchant.stamps.field.subtitle')),
+          const SizedBox(height: AppSpacing.md),
+          MerchantTextField(
+            controller: description,
+            label: texts.text('common.description'),
+            maxLines: 3,
+          ),
         ],
       ),
     );
   }
 }
+
+class _ConditionStep extends StatelessWidget {
+  const _ConditionStep({
+    required this.conditionType,
+    required this.minimumAmount,
+    required this.conditionText,
+    required this.items,
+    required this.requiredItemId,
+    required this.onConditionType,
+    required this.onItem,
+  });
+
+  final String conditionType;
+  final TextEditingController minimumAmount;
+  final TextEditingController conditionText;
+  final List<MerchantItemData> items;
+  final String requiredItemId;
+  final ValueChanged<String> onConditionType;
+  final ValueChanged<MerchantItemData?> onItem;
+
+  @override
+  Widget build(BuildContext context) {
+    final texts = context.watch<LanguageService>();
+    return MerchantFormSection(
+      title: texts.text('merchant.stamps.section.condition'),
+      tooltip: texts.text('merchant.stamps.section.conditionTip'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _ChipWrap(
+            options: [
+              _ChipOption(StampConditionType.visit, texts.text('merchant.stamps.condition.visit')),
+              _ChipOption(StampConditionType.minimumAmount, texts.text('merchant.stamps.condition.minimumAmount')),
+              _ChipOption(StampConditionType.item, texts.text('merchant.stamps.condition.item')),
+              _ChipOption(StampConditionType.custom, texts.text('merchant.stamps.condition.custom')),
+            ],
+            selected: conditionType,
+            onSelected: onConditionType,
+          ),
+          if (conditionType == StampConditionType.minimumAmount) ...[
+            const SizedBox(height: AppSpacing.md),
+            MerchantTextField(
+              controller: minimumAmount,
+              label: texts.text('merchant.stamps.field.minimumAmount'),
+              keyboardType: TextInputType.number,
+            ),
+          ],
+          if (conditionType == StampConditionType.item) ...[
+            const SizedBox(height: AppSpacing.md),
+            _ItemDropdown(
+              label: texts.text('merchant.stamps.field.requiredItem'),
+              items: items,
+              value: requiredItemId,
+              onChanged: onItem,
+            ),
+          ],
+          if (conditionType == StampConditionType.custom) ...[
+            const SizedBox(height: AppSpacing.md),
+            MerchantTextField(
+              controller: conditionText,
+              label: texts.text('merchant.stamps.field.conditionText'),
+              maxLines: 2,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _StampsStep extends StatelessWidget {
+  const _StampsStep({
+    required this.requiredStamps,
+    required this.onCount,
+    required this.onCustom,
+  });
+
+  final int requiredStamps;
+  final ValueChanged<int> onCount;
+  final VoidCallback onCustom;
+
+  @override
+  Widget build(BuildContext context) {
+    final texts = context.watch<LanguageService>();
+    const presets = [5, 8, 10, 12, 15];
+    return MerchantFormSection(
+      title: texts.text('merchant.stamps.section.stamps'),
+      tooltip: texts.text('merchant.stamps.section.stampsTip'),
+      child: _ChipWrap(
+        options: [
+          ...presets.map((count) => _ChipOption(count.toString(), count.toString())),
+          _ChipOption('custom', texts.text('merchant.stamps.custom')),
+        ],
+        selected: presets.contains(requiredStamps) ? requiredStamps.toString() : 'custom',
+        onSelected: (value) {
+          if (value == 'custom') {
+            onCustom();
+          } else {
+            onCount(int.parse(value));
+          }
+        },
+      ),
+    );
+  }
+}
+
+class _RewardStep extends StatelessWidget {
+  const _RewardStep({
+    required this.rewardType,
+    required this.items,
+    required this.rewardItemId,
+    required this.rewardTitle,
+    required this.rewardDescription,
+    required this.onRewardType,
+    required this.onItem,
+  });
+
+  final String rewardType;
+  final List<MerchantItemData> items;
+  final String rewardItemId;
+  final TextEditingController rewardTitle;
+  final TextEditingController rewardDescription;
+  final ValueChanged<String> onRewardType;
+  final ValueChanged<MerchantItemData?> onItem;
+
+  @override
+  Widget build(BuildContext context) {
+    final texts = context.watch<LanguageService>();
+    return MerchantFormSection(
+      title: texts.text('merchant.stamps.section.reward'),
+      tooltip: texts.text('merchant.stamps.section.rewardTip'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _ChipWrap(
+            options: [
+              _ChipOption(StampRewardType.custom, texts.text('merchant.stamps.reward.custom')),
+              _ChipOption(StampRewardType.item, texts.text('merchant.stamps.reward.item')),
+            ],
+            selected: rewardType,
+            onSelected: onRewardType,
+          ),
+          if (rewardType == StampRewardType.item) ...[
+            const SizedBox(height: AppSpacing.md),
+            _ItemDropdown(
+              label: texts.text('merchant.stamps.field.rewardItem'),
+              items: items,
+              value: rewardItemId,
+              onChanged: onItem,
+            ),
+          ],
+          const SizedBox(height: AppSpacing.md),
+          MerchantTextField(controller: rewardTitle, label: texts.text('merchant.stamps.field.rewardTitle')),
+          const SizedBox(height: AppSpacing.md),
+          MerchantTextField(
+            controller: rewardDescription,
+            label: texts.text('merchant.stamps.field.rewardDescription'),
+            maxLines: 3,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DesignStep extends StatelessWidget {
+  const _DesignStep({
+    required this.styleName,
+    required this.showAdvanced,
+    required this.gradientEnabled,
+    required this.backgroundColor,
+    required this.gradientColor,
+    required this.accentColor,
+    required this.textColor,
+    required this.stampShape,
+    required this.stampIconType,
+    required this.stampIconValue,
+    required this.stampContent,
+    required this.imageUrl,
+    required this.imagePlacement,
+    required this.isSaving,
+    required this.onStyle,
+    required this.onToggleAdvanced,
+    required this.onGradient,
+    required this.onBackgroundColor,
+    required this.onGradientColor,
+    required this.onAccentColor,
+    required this.onTextColor,
+    required this.onShape,
+    required this.onIconType,
+    required this.onIconValue,
+    required this.onPlacement,
+    required this.onRemoveImage,
+    required this.onUpload,
+  });
+
+  final String styleName;
+  final bool showAdvanced;
+  final bool gradientEnabled;
+  final String backgroundColor;
+  final String gradientColor;
+  final String accentColor;
+  final String textColor;
+  final String stampShape;
+  final String stampIconType;
+  final String stampIconValue;
+  final TextEditingController stampContent;
+  final String imageUrl;
+  final String imagePlacement;
+  final bool isSaving;
+  final ValueChanged<_StyleOption> onStyle;
+  final VoidCallback onToggleAdvanced;
+  final ValueChanged<bool> onGradient;
+  final ValueChanged<String> onBackgroundColor;
+  final ValueChanged<String> onGradientColor;
+  final ValueChanged<String> onAccentColor;
+  final ValueChanged<String> onTextColor;
+  final ValueChanged<String> onShape;
+  final ValueChanged<String> onIconType;
+  final ValueChanged<String> onIconValue;
+  final ValueChanged<String> onPlacement;
+  final VoidCallback onRemoveImage;
+  final VoidCallback onUpload;
+
+  @override
+  Widget build(BuildContext context) {
+    final texts = context.watch<LanguageService>();
+    return MerchantFormSection(
+      title: texts.text('merchant.stamps.section.design'),
+      tooltip: texts.text('merchant.stamps.section.designTip'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _StyleSelector(selected: styleName, onSelected: onStyle),
+          const SizedBox(height: AppSpacing.md),
+          OutlinedButton.icon(
+            onPressed: onToggleAdvanced,
+            icon: Icon(showAdvanced ? Icons.expand_less_rounded : Icons.tune_rounded),
+            label: Text(texts.text('merchant.stamps.advancedDesign')),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: MerchantPremiumColors.ink,
+              side: const BorderSide(color: MerchantPremiumColors.line),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+            ),
+          ),
+          if (showAdvanced) ...[
+            const SizedBox(height: AppSpacing.md),
+            SwitchListTile(
+              value: gradientEnabled,
+              onChanged: onGradient,
+              title: Text(
+                texts.text('merchant.stamps.gradient'),
+                style: const TextStyle(color: MerchantPremiumColors.ink, fontWeight: FontWeight.w800),
+              ),
+              activeThumbColor: MerchantPremiumColors.gold,
+              contentPadding: EdgeInsets.zero,
+            ),
+            _ColorSelector(
+              title: texts.text('merchant.stamps.backgroundColor'),
+              selected: backgroundColor,
+              colors: const ['#171A18', '#E9FAF3', '#FFF5E6', '#301824', '#1F3A52', '#F5F6F2'],
+              onSelected: onBackgroundColor,
+            ),
+            if (gradientEnabled)
+              _ColorSelector(
+                title: texts.text('merchant.stamps.gradientColor'),
+                selected: gradientColor,
+                colors: const ['#45C9A4', '#9CE8CF', '#FFD6E7', '#CFE4FF', '#FFF1A5', '#FFB36C'],
+                onSelected: onGradientColor,
+              ),
+            _ColorSelector(
+              title: texts.text('merchant.stamps.accentColor'),
+              selected: accentColor,
+              colors: const ['#9CE8CF', '#171A18', '#FEFFFC', '#FFD6E7', '#FFF1A5', '#CFE4FF'],
+              onSelected: onAccentColor,
+            ),
+            _ColorSelector(
+              title: texts.text('merchant.stamps.textColor'),
+              selected: textColor,
+              colors: const ['#FEFFFC', '#171A18', '#4A4A4A', '#FFF5E6'],
+              onSelected: onTextColor,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            _ChipWrap(
+              options: [
+                _ChipOption('circle', texts.text('merchant.stamps.shape.circle')),
+                _ChipOption('square', texts.text('merchant.stamps.shape.square')),
+                _ChipOption('softSquare', texts.text('merchant.stamps.shape.softSquare')),
+                _ChipOption('diamond', texts.text('merchant.stamps.shape.diamond')),
+              ],
+              selected: stampShape,
+              onSelected: onShape,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            _ChipWrap(
+              options: [
+                _ChipOption('icon', texts.text('merchant.stamps.content.icon')),
+                _ChipOption('char', texts.text('merchant.stamps.content.char')),
+              ],
+              selected: stampIconType,
+              onSelected: onIconType,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            if (stampIconType == 'icon')
+              _ChipWrap(
+                options: [
+                  _ChipOption('star', texts.text('merchant.stamps.icon.star')),
+                  _ChipOption('gift', texts.text('merchant.stamps.icon.gift')),
+                  _ChipOption('coffee', texts.text('merchant.stamps.icon.coffee')),
+                  _ChipOption('food', texts.text('merchant.stamps.icon.food')),
+                  _ChipOption('heart', texts.text('merchant.stamps.icon.heart')),
+                  _ChipOption('local', texts.text('merchant.stamps.icon.local')),
+                ],
+                selected: stampIconValue,
+                onSelected: onIconValue,
+              )
+            else
+              MerchantTextField(
+                controller: stampContent,
+                label: texts.text('merchant.stamps.field.stampContent'),
+              ),
+          ],
+          const SizedBox(height: AppSpacing.md),
+          if (imageUrl.isEmpty)
+            _ChipWrap(
+              options: [
+                _ChipOption('side', texts.text('merchant.stamps.image.side')),
+                _ChipOption('top', texts.text('merchant.stamps.image.top')),
+                _ChipOption('background', texts.text('merchant.stamps.image.background')),
+              ],
+              selected: imagePlacement,
+              onSelected: onPlacement,
+            )
+          else
+            _LockedImagePlacement(
+              label: texts
+                  .text('merchant.stamps.imageLocked')
+                  .replaceAll('{placement}', texts.text('merchant.stamps.image.$imagePlacement')),
+              onRemove: onRemoveImage,
+            ),
+          const SizedBox(height: AppSpacing.md),
+          OutlinedButton.icon(
+            onPressed: isSaving ? null : onUpload,
+            icon: const Icon(Icons.image_rounded),
+            label: Text(
+              imageUrl.isEmpty ? texts.text('common.uploadImage') : texts.text('common.replaceImage'),
+            ),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: MerchantPremiumColors.ink,
+              side: const BorderSide(color: MerchantPremiumColors.line),
+              minimumSize: const Size.fromHeight(50),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PublishStep extends StatelessWidget {
+  const _PublishStep({required this.card});
+
+  final StampCardModel card;
+
+  @override
+  Widget build(BuildContext context) {
+    final texts = context.watch<LanguageService>();
+    return MerchantFormSection(
+      title: texts.text('merchant.stamps.section.publish'),
+      tooltip: texts.text('merchant.stamps.section.publishTip'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          MerchantStampPreview(card: card),
+          const SizedBox(height: AppSpacing.md),
+          MerchantPremiumCard(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            color: MerchantPremiumColors.surfaceAlt,
+            radius: 22,
+            child: Row(
+              children: [
+                const MerchantPremiumIconBox(icon: Icons.info_outline_rounded, size: 42),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Text(
+                    kStampPublishInfo,
+                    style: const TextStyle(
+                      color: MerchantPremiumColors.mutedLight,
+                      fontWeight: FontWeight.w700,
+                      height: 1.3,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Navigation & step indicator ───────────────────────────────────────────
+
+class _StepDots extends StatelessWidget {
+  const _StepDots({required this.step, required this.total, required this.labels});
+
+  final int step;
+  final int total;
+  final List<String> labels;
+
+  @override
+  Widget build(BuildContext context) {
+    final texts = context.watch<LanguageService>();
+    return MerchantPremiumCard(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      color: MerchantPremiumColors.surfaceAlt,
+      radius: 24,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Schritt ${step + 1}/$total',
+            style: const TextStyle(
+              color: MerchantPremiumColors.muted,
+              fontSize: 12,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0.4,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            texts.text(labels[step]),
+            style: const TextStyle(
+              color: MerchantPremiumColors.ink,
+              fontSize: 22,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Row(
+            children: List.generate(total, (index) {
+              final active = index <= step;
+              return Expanded(
+                child: Container(
+                  height: 6,
+                  margin: EdgeInsets.only(right: index == total - 1 ? 0 : 6),
+                  decoration: BoxDecoration(
+                    color: active ? MerchantPremiumColors.gold : MerchantPremiumColors.line,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              );
+            }),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PreviewLauncher extends StatelessWidget {
+  const _PreviewLauncher({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return MerchantPremiumCard(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      radius: 24,
+      onTap: onTap,
+      child: Row(
+        children: [
+          const MerchantPremiumIconBox(icon: Icons.visibility_rounded, size: 44),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Vorschau ansehen',
+                  style: TextStyle(
+                    color: MerchantPremiumColors.ink,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 16,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                const Text(
+                  'Live-Vorschau deiner Stempelkarte öffnen',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: MerchantPremiumColors.muted,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Icon(Icons.open_in_full_rounded, color: MerchantPremiumColors.ink, size: 20),
+        ],
+      ),
+    );
+  }
+}
+
+class _NavigationRow extends StatelessWidget {
+  const _NavigationRow({
+    required this.step,
+    required this.isLast,
+    required this.isSaving,
+    required this.onBack,
+    required this.onNext,
+  });
+
+  final int step;
+  final bool isLast;
+  final bool isSaving;
+  final VoidCallback? onBack;
+  final VoidCallback onNext;
+
+  @override
+  Widget build(BuildContext context) {
+    final texts = context.watch<LanguageService>();
+    return Row(
+      children: [
+        if (onBack != null) ...[
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: isSaving ? null : onBack,
+              icon: const Icon(Icons.arrow_back_rounded),
+              label: Text(texts.text('common.back')),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: MerchantPremiumColors.ink,
+                minimumSize: const Size.fromHeight(56),
+                side: const BorderSide(color: MerchantPremiumColors.line),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+              ),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+        ],
+        Expanded(
+          flex: onBack == null ? 1 : 2,
+          child: MerchantPrimaryButton(
+            label: isLast ? texts.text('merchant.stamps.publish') : 'Weiter',
+            icon: isLast ? Icons.rocket_launch_rounded : Icons.arrow_forward_rounded,
+            isLoading: isSaving,
+            onPressed: onNext,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ─── Shared form widgets ───────────────────────────────────────────────────
 
 class _ChipOption {
   const _ChipOption(this.value, this.label);
@@ -684,12 +1122,15 @@ class _ChipWrap extends StatelessWidget {
               label: Text(option.label),
               selected: selected == option.value,
               onSelected: (_) => onSelected(option.value),
-              selectedColor: AppColors.black,
+              selectedColor: MerchantPremiumColors.gold,
+              backgroundColor: MerchantPremiumColors.surface,
               labelStyle: TextStyle(
-                color: selected == option.value ? AppColors.white : AppColors.black,
+                color: selected == option.value
+                    ? MerchantPremiumColors.base
+                    : MerchantPremiumColors.ink,
                 fontWeight: FontWeight.w800,
               ),
-              side: const BorderSide(color: AppColors.border),
+              side: const BorderSide(color: MerchantPremiumColors.line),
             ),
           )
           .toList(),
@@ -717,30 +1158,31 @@ class _ItemDropdown extends StatelessWidget {
       return Container(
         padding: const EdgeInsets.all(AppSpacing.md),
         decoration: BoxDecoration(
-          color: AppColors.gray50,
-          borderRadius: BorderRadius.circular(AppRadius.large),
-          border: Border.all(color: AppColors.border),
+          color: MerchantPremiumColors.surfaceAlt,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: MerchantPremiumColors.line),
         ),
         child: Text(
           texts.text('merchant.stamps.noItems'),
-          style: const TextStyle(color: AppColors.gray700, fontWeight: FontWeight.w700),
+          style: const TextStyle(color: MerchantPremiumColors.muted, fontWeight: FontWeight.w700),
         ),
       );
     }
     final selected = items.any((item) => item.id == value) ? value : items.first.id;
     return DropdownButtonFormField<String>(
-      value: selected,
-      decoration: InputDecoration(
-        labelText: label,
-        filled: true,
-        fillColor: AppColors.surface,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(AppRadius.large)),
-      ),
+      initialValue: selected,
+      dropdownColor: MerchantPremiumColors.surface,
+      iconEnabledColor: MerchantPremiumColors.ink,
+      style: const TextStyle(color: MerchantPremiumColors.ink, fontWeight: FontWeight.w800),
+      decoration: merchantPremiumInputDecoration(label: label),
       items: items
           .map(
             (item) => DropdownMenuItem<String>(
               value: item.id,
-              child: Text(item.name),
+              child: Text(
+                item.name,
+                style: const TextStyle(color: MerchantPremiumColors.ink, fontWeight: FontWeight.w800),
+              ),
             ),
           )
           .toList(),
@@ -809,7 +1251,7 @@ class _StyleSelector extends StatelessWidget {
                   color: _color(option.background),
                   borderRadius: BorderRadius.circular(24),
                   border: Border.all(
-                    color: selected == option.key ? AppColors.black : AppColors.border,
+                    color: selected == option.key ? MerchantPremiumColors.gold : MerchantPremiumColors.line,
                     width: selected == option.key ? 2 : 1,
                   ),
                 ),
@@ -844,7 +1286,7 @@ class _StyleSelector extends StatelessWidget {
   Color _color(String hex) {
     final clean = hex.replaceAll('#', '');
     final parsed = int.tryParse('FF$clean', radix: 16);
-    return parsed == null ? AppColors.black : Color(parsed);
+    return parsed == null ? MerchantPremiumColors.base : Color(parsed);
   }
 }
 
@@ -868,7 +1310,10 @@ class _ColorSelector extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
+          Text(
+            title,
+            style: const TextStyle(color: MerchantPremiumColors.ink, fontWeight: FontWeight.w900),
+          ),
           const SizedBox(height: 8),
           Wrap(
             spacing: 9,
@@ -885,7 +1330,7 @@ class _ColorSelector extends StatelessWidget {
                     color: _color(hex),
                     borderRadius: BorderRadius.circular(999),
                     border: Border.all(
-                      color: selectedColor ? AppColors.black : AppColors.border,
+                      color: selectedColor ? MerchantPremiumColors.gold : MerchantPremiumColors.line,
                       width: selectedColor ? 3 : 1,
                     ),
                   ),
@@ -901,7 +1346,7 @@ class _ColorSelector extends StatelessWidget {
   Color _color(String hex) {
     final clean = hex.replaceAll('#', '');
     final parsed = int.tryParse('FF$clean', radix: 16);
-    return parsed == null ? AppColors.black : Color(parsed);
+    return parsed == null ? MerchantPremiumColors.base : Color(parsed);
   }
 }
 
@@ -920,16 +1365,19 @@ class _LockedImagePlacement extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: AppColors.gray50,
-        borderRadius: BorderRadius.circular(AppRadius.large),
-        border: Border.all(color: AppColors.border),
+        color: MerchantPremiumColors.surfaceAlt,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: MerchantPremiumColors.line),
       ),
       child: Row(
         children: [
-          const Icon(Icons.lock_outline_rounded, size: 19),
+          const Icon(Icons.lock_outline_rounded, size: 19, color: MerchantPremiumColors.ink),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
-            child: Text(label, style: const TextStyle(fontWeight: FontWeight.w800)),
+            child: Text(
+              label,
+              style: const TextStyle(color: MerchantPremiumColors.ink, fontWeight: FontWeight.w800),
+            ),
           ),
           TextButton(
             onPressed: onRemove,
@@ -940,6 +1388,11 @@ class _LockedImagePlacement extends StatelessWidget {
     );
   }
 }
+
+// ─── Local, credit-free copy ───────────────────────────────────────────────
+
+const String kStampPublishInfo =
+    'Du kannst mehrere aktive Karten gleichzeitig nutzen. Änderungen an aktiven Karten bitte klar mit deinem Team abstimmen.';
 
 UploadImageType _uploadTypeForPlacement(String placement) {
   return switch (placement) {
@@ -956,7 +1409,7 @@ Future<int?> _askCustomStampCount(BuildContext context, int current) async {
     context: context,
     showDragHandle: true,
     isScrollControlled: true,
-    backgroundColor: AppColors.surface,
+    backgroundColor: MerchantPremiumColors.surface,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
     ),
@@ -974,7 +1427,11 @@ Future<int?> _askCustomStampCount(BuildContext context, int current) async {
           Text(
             texts.text('merchant.stamps.customCount'),
             textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900),
+            style: const TextStyle(
+              color: MerchantPremiumColors.ink,
+              fontSize: 24,
+              fontWeight: FontWeight.w900,
+            ),
           ),
           const SizedBox(height: AppSpacing.md),
           MerchantTextField(
@@ -987,7 +1444,7 @@ Future<int?> _askCustomStampCount(BuildContext context, int current) async {
             label: texts.text('common.save'),
             onPressed: () {
               final value = int.tryParse(controller.text.trim());
-              Navigator.of(sheetContext).pop(value == null ? null : value.clamp(2, 30).toInt());
+              Navigator.of(sheetContext).pop(value?.clamp(2, 30).toInt());
             },
           ),
         ],
@@ -1003,7 +1460,7 @@ Future<bool?> _showPublishSheet(BuildContext context) {
   return showModalBottomSheet<bool>(
     context: context,
     showDragHandle: true,
-    backgroundColor: AppColors.surface,
+    backgroundColor: MerchantPremiumColors.surface,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
     ),
@@ -1018,14 +1475,18 @@ Future<bool?> _showPublishSheet(BuildContext context) {
             Text(
               texts.text('merchant.stamps.publishTitle'),
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900),
+              style: const TextStyle(
+                color: MerchantPremiumColors.ink,
+                fontSize: 24,
+                fontWeight: FontWeight.w900,
+              ),
             ),
             const SizedBox(height: AppSpacing.sm),
             Text(
-              texts.text('merchant.stamps.publishMessage'),
+              kStampPublishConfirmMessage,
               textAlign: TextAlign.center,
               style: const TextStyle(
-                color: AppColors.gray700,
+                color: MerchantPremiumColors.muted,
                 fontWeight: FontWeight.w700,
                 height: 1.35,
               ),
@@ -1046,6 +1507,9 @@ Future<bool?> _showPublishSheet(BuildContext context) {
     ),
   );
 }
+
+const String kStampPublishConfirmMessage =
+    'Nach der Bestätigung wird die Karte sofort für deine Kundinnen und Kunden aktiv.';
 
 num? _parseAmount(String value) {
   final clean = value.trim().replaceAll(',', '.');

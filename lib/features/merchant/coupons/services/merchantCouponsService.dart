@@ -54,11 +54,9 @@ class MerchantCouponsService {
       merchantId: merchantId,
       isActive: coupon.status == CouponStatus.active,
       isArchived: coupon.status == CouponStatus.archived,
-      creditCostPerWeek: 1,
     );
     final data = prepared.toMap()
-      ..['updatedAt'] = FieldValue.serverTimestamp()
-      ..['creditCostPerWeek'] = 1;
+      ..['updatedAt'] = FieldValue.serverTimestamp();
     if (isNew) data['createdAt'] = FieldValue.serverTimestamp();
     await firestoreService.setDocument(
       FirebasePaths.merchantCoupon(merchantId, couponId),
@@ -74,16 +72,12 @@ class MerchantCouponsService {
             .collection(FirebasePaths.merchantCoupons(merchantId))
             .doc()
             .id;
-    final existing = coupon.id.isEmpty ? null : await loadCoupon(couponId);
-    final wasAlreadyActive =
-        existing?.status == CouponStatus.active && existing?.isActive == true;
     final prepared = coupon.copyWith(
       id: couponId,
       merchantId: merchantId,
       status: CouponStatus.active,
       isActive: true,
       isArchived: false,
-      creditCostPerWeek: 1,
     );
     final data = prepared.toMap()
       ..['updatedAt'] = FieldValue.serverTimestamp()
@@ -99,28 +93,6 @@ class MerchantCouponsService {
       data,
       SetOptions(merge: true),
     );
-    if (!wasAlreadyActive) {
-      final eventId = firestoreService.collection(FirebasePaths.billingEvents).doc().id;
-      final periodStart = DateTime.now();
-      final periodEnd = periodStart.add(const Duration(days: 7));
-      batch.set(
-        firestoreService.document(FirebasePaths.billingEvent(eventId)),
-        {
-          'eventId': eventId,
-          'merchantId': merchantId,
-          'featureType': 'coupons',
-          'actionType': 'couponActivated',
-          'targetId': couponId,
-          'creditAmount': 1,
-          'billingType': 'weekly',
-          'status': 'committed',
-          'periodStart': Timestamp.fromDate(periodStart),
-          'periodEnd': Timestamp.fromDate(periodEnd),
-          'createdAt': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
-      );
-    }
     await batch.commit();
     return couponId;
   }

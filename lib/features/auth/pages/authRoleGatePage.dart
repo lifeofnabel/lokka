@@ -7,8 +7,6 @@ import '../../../core/services/firestoreService.dart';
 import '../../../core/services/languageService.dart';
 import '../../../core/services/sessionService.dart';
 import '../../../core/theme/appColors.dart';
-import '../../../core/theme/appRadius.dart';
-import '../../../core/theme/appSpacing.dart';
 
 class AuthRoleGatePage extends StatefulWidget {
   const AuthRoleGatePage({super.key});
@@ -38,12 +36,14 @@ class _AuthRoleGatePageState extends State<AuthRoleGatePage> {
       }
 
       final profile = await firestore.getUserProfile(user.uid);
+      if (!mounted) return;
       if (profile == null) {
         context.go('/auth/chooseRole');
         return;
       }
 
       await session.markLastSeenIfNeeded();
+      if (!mounted) return;
 
       if (profile['role'] == 'user') {
         context.go('/user/discover');
@@ -52,6 +52,7 @@ class _AuthRoleGatePageState extends State<AuthRoleGatePage> {
 
       if (profile['role'] == 'merchant') {
         final merchant = await firestore.getMerchantProfile(user.uid);
+        if (!mounted) return;
         final status = merchant?['verificationStatus'] as String? ?? 'pending';
         if (status == 'approved') {
           context.go('/merchant/dashboard');
@@ -70,28 +71,35 @@ class _AuthRoleGatePageState extends State<AuthRoleGatePage> {
   @override
   Widget build(BuildContext context) {
     final texts = context.watch<LanguageService>();
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColors.surfaceBg,
       body: Center(
-        child: Container(
-          margin: const EdgeInsets.all(AppSpacing.lg),
-          padding: const EdgeInsets.all(AppSpacing.lg),
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(AppRadius.large),
-            border: Border.all(color: AppColors.border),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const CircularProgressIndicator(),
-              const SizedBox(height: 16),
-              Text(texts.text('auth.roleGate.title')),
-              if (_error != null) ...[
-                const SizedBox(height: 12),
-                Text(_error!, textAlign: TextAlign.center),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 360),
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const CircularProgressIndicator(),
+                const SizedBox(height: 20),
+                Text(
+                  texts.text('auth.roleGate.title'),
+                  textAlign: TextAlign.center,
+                  style: tt.titleMedium?.copyWith(color: cs.onSurfaceVariant),
+                ),
+                if (_error != null) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    _error!,
+                    textAlign: TextAlign.center,
+                    style: tt.bodySmall?.copyWith(color: cs.error),
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),

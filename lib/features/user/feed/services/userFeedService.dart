@@ -22,8 +22,8 @@ class UserFeedService {
         .collection(FirebasePaths.feed)
         .orderBy('publishedAt', descending: true)
         .snapshots()
-        .map((snap) {
-      var posts = snap.docs
+        .asyncMap((snap) async {
+      final rawPosts = snap.docs
           .where((doc) {
             final d = doc.data();
             return d['isActive'] == true &&
@@ -31,6 +31,12 @@ class UserFeedService {
                 d['isPrivate'] != true;
           })
           .map((doc) => FeedPostModel.fromMap({...doc.data(), 'postId': doc.id}))
+          .toList();
+      final subscribedMerchantIds = rawPosts.any((post) => post.isForRegulars)
+          ? await _walletMerchantIds()
+          : <String>{};
+      var posts = rawPosts
+          .where((post) => _visibleForAudience(post, subscribedMerchantIds))
           .toList();
 
       if (area != null && area.isNotEmpty) {
@@ -71,7 +77,10 @@ class UserFeedService {
         data['isPrivate'] == true) {
       return null;
     }
-    return FeedPostModel.fromMap({...data, 'postId': doc.id});
+    final post = FeedPostModel.fromMap({...data, 'postId': doc.id});
+    final subscribedMerchantIds =
+        post.isForRegulars ? await _walletMerchantIds() : <String>{};
+    return _visibleForAudience(post, subscribedMerchantIds) ? post : null;
   }
 
   Future<void> toggleLike(String postId, bool currentlyLiked) async {
@@ -104,23 +113,35 @@ class UserFeedService {
     required String merchantId,
     required double rating,
     required String text,
+    String imageUrl = '',
   }) async {
     final uid = authService.currentUser?.uid;
     if (uid == null) throw StateError('Bitte einloggen');
     final user = authService.currentUser!;
-    final ref = firestoreService.collection(FirebasePaths.feedReviews(postId)).doc();
-    await firestoreService.setDocument(FirebasePaths.feedReview(postId, ref.id), {
-      'reviewId': ref.id,
+    // Doc-ID = uid ⇒ eine editierbare Rezension pro Nutzer je Beitrag.
+    await firestoreService.setDocument(FirebasePaths.feedReview(postId, uid), {
+      'reviewId': uid,
       'postId': postId,
       'merchantId': merchantId,
       'userId': uid,
       'userName': user.displayName ?? user.email ?? 'Anonym',
       'rating': rating,
       'text': text.trim(),
-      'imageUrl': '',
+      'imageUrl': imageUrl,
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     });
+  }
+
+  Future<ReviewModel?> myReview(String postId) async {
+    final uid = authService.currentUser?.uid;
+    if (uid == null) return null;
+    final doc = await firestoreService
+        .document(FirebasePaths.feedReview(postId, uid))
+        .get();
+    final data = doc.data();
+    if (!doc.exists || data == null) return null;
+    return ReviewModel.fromMap({...data, 'reviewId': doc.id});
   }
 
   Future<double?> averageRatingFor(String postId) async {
@@ -149,5 +170,63 @@ class UserFeedService {
       FirebasePaths.feedPost(postId),
       {'viewsCount': FieldValue.increment(1)},
     );
+  }
+
+  Future<void> incrementClicks(String postId) async {
+    await firestoreService.updateDocument(
+      FirebasePaths.feedPost(postId),
+      {'clicksCount': FieldValue.increment(1)},
+    );
+  }
+
+  /// Lädt gelikte Beiträge in 10er-Blöcken (whereIn) statt N Einzelabfragen.
+  /// Reihenfolge entspricht der likedAt-Sortierung (neueste zuerst).
+  Future<List<FeedPostModel>> fetchLikedPosts() async {
+    final uid = authService.currentUser?.uid;
+    if (uid == null) return [];
+
+    final likedSnap = await firestoreService
+        .collection(FirebasePaths.userLikedPosts(uid))
+        .orderBy('likedAt', descending: true)
+        .get();
+    final orderedIds = likedSnap.docs.map((doc) => doc.id).toList();
+    if (orderedIds.isEmpty) return [];
+
+    final byId = <String, FeedPostModel>{};
+    for (var i = 0; i < orderedIds.length; i += 10) {
+      final end = (i + 10 < orderedIds.length) ? i + 10 : orderedIds.length;
+      final chunk = orderedIds.sublist(i, end);
+      final snap = await firestoreService
+          .collection(FirebasePaths.feed)
+          .where(FieldPath.documentId, whereIn: chunk)
+          .get();
+      for (final doc in snap.docs) {
+        byId[doc.id] = FeedPostModel.fromMap({...doc.data(), 'postId': doc.id});
+      }
+    }
+
+    return [
+      for (final id in orderedIds)
+        if (byId[id] != null) byId[id]!,
+    ];
+  }
+
+  Future<Set<String>> _walletMerchantIds() async {
+    final uid = authService.currentUser?.uid;
+    if (uid == null) return <String>{};
+    final snapshot =
+        await firestoreService.collection(FirebasePaths.userWalletCards(uid)).get();
+    return snapshot.docs
+        .map((doc) => (doc.data()['merchantId'] as String?) ?? doc.id)
+        .where((merchantId) => merchantId.trim().isNotEmpty)
+        .toSet();
+  }
+
+  bool _visibleForAudience(
+    FeedPostModel post,
+    Set<String> subscribedMerchantIds,
+  ) {
+    if (!post.isForRegulars) return true;
+    return subscribedMerchantIds.contains(post.merchantId);
   }
 }
