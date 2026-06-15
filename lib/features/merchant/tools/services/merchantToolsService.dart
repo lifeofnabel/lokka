@@ -303,7 +303,10 @@ class MerchantToolsService {
       fullAddress: fullAddress,
       shopTypes: shopTypes,
     );
-    merchantData['isPublic'] = profileComplete;
+    // Sichtbarkeit respektiert das bewusste Opt-out des Merchants (#44) statt
+    // bei Vollständigkeit zwangsweise auf public zu kippen.
+    final isPublic = profileComplete && values['visibilityOptOut'] != true;
+    merchantData['isPublic'] = isPublic;
     merchantData['isActive'] = profileComplete;
     final publicData = {
       'merchantId': merchantId,
@@ -334,8 +337,9 @@ class MerchantToolsService {
       'galleryImages': values['galleryImages'] ?? const <String>[],
       'socialLinks': values['socialLinks'] ?? const <String, String>{},
       'openingHours': values['openingHours'],
-      'isPublic': profileComplete,
+      'isPublic': isPublic,
       'isActive': profileComplete,
+      'visibilityOptOut': values['visibilityOptOut'] == true,
       'updatedAt': FieldValue.serverTimestamp(),
     };
 

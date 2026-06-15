@@ -60,6 +60,7 @@ class _MerchantStampEditViewState extends State<_MerchantStampEditView> {
   int _step = 0;
   String? _hydratedId;
   bool _isHydrating = false;
+  MerchantStampsProvider? _stampsProvider;
   bool _showAdvancedDesign = false;
   int _requiredStamps = 10;
   String _conditionType = StampConditionType.visit;
@@ -95,10 +96,16 @@ class _MerchantStampEditViewState extends State<_MerchantStampEditView> {
     ]) {
       controller.addListener(_refreshPreview);
     }
+    // Hydration NICHT in build() (#45): einmalig, sobald der Provider die Karte
+    // geladen hat – kein State-Mutieren während des Builds.
+    _stampsProvider = context.read<MerchantStampsProvider>()
+      ..addListener(_hydrateFromProvider);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _hydrateFromProvider());
   }
 
   @override
   void dispose() {
+    _stampsProvider?.removeListener(_hydrateFromProvider);
     _title.dispose();
     _subtitle.dispose();
     _description.dispose();
@@ -112,6 +119,17 @@ class _MerchantStampEditViewState extends State<_MerchantStampEditView> {
 
   void _refreshPreview() {
     if (!_isHydrating && mounted) setState(() {});
+  }
+
+  // Hydriert Controller/Felder aus dem geladenen Provider-Stand (#45) – einmal
+  // pro Karte (danach via _hydratedId idempotent); Rebuild nach frischer
+  // Hydration, damit die befüllten Felder erscheinen.
+  void _hydrateFromProvider() {
+    final provider = _stampsProvider;
+    if (!mounted || provider == null || provider.isLoading) return;
+    final card = provider.editingCard ??
+        StampCardModel.empty(merchantId: provider.merchantId);
+    if (_hydrate(card) && mounted) setState(() {});
   }
 
   @override
@@ -141,7 +159,6 @@ class _MerchantStampEditViewState extends State<_MerchantStampEditView> {
     }
 
     final card = provider.editingCard ?? StampCardModel.empty(merchantId: provider.merchantId);
-    _hydrate(card);
 
     return MerchantToolScaffold(
       title: widget.stampCardId == null
@@ -343,9 +360,9 @@ class _MerchantStampEditViewState extends State<_MerchantStampEditView> {
     );
   }
 
-  void _hydrate(StampCardModel card) {
+  bool _hydrate(StampCardModel card) {
     final key = card.id.isEmpty ? 'new' : card.id;
-    if (_hydratedId == key) return;
+    if (_hydratedId == key) return false;
     _isHydrating = true;
     _hydratedId = key;
     _title.text = card.title;
@@ -375,6 +392,7 @@ class _MerchantStampEditViewState extends State<_MerchantStampEditView> {
     _imageUrl = card.imageUrl;
     _imagePlacement = card.imagePlacement;
     _isHydrating = false;
+    return true;
   }
 
   StampCardModel _cardFromForm(
@@ -382,8 +400,10 @@ class _MerchantStampEditViewState extends State<_MerchantStampEditView> {
     StampCardModel existing, {
     String? forcedStatus,
   }) {
-    final status = forcedStatus ??
-        (existing.status == StampCardStatus.active ? StampCardStatus.active : StampCardStatus.draft);
+    // Bestehenden Status erhalten (#46): nur _publish erzwingt 'active'. Vorher
+    // wurde paused/archived beim Entwurf-Speichern still zu 'draft'. Neue Karten
+    // sind via StampCardModel.empty() ohnehin 'draft'.
+    final status = forcedStatus ?? existing.status;
     final conditionItem = _findItem(provider.items, _requiredItemId);
     final rewardItem = _findItem(provider.items, _rewardItemId);
     return StampCardModel(
@@ -416,7 +436,7 @@ class _MerchantStampEditViewState extends State<_MerchantStampEditView> {
           : _stampIconValue,
       imageUrl: _imageUrl,
       imagePlacement: _imagePlacement,
-      claimLimits: const {'perUser': null, 'perDay': null},
+      claimLimits: existing.claimLimits,
       status: status,
       isActive: status == StampCardStatus.active,
       isArchived: status == StampCardStatus.archived,

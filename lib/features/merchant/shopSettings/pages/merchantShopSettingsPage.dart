@@ -208,8 +208,9 @@ class _ShopFormState extends State<_ShopForm> {
   /// Der gespeicherte Wert wird beim Speichern unverändert durchgereicht.
   String? selectedArea;
   bool phoneVerified = false;
-  bool isPublic = false;
-  bool isActive = false;
+  // Bewusste Sichtbarkeits-Wahl des Merchants (#44): nicht mehr aus
+  // Vollständigkeit abgeleitet. Default: sichtbar.
+  bool _publicVisible = true;
   bool _filled = false;
   bool _hydrating = false;
 
@@ -619,6 +620,33 @@ class _ShopFormState extends State<_ShopForm> {
             ),
           ],
         ),
+        _SectionCard(
+          title: texts.text('merchant.shop.visibility'),
+          children: [
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              value: _publicVisible,
+              onChanged: (value) {
+                setState(() => _publicVisible = value);
+                _markDirty();
+              },
+              title: Text(
+                texts.text('merchant.shop.visibilityToggle'),
+                style: const TextStyle(
+                  color: MerchantPremiumColors.ink,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              subtitle: Text(
+                texts.text('merchant.shop.visibilityHint'),
+                style: const TextStyle(
+                  color: MerchantPremiumColors.muted,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
         const _FeaturesNavTile(),
         // Statischer Speichern-Button entfernt: Speichern erfolgt jetzt über
         // die schwebende Leiste am unteren Rand (nur bei Änderungen sichtbar).
@@ -681,8 +709,8 @@ class _ShopFormState extends State<_ShopForm> {
 
     selectedArea = data['area']?.toString().isNotEmpty == true ? data['area'].toString() : null;
     phoneVerified = data['phoneVerified'] as bool? ?? false;
-    isPublic = data['isPublic'] as bool? ?? false;
-    isActive = data['isActive'] as bool? ?? false;
+    // Opt-out respektieren (#44); ältere Profile ohne das Feld bleiben sichtbar.
+    _publicVisible = !(data['visibilityOptOut'] as bool? ?? false);
 
     final rawTypes = data['shopTypes'];
     if (rawTypes is Iterable) {
@@ -1229,8 +1257,9 @@ class _ShopFormState extends State<_ShopForm> {
             'close': (openingHours[day.key]?.isNotEmpty ?? false) ? openingHours[day.key]!.first.close : '',
           },
       },
-      'isPublic': isComplete,
-      'isActive': isComplete,
+      // Sichtbarkeit als bewusste Wahl (#44): nur das Opt-out durchreichen –
+      // isPublic/isActive berechnet der Service (eine Quelle der Wahrheit).
+      'visibilityOptOut': !_publicVisible,
     });
     // Nach erfolgreichem Speichern verschwindet die schwebende Leiste wieder.
     if (provider.error == null) {
