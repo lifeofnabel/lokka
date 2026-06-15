@@ -59,3 +59,9 @@ analyze_out.txt
 scripts/*.zip
 scripts/*.ics
 scripts/*.png
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+!.env.example
