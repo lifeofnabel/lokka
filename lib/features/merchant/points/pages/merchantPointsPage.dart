@@ -56,6 +56,17 @@ class _MerchantPointsViewState extends State<_MerchantPointsView> {
         .where((reward) => !reward.isArchivedReward)
         .toList()
       ..sort((a, b) => a.requiredPoints.compareTo(b.requiredPoints));
+    // Belohnungen nach Typ trennen (#32): Geschenke (custom/discount) gehören in
+    // den Monatsmodus, Shop-Artikel (item) in den Shop-Modus – sonst vermischen
+    // sich Geschenke-Leiter und Shop-Grid.
+    final giftRewards = visibleRewards
+        .where((r) => r.rewardType != PointsRewardType.item)
+        .toList();
+    final shopRewards = visibleRewards
+        .where((r) => r.rewardType == PointsRewardType.item)
+        .toList();
+    final modeRewards =
+        mode == PointsProgramMode.monthlyRewards ? giftRewards : shopRewards;
 
     return MerchantToolScaffold(
       title: texts.text('merchant.points.title'),
@@ -75,7 +86,7 @@ class _MerchantPointsViewState extends State<_MerchantPointsView> {
             // ── 1 · Status auf einen Blick ──────────────────────────────────
             _StatusHero(
               system: system,
-              activeRewards: visibleRewards.where((r) => r.isLive).length,
+              activeRewards: modeRewards.where((r) => r.isLive).length,
             ),
             const SizedBox(height: AppSpacing.xl),
 
@@ -111,7 +122,7 @@ class _MerchantPointsViewState extends State<_MerchantPointsView> {
             // ── 4 · Inhalte je nach System ──────────────────────────────────
             if (mode == PointsProgramMode.monthlyRewards)
               _MonthlySection(
-                rewards: visibleRewards,
+                rewards: giftRewards,
                 onEditReward: (reward) => context
                     .push('/merchant/points/rewards/edit/${reward.id}'),
                 onAddReward: () =>
@@ -119,7 +130,7 @@ class _MerchantPointsViewState extends State<_MerchantPointsView> {
               )
             else
               _ShopSection(
-                rewards: visibleRewards,
+                rewards: shopRewards,
                 onEditReward: (reward) =>
                     _editShopPrice(context, provider, reward),
                 onAddArticle: () => _importArticle(context, provider, system),
