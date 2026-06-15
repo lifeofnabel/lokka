@@ -1,0 +1,7 @@
+name = "lokka"
+main = "aiSuggestionWorker.js"
+compatibility_date = "2026-06-02"
+account_id = "4c680ab301eeacb312044fdd7c800ed9"
+
+[vars]
+OPENAI_MODEL = "gpt-4.1-mini"

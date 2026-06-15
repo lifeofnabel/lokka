@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import '../../../../core/services/authService.dart';
 import '../../../../core/services/firestoreService.dart';
 import '../../../../core/services/languageService.dart';
-import '../../../../core/theme/appColors.dart';
 import '../../../../core/theme/appRadius.dart';
 import '../../../../core/theme/appSpacing.dart';
 import '../../shared/widgets/merchantPremiumUi.dart';
@@ -178,7 +177,7 @@ Future<void> _openTagSheet(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
-    backgroundColor: AppColors.background,
+    backgroundColor: MerchantPremiumColors.baseElevated,
     shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(32))),
     builder: (sheetContext) => Padding(
       padding: EdgeInsets.fromLTRB(20, 4, 20, MediaQuery.of(sheetContext).viewInsets.bottom + 24),
@@ -196,7 +195,12 @@ Future<void> _openTagSheet(
             label: texts.text('common.save'),
             isLoading: provider.isSaving,
             onPressed: () async {
-              if (name.text.trim().isEmpty || code.text.trim().isEmpty) return;
+              if (name.text.trim().isEmpty || code.text.trim().isEmpty) {
+                ScaffoldMessenger.of(sheetContext).showSnackBar(
+                  SnackBar(content: Text(texts.text('merchant.itemTags.error'))),
+                );
+                return;
+              }
               await provider.saveTag(
                 id: tag?.id,
                 type: type,

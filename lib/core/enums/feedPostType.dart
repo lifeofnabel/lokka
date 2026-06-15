@@ -1,0 +1,18 @@
+enum FeedPostType {
+  offer,
+  onePlusOneFree,
+  buyOneGetOneFree,
+  twoPlusOneFree,
+  buyTwoGetOneFree,
+  categoryDiscountPercent,
+  categoryDiscountFixed,
+  happyHour,
+  quickSell,
+  rescueMe,
+  news,
+  newProduct,
+  info,
+  communityEvent,
+  hiring,
+  sponsoredSpot,
+}

@@ -1,0 +1,36 @@
+{
+  "title": "Allgemeine Geschäftsbedingungen",
+  "shortLabel": "AGB",
+  "updated": "2026-06-12",
+  "intro": "Diese Bedingungen regeln die Nutzung der Lokka-App (ein Produkt von Jajehelp). Bitte ersetze diesen Platzhaltertext vor dem Release durch die finale, rechtlich geprüfte Fassung.",
+  "sections": [
+    {
+      "heading": "1. Geltungsbereich",
+      "body": "Diese Allgemeinen Geschäftsbedingungen gelten für die Nutzung der Lokka-Anwendung und aller damit verbundenen Dienste durch registrierte Nutzerinnen und Nutzer."
+    },
+    {
+      "heading": "2. Registrierung & Konto",
+      "body": "Für die Nutzung ist ein kostenloses Konto erforderlich. Die bei der Registrierung angegebenen Daten müssen wahrheitsgemäß und vollständig sein. Das Konto ist nicht übertragbar."
+    },
+    {
+      "heading": "3. Leistungen",
+      "body": "Lokka vermittelt lokale Angebote, digitale Stempelkarten, Punkte- und Prämienprogramme teilnehmender Partner. Lokka ist nicht Vertragspartner der zwischen Nutzer und Partner zustande kommenden Geschäfte."
+    },
+    {
+      "heading": "4. Pflichten der Nutzer",
+      "body": "Nutzer verpflichten sich, die App nicht missbräuchlich zu verwenden, keine rechtswidrigen Inhalte zu melden oder zu verbreiten und Zugangsdaten vertraulich zu behandeln."
+    },
+    {
+      "heading": "5. Haftung",
+      "body": "Lokka haftet nur für Schäden, die auf vorsätzlichem oder grob fahrlässigem Verhalten beruhen, soweit gesetzlich zulässig. Für Angebote und Leistungen der Partner wird keine Gewähr übernommen."
+    },
+    {
+      "heading": "6. Kündigung",
+      "body": "Nutzer können ihr Konto jederzeit löschen. Lokka kann Konten bei Verstößen gegen diese Bedingungen sperren oder löschen."
+    },
+    {
+      "heading": "7. Änderungen",
+      "body": "Diese Bedingungen können bei Bedarf angepasst werden. Über wesentliche Änderungen werden Nutzer rechtzeitig informiert."
+    }
+  ]
+}

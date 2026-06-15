@@ -1,0 +1,36 @@
+{
+  "title": "Datenschutzhinweise",
+  "shortLabel": "Datenschutz",
+  "updated": "2026-06-12",
+  "intro": "Diese Hinweise erklären, wie Lokka (ein Produkt von Jajehelp) personenbezogene Daten verarbeitet. Bitte ersetze diesen Platzhaltertext vor dem Release durch die finale, rechtlich geprüfte Datenschutzerklärung.",
+  "sections": [
+    {
+      "heading": "1. Verantwortlicher",
+      "body": "Verantwortlich für die Datenverarbeitung ist Jajehelp als Betreiber der Lokka-App. Kontaktdaten werden vor dem Release ergänzt."
+    },
+    {
+      "heading": "2. Welche Daten wir verarbeiten",
+      "body": "Bei der Registrierung: Name, E-Mail-Adresse und optional Telefonnummer. Bei der Nutzung: Interessen, Favoriten, gesammelte Stempel/Punkte, Bewertungen sowie technische Daten zur Bereitstellung des Dienstes."
+    },
+    {
+      "heading": "3. Zwecke der Verarbeitung",
+      "body": "Die Daten dienen der Bereitstellung der App, der personalisierten Anzeige lokaler Angebote, der Verwaltung der Wallet sowie der Verbesserung des Dienstes."
+    },
+    {
+      "heading": "4. Standortdaten",
+      "body": "Mit deiner Einwilligung verwendet Lokka deinen ungefähren Standort, um Angebote in deiner Nähe anzuzeigen. Die Einwilligung kann jederzeit in den Geräteeinstellungen widerrufen werden."
+    },
+    {
+      "heading": "5. Weitergabe an Dritte",
+      "body": "Eine Weitergabe erfolgt nur, soweit zur Erbringung des Dienstes erforderlich (z. B. an teilnehmende Partner bei Einlösung) oder gesetzlich vorgeschrieben."
+    },
+    {
+      "heading": "6. Deine Rechte",
+      "body": "Du hast das Recht auf Auskunft, Berichtigung, Löschung, Einschränkung und Datenübertragbarkeit. Dein Konto und deine Daten kannst du jederzeit in der App löschen."
+    },
+    {
+      "heading": "7. Speicherdauer",
+      "body": "Daten werden nur so lange gespeichert, wie es für die genannten Zwecke erforderlich ist oder gesetzliche Aufbewahrungspflichten bestehen."
+    }
+  ]
+}

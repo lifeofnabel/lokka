@@ -1,0 +1,7 @@
+Postal code data for Frankfurt/Rhein-Main region.
+Source: GeoNames (https://www.geonames.org)
+License: Creative Commons Attribution 4.0 (CC BY 4.0)
+https://creativecommons.org/licenses/by/4.0/
+
+Data curated for offline use within the Lokka app.
+Coverage: Frankfurt am Main and Rhein-Main metropolitan area (Hessen).

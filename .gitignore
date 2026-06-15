@@ -48,3 +48,14 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Node / Firebase tooling
+node_modules/
+.firebase/
+
+# Scratch / lokale Artefakte (nicht versionieren)
+analyze_out.txt
+/Y/
+scripts/*.zip
+scripts/*.ics
+scripts/*.png

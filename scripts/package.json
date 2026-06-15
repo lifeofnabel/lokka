@@ -1,0 +1,13 @@
+{
+  "name": "lokka-scripts",
+  "version": "1.0.0",
+  "description": "Firebase Admin scripts for Lokka",
+  "private": true,
+  "scripts": {
+    "migrate": "node migrateMerchantsToPublic.js",
+    "seed": "node seedLokkaDemo.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.0.0"
+  }
+}

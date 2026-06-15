@@ -1,0 +1,221 @@
+rules_version = '2';
+
+// ============================================================================
+//  LOKKA – Firestore Security Rules (PRODUKTIV / gehärtet)
+// ----------------------------------------------------------------------------
+//  Ersetzt die offene Firebase-Default-Testregel. Passend zu
+//  lib/core/constants/firebasePaths.dart. Konvention: merchantId == Auth-UID.
+//  Quelle: Merchant-Audit 2026-06-14 (Issues #2 Rules offen, #34 interne
+//  Collections). Vor größeren Änderungen im Emulator gegen die echten
+//  Lese-/Schreibpfade testen: firebase emulators:start --only firestore
+// ============================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---- Helpers ----------------------------------------------------------
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function isUser(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+    // merchantId entspricht der Auth-UID des Merchants.
+    function isMerchantOwner(mid) {
+      return isUser(mid);
+    }
+    function existing() {
+      return resource.data;
+    }
+    function incoming() {
+      return request.resource.data;
+    }
+    // Erlaubt nur Änderungen an Zähler-/Timestamp-Feldern (Likes/Views/Klicks).
+    function onlyCounters() {
+      return incoming().diff(existing()).affectedKeys()
+        .hasOnly(['likesCount', 'viewsCount', 'opensCount', 'clicksCount', 'updatedAt']);
+    }
+
+    // ---- Öffentliche Referenzdaten ----------------------------------------
+    match /system/{doc=**}    { allow read: if true; allow write: if false; }
+    match /areas/{doc=**}     { allow read: if true; allow write: if false; }
+    match /shopTypes/{doc=**} { allow read: if true; allow write: if false; }
+    // chooser/*: öffentlich lesbar; eingeloggte Nutzer/Merchants dürfen eigene
+    // Werte anhängen (FirestoreService.addChooserValue → arrayUnion auf 'name',
+    // z. B. eigene Kategorie/Herkunft). TODO: später auf arrayUnion-only /
+    // Cloud Function einschränken.
+    match /chooser/{doc=**}   { allow read: if true; allow write: if isSignedIn(); }
+
+    // ---- Nutzer + private Unterdaten --------------------------------------
+    // users/{uid}: nur der Nutzer selbst. Enthält u. a. walletCards,
+    // likedPosts, postInteractions, stampProgress, pointsProgress, coupons,
+    // availableRewards, orders, notifications.
+    match /users/{uid} {
+      allow read: if isUser(uid);
+      allow create, update: if isUser(uid);
+      allow delete: if false;
+      match /{sub=**} {
+        allow read, write: if isUser(uid);
+      }
+    }
+
+    // ---- Öffentliches Merchant-Profil -------------------------------------
+    // publicMerchants/{mid}: jeder darf lesen (Entdecken/Partner/Speisekarte-
+    // Einstellung); nur der Merchant selbst darf sein Doc schreiben.
+    match /publicMerchants/{mid} {
+      allow read: if true;
+      allow create, update: if isMerchantOwner(mid);
+      allow delete: if false;
+    }
+
+    // ---- Merchant (privat) + öffentliche Unter-Collections ----------------
+    match /merchants/{mid} {
+      allow read, write: if isMerchantOwner(mid);
+
+      // Speisekarte/Katalog – öffentlich lesbar (integrierte User-Karte).
+      match /items/{id}          { allow read: if true; allow write: if isMerchantOwner(mid); }
+      match /itemCategories/{id} { allow read: if true; allow write: if isMerchantOwner(mid); }
+      match /itemTags/{id}       { allow read: if true; allow write: if isMerchantOwner(mid); }
+
+      // Öffentlich sichtbare Programm-Definitionen (für Wallet/Partner-Seite).
+      match /stampCards/{id}     { allow read: if true; allow write: if isMerchantOwner(mid); }
+      match /pointsSystems/{id}  { allow read: if true; allow write: if isMerchantOwner(mid); }
+      match /pointsRewards/{id}  { allow read: if true; allow write: if isMerchantOwner(mid); }
+      match /coupons/{id}        { allow read: if true; allow write: if isMerchantOwner(mid); }
+      match /feedPosts/{id}      { allow read: if true; allow write: if isMerchantOwner(mid); }
+      match /openingHours/{id}   { allow read: if true; allow write: if isMerchantOwner(mid); }
+
+      // Alles Übrige bleibt privat beim Merchant (customers, orders,
+      // displayStudio (+ Sub: layouts/devices/routines/logs), shifts, tables,
+      // tableAreas, appointments, featureConfigs, campaigns …).
+      match /{sub=**} {
+        allow read, write: if isMerchantOwner(mid);
+      }
+    }
+
+    // ---- Globaler Feed ----------------------------------------------------
+    // feed/{postId}: öffentlich lesbar. Merchant (= post.merchantId) erstellt/
+    // ändert/löscht eigene Posts. Eingeloggte Nutzer dürfen NUR die Zähler
+    // (Likes/Views/Klicks) per Transaktion erhöhen.
+    match /feed/{postId} {
+      allow read: if true;
+      allow create: if isSignedIn() && incoming().merchantId == request.auth.uid;
+      allow update: if (isSignedIn() && existing().merchantId == request.auth.uid)
+                    || (isSignedIn() && onlyCounters());
+      allow delete: if isSignedIn() && existing().merchantId == request.auth.uid;
+
+      // Likes: ein Doc pro Nutzer (Doc-ID == uid).
+      match /likes/{uid} {
+        allow read: if true;
+        allow write: if isUser(uid);
+      }
+      // Reviews: ein Doc pro Nutzer (Doc-ID == uid).
+      match /reviews/{uid} {
+        allow read: if true;
+        allow create, update, delete: if isUser(uid);
+      }
+      match /views/{id}  { allow read: if true; allow write: if isSignedIn(); }
+      match /clicks/{id} { allow read: if true; allow write: if isSignedIn(); }
+    }
+
+    // ---- Reviews am publicMerchant (Doc-ID == uid) ------------------------
+    match /publicMerchants/{mid}/reviews/{uid} {
+      allow read: if true;
+      allow create, update, delete: if isUser(uid);
+    }
+
+    // ---- Collection-Group „Meine Rezensionen" -----------------------------
+    // meineRezensionenPage: collectionGroup('reviews').where('userId'==uid).
+    // Reviews (feed/*/reviews + publicMerchants/*/reviews) sind öffentlich
+    // lesbar; Schreibrechte regeln die spezifischen Pfade oben. Diese
+    // {path=**}-Regel ist nötig, damit die Collection-Group-Query überhaupt
+    // erlaubt ist.
+    match /{path=**}/reviews/{reviewId} {
+      allow read: if true;
+    }
+
+    // ---- Aggregierte Merchant-Bewertungen ---------------------------------
+    match /merchantRatings/{mid} {
+      allow read: if true;
+      allow write: if isSignedIn(); // TODO REVIEW: ggf. nur via Cloud Function
+    }
+
+    // ---- Meldungen / Lösch-Anfragen (write-only für Nutzer) ---------------
+    match /contentReports/{id} {
+      allow create: if isSignedIn();
+      allow read, update, delete: if false; // nur Admin/Console
+    }
+    match /accountDeletionRequests/{id} {
+      allow create: if isSignedIn();
+      allow read, update, delete: if false; // nur Admin/Console
+    }
+
+    // ---- Support-Tickets --------------------------------------------------
+    match /supportTickets/{ticketId} {
+      allow create: if isSignedIn();
+      allow read, update: if isSignedIn() &&
+        (existing().userId == request.auth.uid ||
+         existing().merchantId == request.auth.uid);
+      allow delete: if false;
+      match /messages/{msgId} {
+        allow read, create: if isSignedIn();
+        allow update, delete: if false;
+      }
+    }
+
+    // ---- Display-Pairing (Geräte koppeln) ---------------------------------
+    // Cross-Client-Flow: Die Session wird vom TV/Display-Client (separate App,
+    // evtl. nicht in dieser App eingeloggt) angelegt; der Merchant LIEST eine
+    // noch nicht ihm gehörende Session, um sie per Token-Abgleich in einer
+    // Transaktion zu claimen (display_studio_service: getPairingSession /
+    // claim). Read kann daher NICHT auf den Besitzer eingeengt werden, ohne
+    // den Flow zu brechen. Die Sicherheit liegt im Token-Abgleich.
+    match /displayPairingSessions/{id} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+
+    // ========================================================================
+    //  Interne Collections – gehärtet (#34).
+    // ========================================================================
+
+    // aiUsage/{usageId}: Doc-ID == '<merchantId>_<YYYYMMDD>', Feld merchantId.
+    // Owner-gebunden über das uid-Präfix der Doc-ID (funktioniert auch beim
+    // ersten Read des Tages, wenn das Doc noch nicht existiert). Schützt das
+    // KI-Tageslimit vor Fremd-/Cross-Account-Manipulation.
+    match /aiUsage/{usageId} {
+      allow read, write: if isSignedIn() && usageId.split('_')[0] == request.auth.uid;
+    }
+
+    // merchantInvites/{inviteId}: Auto-ID, Feld merchantId immer gesetzt.
+    // Nur der eigene Merchant (Lese-Query ist where('merchantId'==me)).
+    match /merchantInvites/{inviteId} {
+      allow read:   if isSignedIn() && existing().merchantId == request.auth.uid;
+      allow create: if isSignedIn() && incoming().merchantId == request.auth.uid;
+      allow update, delete: if isSignedIn() && existing().merchantId == request.auth.uid;
+    }
+
+    // devChecks/{id}: Dev-Tool (devFoundationPage), kein Besitzer-Feld, keine
+    // sensiblen Daten. TODO: in echter Produktion auf 'if false' setzen.
+    match /devChecks/{id} { allow read, write: if isSignedIn(); }
+
+    // Im App-Code aktuell ungenutzt (nur Konstanten in firebasePaths) → komplett
+    // gesperrt, bis ein echter Flow / eine Cloud Function sie braucht. Loyalty
+    // läuft über users/{uid}/stampProgress|pointsProgress|walletCards.
+    match /stampClaims/{id}     { allow read, write: if false; }
+    match /pointsEvents/{id}    { allow read, write: if false; }
+    match /couponClaims/{id}    { allow read, write: if false; }
+    match /campaignEntries/{id} { allow read, write: if false; }
+    match /claimLinks/{id}      { allow read, write: if false; }
+    match /dailyClaimKeys/{id}  { allow read, write: if false; }
+    match /walletEvents/{id}    { allow read, write: if false; }
+    match /billingEvents/{id}   { allow read, write: if false; } // Credits entfernt
+
+    // Reine Server-/Admin-Logs: für Clients gesperrt.
+    match /auditLogs/{id}  { allow read, write: if false; }
+    match /riskEvents/{id} { allow read, write: if false; }
+
+    // ---- Default: alles andere verbieten ----------------------------------
+    // (Kein Catch-all-allow! Nicht abgedeckte Pfade sind automatisch gesperrt.)
+  }
+}
