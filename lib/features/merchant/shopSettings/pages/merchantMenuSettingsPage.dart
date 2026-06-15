@@ -1,134 +1,107 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
-import '../../../../core/constants/firebasePaths.dart';
 import '../../../../core/services/authService.dart';
 import '../../../../core/services/firestoreService.dart';
+import '../../../../core/services/languageService.dart';
 import '../../../../core/theme/appRadius.dart';
 import '../../../../core/theme/appSpacing.dart';
 import '../../shared/widgets/merchantPremiumUi.dart';
 import '../../tools/widgets/merchantToolUi.dart';
+import '../providers/merchantMenuSettingsProvider.dart';
+import '../services/merchantMenuSettingsService.dart';
 
 /// „Speisekarte" – Merchant steuert, ob/wie Kunden seine Karte auf der
 /// Partner-Seite sehen: externer Link und/oder integrierte Lokka-Karte.
-class MerchantMenuSettingsPage extends StatefulWidget {
+/// Reine UI – State/Firestore liegen in Provider/Service (#42).
+class MerchantMenuSettingsPage extends StatelessWidget {
   const MerchantMenuSettingsPage({super.key});
 
   @override
-  State<MerchantMenuSettingsPage> createState() =>
-      _MerchantMenuSettingsPageState();
+  Widget build(BuildContext context) {
+    return ChangeNotifierProvider(
+      create: (context) => MerchantMenuSettingsProvider(
+        service: MerchantMenuSettingsService(
+          authService: context.read<AuthService>(),
+          firestoreService: context.read<FirestoreService>(),
+        ),
+      )..load(),
+      child: const _MenuSettingsView(),
+    );
+  }
 }
 
-class _MerchantMenuSettingsPageState extends State<MerchantMenuSettingsPage> {
-  final _urlController = TextEditingController();
-  bool _externalEnabled = false;
-  bool _integratedEnabled = false;
+class _MenuSettingsView extends StatefulWidget {
+  const _MenuSettingsView();
 
-  bool _loading = true;
-  bool _saving = false;
-  String? _error;
+  @override
+  State<_MenuSettingsView> createState() => _MenuSettingsViewState();
+}
+
+class _MenuSettingsViewState extends State<_MenuSettingsView> {
+  final _urlController = TextEditingController();
+  MerchantMenuSettingsProvider? _provider;
+  bool _syncedUrl = false;
 
   @override
   void initState() {
     super.initState();
-    _load();
+    _provider = context.read<MerchantMenuSettingsProvider>()..addListener(_syncUrl);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _syncUrl());
+  }
+
+  // URL-Feld einmalig aus dem geladenen Provider-Stand befüllen – nicht in build().
+  void _syncUrl() {
+    final provider = _provider;
+    if (!mounted || provider == null || provider.isLoading || _syncedUrl) return;
+    _urlController.text = provider.externalUrl;
+    _syncedUrl = true;
   }
 
   @override
   void dispose() {
+    _provider?.removeListener(_syncUrl);
     _urlController.dispose();
     super.dispose();
   }
 
-  String? get _uid => context.read<AuthService>().currentUser?.uid;
-
-  Future<void> _load() async {
-    final uid = _uid;
-    if (uid == null) {
-      setState(() {
-        _loading = false;
-        _error = 'Nicht angemeldet.';
-      });
-      return;
-    }
-    try {
-      final data = await context
-          .read<FirestoreService>()
-          .readDocument(FirebasePaths.publicMerchant(uid));
-      if (!mounted) return;
-      setState(() {
-        _urlController.text = (data?['menuExternalUrl'] as String?) ?? '';
-        _externalEnabled = data?['menuExternalEnabled'] as bool? ?? false;
-        _integratedEnabled = data?['menuIntegratedEnabled'] as bool? ?? false;
-        _loading = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _error = e.toString();
-        _loading = false;
-      });
-    }
-  }
-
   Future<void> _save() async {
-    final uid = _uid;
-    if (uid == null) return;
-    final url = _urlController.text.trim();
-    if (_externalEnabled && url.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Bitte einen Link eingeben oder externen Link ausschalten.')),
-      );
-      return;
-    }
-    setState(() => _saving = true);
-    try {
-      await context.read<FirestoreService>().setDocument(
-        FirebasePaths.publicMerchant(uid),
-        {
-          'menuExternalUrl': url,
-          'menuExternalEnabled': _externalEnabled,
-          'menuIntegratedEnabled': _integratedEnabled,
-          'updatedAt': FieldValue.serverTimestamp(),
-        },
-      );
-      if (!mounted) return;
-      setState(() => _saving = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Speisekarte gespeichert.')),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _saving = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Speichern fehlgeschlagen: $e')),
-      );
-    }
+    final texts = context.read<LanguageService>();
+    final provider = context.read<MerchantMenuSettingsProvider>();
+    final result = await provider.save(url: _urlController.text);
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final key = switch (result) {
+      MenuSaveResult.success => 'merchant.menu.saved',
+      MenuSaveResult.missingUrl => 'merchant.menu.error.url',
+      MenuSaveResult.error => 'merchant.menu.error.save',
+    };
+    messenger.showSnackBar(SnackBar(content: Text(texts.text(key))));
   }
 
   @override
   Widget build(BuildContext context) {
+    final texts = context.watch<LanguageService>();
+    final provider = context.watch<MerchantMenuSettingsProvider>();
     return MerchantToolScaffold(
-      title: 'Speisekarte',
-      subtitle: 'Wie Kunden deine Karte sehen',
+      title: texts.text('merchant.menu.title'),
+      subtitle: texts.text('merchant.menu.subtitle'),
       backPath: '/merchant/features',
-      trailing: const MerchantInfoTooltip(
-        message:
-            'Kunden sehen deine Speisekarte nur auf deiner Partner-Seite. '
-            'Du kannst einen externen Link verlinken und/oder die in Lokka '
-            'integrierte Karte aus deinem Katalog aktivieren.',
-      ),
-      child: _loading
+      trailing: MerchantInfoTooltip(message: texts.text('merchant.menu.tooltip')),
+      child: provider.isLoading
           ? const MerchantLoadingCards(count: 3)
-          : _error != null
-              ? MerchantErrorState(message: _error!, onRetry: _load)
-              : _form(),
+          : provider.error != null
+              ? MerchantErrorState(message: provider.error!, onRetry: provider.load)
+              : _form(context, texts, provider),
     );
   }
 
-  Widget _form() {
+  Widget _form(
+    BuildContext context,
+    LanguageService texts,
+    MerchantMenuSettingsProvider provider,
+  ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -140,18 +113,18 @@ class _MerchantMenuSettingsPageState extends State<MerchantMenuSettingsPage> {
             children: [
               _SwitchRow(
                 icon: Icons.link_rounded,
-                title: 'Externer Speisekarten-Link',
-                subtitle: 'Eigene Website oder PDF verlinken',
-                value: _externalEnabled,
-                onChanged: (v) => setState(() => _externalEnabled = v),
+                title: texts.text('merchant.menu.externalTitle'),
+                subtitle: texts.text('merchant.menu.externalSubtitle'),
+                value: provider.externalEnabled,
+                onChanged: provider.setExternalEnabled,
               ),
-              if (_externalEnabled) ...[
+              if (provider.externalEnabled) ...[
                 const SizedBox(height: AppSpacing.md),
                 TextField(
                   controller: _urlController,
                   keyboardType: TextInputType.url,
                   decoration: InputDecoration(
-                    hintText: 'https://…',
+                    hintText: texts.text('merchant.menu.urlHint'),
                     filled: true,
                     fillColor: MerchantPremiumColors.surfaceAlt,
                     border: OutlineInputBorder(
@@ -174,12 +147,12 @@ class _MerchantMenuSettingsPageState extends State<MerchantMenuSettingsPage> {
             children: [
               _SwitchRow(
                 icon: Icons.restaurant_menu_rounded,
-                title: 'Integrierte Lokka-Karte',
-                subtitle: 'Aus deinem Katalog – direkt in der App',
-                value: _integratedEnabled,
-                onChanged: (v) => setState(() => _integratedEnabled = v),
+                title: texts.text('merchant.menu.integratedTitle'),
+                subtitle: texts.text('merchant.menu.integratedSubtitle'),
+                value: provider.integratedEnabled,
+                onChanged: provider.setIntegratedEnabled,
               ),
-              if (_integratedEnabled) ...[
+              if (provider.integratedEnabled) ...[
                 const SizedBox(height: AppSpacing.md),
                 Container(
                   padding: const EdgeInsets.all(12),
@@ -191,11 +164,9 @@ class _MerchantMenuSettingsPageState extends State<MerchantMenuSettingsPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Deine Karte wird aus dem Katalog zusammengestellt. '
-                        'Nur aktive, öffentliche Artikel & Kategorien erscheinen. '
-                        'Auf „privat" gestellte Einträge bleiben verborgen.',
-                        style: TextStyle(
+                      Text(
+                        texts.text('merchant.menu.integratedHint'),
+                        style: const TextStyle(
                           color: MerchantPremiumColors.muted,
                           height: 1.4,
                           fontWeight: FontWeight.w600,
@@ -205,7 +176,7 @@ class _MerchantMenuSettingsPageState extends State<MerchantMenuSettingsPage> {
                       TextButton.icon(
                         onPressed: () => context.go('/merchant/catalog'),
                         icon: const Icon(Icons.tune_rounded, size: 18),
-                        label: const Text('Karte im Katalog zusammenstellen'),
+                        label: Text(texts.text('merchant.menu.openCatalog')),
                         style: TextButton.styleFrom(
                           foregroundColor: MerchantPremiumColors.ink,
                           padding: EdgeInsets.zero,
@@ -221,16 +192,16 @@ class _MerchantMenuSettingsPageState extends State<MerchantMenuSettingsPage> {
         ),
         const SizedBox(height: AppSpacing.lg),
         MerchantPrimaryButton(
-          label: 'Speichern',
+          label: texts.text('merchant.menu.save'),
           icon: Icons.save_rounded,
-          isLoading: _saving,
+          isLoading: provider.isSaving,
           onPressed: _save,
         ),
         const SizedBox(height: AppSpacing.md),
-        const Text(
-          'Tipp: Wenn beide aus sind, sehen Kunden keine Speisekarte auf deiner Seite.',
+        Text(
+          texts.text('merchant.menu.tip'),
           textAlign: TextAlign.center,
-          style: TextStyle(
+          style: const TextStyle(
             color: MerchantPremiumColors.muted,
             fontWeight: FontWeight.w600,
             fontSize: 12.5,
