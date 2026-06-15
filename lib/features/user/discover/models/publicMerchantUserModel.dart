@@ -1,3 +1,5 @@
+import '../../../../core/models/menuDesign.dart';
+
 class PublicMerchantUserModel {
   const PublicMerchantUserModel({
     required this.merchantId,
@@ -19,6 +21,7 @@ class PublicMerchantUserModel {
     this.menuExternalUrl,
     this.menuExternalEnabled = false,
     this.menuIntegratedEnabled = false,
+    this.menuStyle = const MenuDesign(),
     this.city = '',
     this.socialLinks = const {},
     this.galleryImages = const [],
@@ -51,6 +54,9 @@ class PublicMerchantUserModel {
 
   /// Merchant hat die in Lokka integrierte Speisekarte aktiviert.
   final bool menuIntegratedEnabled;
+
+  /// Gestaltung der integrierten Kundenkarte (Vorlage, Farbe, Theme, Spalten).
+  final MenuDesign menuStyle;
 
   /// Stadt aus der Adresse – ersetzt das Legacy-„area" in der Anzeige.
   final String city;
@@ -89,6 +95,7 @@ class PublicMerchantUserModel {
           : null,
       menuExternalEnabled: map['menuExternalEnabled'] as bool? ?? false,
       menuIntegratedEnabled: map['menuIntegratedEnabled'] as bool? ?? false,
+      menuStyle: MenuDesign.fromMap(map),
       city: map['city'] as String? ?? '',
       socialLinks: _stringMap(map['socialLinks']),
       galleryImages: (map['galleryImages'] as List?)
@@ -126,6 +133,7 @@ class PublicMerchantUserModel {
       'menuExternalUrl': menuExternalUrl,
       'menuExternalEnabled': menuExternalEnabled,
       'menuIntegratedEnabled': menuIntegratedEnabled,
+      ...menuStyle.toMap(),
       'city': city,
       'socialLinks': socialLinks,
       'galleryImages': galleryImages,

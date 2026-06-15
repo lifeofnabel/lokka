@@ -1,20 +1,24 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../../core/constants/firebasePaths.dart';
+import '../../../../core/models/menuDesign.dart';
 import '../../../../core/services/authService.dart';
 import '../../../../core/services/firestoreService.dart';
 
-/// Speisekarten-Einstellungen des Merchants (externer Link + integrierte Karte).
+/// Speisekarten-Einstellungen des Merchants: externer Link, integrierte Karte
+/// und die Gestaltung der Kundenansicht ([MenuDesign]).
 class MenuSettingsData {
   const MenuSettingsData({
     required this.externalUrl,
     required this.externalEnabled,
     required this.integratedEnabled,
+    this.style = const MenuDesign(),
   });
 
   final String externalUrl;
   final bool externalEnabled;
   final bool integratedEnabled;
+  final MenuDesign style;
 }
 
 /// Persistenz der Speisekarten-Einstellungen (publicMerchants/{uid}).
@@ -41,6 +45,7 @@ class MerchantMenuSettingsService {
       externalUrl: data?['menuExternalUrl'] as String? ?? '',
       externalEnabled: data?['menuExternalEnabled'] as bool? ?? false,
       integratedEnabled: data?['menuIntegratedEnabled'] as bool? ?? false,
+      style: MenuDesign.fromMap(data),
     );
   }
 
@@ -51,6 +56,7 @@ class MerchantMenuSettingsService {
         'menuExternalUrl': settings.externalUrl,
         'menuExternalEnabled': settings.externalEnabled,
         'menuIntegratedEnabled': settings.integratedEnabled,
+        ...settings.style.toMap(),
         'updatedAt': FieldValue.serverTimestamp(),
       },
     );

@@ -1,8 +1,8 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:lokka/core/models/menuDesign.dart';
 import 'package:lokka/core/services/firestoreService.dart';
-import 'package:lokka/core/theme/appColors.dart';
 import 'package:lokka/core/theme/appRadius.dart';
 import 'package:lokka/core/theme/appSpacing.dart';
 import 'package:lokka/core/widgets/appEmptyState.dart';
@@ -12,12 +12,16 @@ import 'package:lokka/features/user/partners/models/userMenuModels.dart';
 import 'package:lokka/features/user/partners/services/userMenuService.dart';
 
 /// Vollbild-Speisekarte eines Partners (integrierte Lokka-Karte, read-only).
+///
+/// Das Aussehen bestimmt der Merchant über [style]: Vorlage, Akzentfarbe,
+/// Hell/Dunkel und Artikel pro Reihe (siehe `MerchantMenuSettingsPage`).
 class UserMenuPage extends StatefulWidget {
   const UserMenuPage({
     super.key,
     required this.merchantId,
     required this.shopName,
     this.tablesEnabled = false,
+    this.style = const MenuDesign(),
   });
 
   final String merchantId;
@@ -25,6 +29,9 @@ class UserMenuPage extends StatefulWidget {
 
   /// „Tisch wählen"-Stub einblenden (nur wenn der Merchant Tische pflegt).
   final bool tablesEnabled;
+
+  /// Vom Merchant gewählte Gestaltung der Kundenkarte.
+  final MenuDesign style;
 
   @override
   State<UserMenuPage> createState() => _UserMenuPageState();
@@ -35,6 +42,8 @@ class _UserMenuPageState extends State<UserMenuPage> {
   List<UserMenuCategory> _categories = [];
   bool _loading = true;
   String? _error;
+
+  _MenuPalette get _palette => _MenuPalette(widget.style);
 
   @override
   void initState() {
@@ -70,11 +79,12 @@ class _UserMenuPageState extends State<UserMenuPage> {
 
   @override
   Widget build(BuildContext context) {
+    final palette = _palette;
     return Scaffold(
-      backgroundColor: AppColors.greenTint,
+      backgroundColor: palette.pageBg,
       body: CustomScrollView(
         slivers: [
-          _header(),
+          _header(palette),
           if (_loading)
             const SliverFillRemaining(
                 hasScrollBody: false, child: AppLoadingState())
@@ -100,7 +110,11 @@ class _UserMenuPageState extends State<UserMenuPage> {
                   AppSpacing.md, AppSpacing.md, AppSpacing.md, AppSpacing.xxl),
               sliver: SliverList.builder(
                 itemCount: _categories.length,
-                itemBuilder: (_, i) => _CategorySection(category: _categories[i]),
+                itemBuilder: (_, i) => _CategorySection(
+                  category: _categories[i],
+                  style: widget.style,
+                  palette: palette,
+                ),
               ),
             ),
         ],
@@ -108,10 +122,10 @@ class _UserMenuPageState extends State<UserMenuPage> {
     );
   }
 
-  Widget _header() {
+  Widget _header(_MenuPalette palette) {
     return SliverToBoxAdapter(
       child: Container(
-        decoration: const BoxDecoration(gradient: AppColors.mintGradient),
+        decoration: BoxDecoration(gradient: palette.headerGradient),
         child: SafeArea(
           bottom: false,
           child: Padding(
@@ -177,7 +191,7 @@ class _UserMenuPageState extends State<UserMenuPage> {
 void _showTableStub(BuildContext context) {
   showModalBottomSheet<void>(
     context: context,
-    backgroundColor: AppColors.surfaceBg,
+    backgroundColor: Theme.of(context).colorScheme.surface,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
     ),
@@ -268,8 +282,15 @@ class _TableSelectButton extends StatelessWidget {
 }
 
 class _CategorySection extends StatelessWidget {
-  const _CategorySection({required this.category});
+  const _CategorySection({
+    required this.category,
+    required this.style,
+    required this.palette,
+  });
+
   final UserMenuCategory category;
+  final MenuDesign style;
+  final _MenuPalette palette;
 
   @override
   Widget build(BuildContext context) {
@@ -279,47 +300,132 @@ class _CategorySection extends StatelessWidget {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(4, AppSpacing.md, 4, AppSpacing.sm),
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (category.emoji != null) ...[
-                Text(category.emoji!, style: const TextStyle(fontSize: 18)),
-                const SizedBox(width: 8),
-              ],
-              Text(
-                category.name,
-                style: tt.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -0.3,
+              Row(
+                children: [
+                  if (category.emoji != null) ...[
+                    Text(category.emoji!, style: const TextStyle(fontSize: 18)),
+                    const SizedBox(width: 8),
+                  ],
+                  Flexible(
+                    child: Text(
+                      category.name,
+                      style: tt.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.3,
+                        color: palette.textPrimary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Container(
+                width: 28,
+                height: 3,
+                decoration: BoxDecoration(
+                  color: palette.accent,
+                  borderRadius: BorderRadius.circular(3),
                 ),
               ),
             ],
           ),
         ),
-        ...category.items.map((item) => _MenuItemCard(item: item)),
+        _items(),
       ],
     );
   }
+
+  Widget _items() {
+    final items = category.items;
+    if (style.safeColumns != 2) {
+      return Column(
+        children: [
+          for (final item in items)
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+              child: _MenuItemTile(
+                  item: item, style: style, palette: palette, grid: false),
+            ),
+        ],
+      );
+    }
+
+    // Zwei Artikel pro Reihe.
+    final rows = <Widget>[];
+    for (var i = 0; i < items.length; i += 2) {
+      final left = items[i];
+      final right = i + 1 < items.length ? items[i + 1] : null;
+      rows.add(Padding(
+        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: _MenuItemTile(
+                  item: left, style: style, palette: palette, grid: true),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: right == null
+                  ? const SizedBox.shrink()
+                  : _MenuItemTile(
+                      item: right, style: style, palette: palette, grid: true),
+            ),
+          ],
+        ),
+      ));
+    }
+    return Column(children: rows);
+  }
 }
 
-class _MenuItemCard extends StatelessWidget {
-  const _MenuItemCard({required this.item});
+/// Ein Speisekarten-Eintrag, gerendert je nach Vorlage und Spaltenmodus.
+class _MenuItemTile extends StatelessWidget {
+  const _MenuItemTile({
+    required this.item,
+    required this.style,
+    required this.palette,
+    required this.grid,
+  });
+
   final UserMenuItem item;
+  final MenuDesign style;
+  final _MenuPalette palette;
+
+  /// true = zwei Spalten (kompaktere Variante der Vorlage).
+  final bool grid;
 
   String _price(num value) =>
       '${value.toStringAsFixed(2).replaceAll('.', ',')} €';
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-    return Container(
-      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceBg,
+    switch (style.layout) {
+      case MenuLayoutStyle.list:
+        return grid ? _imageTopCard(imageAspect: 16 / 9) : _imageLeftRow();
+      case MenuLayoutStyle.compact:
+        return _compactRow();
+      case MenuLayoutStyle.gallery:
+        return _imageTopCard(imageAspect: grid ? 1 : 4 / 3);
+      case MenuLayoutStyle.magazine:
+        return _heroCard(height: grid ? 150 : 200);
+    }
+  }
+
+  BoxDecoration get _cardDecoration => BoxDecoration(
+        color: palette.cardBg,
         borderRadius: BorderRadius.circular(AppRadius.large),
-        border: Border.all(color: cs.outlineVariant),
-      ),
+        border: Border.all(color: palette.cardBorder),
+      );
+
+  // Vorlage „Liste": Bild links, Text rechts, Preis ganz rechts.
+  Widget _imageLeftRow() {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: _cardDecoration,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -329,17 +435,7 @@ class _MenuItemCard extends StatelessWidget {
               child: SizedBox(
                 width: 68,
                 height: 68,
-                child: CachedNetworkImage(
-                  imageUrl: item.imageUrl!,
-                  fit: BoxFit.cover,
-                  placeholder: (_, __) =>
-                      Container(color: cs.secondaryContainer),
-                  errorWidget: (_, __, ___) => Container(
-                    color: cs.secondaryContainer,
-                    child: Icon(Icons.restaurant_rounded,
-                        color: cs.onSecondaryContainer, size: 22),
-                  ),
-                ),
+                child: _image(item.imageUrl),
               ),
             ),
             const SizedBox(width: AppSpacing.md),
@@ -350,7 +446,11 @@ class _MenuItemCard extends StatelessWidget {
               children: [
                 Text(
                   item.name,
-                  style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                  style: TextStyle(
+                    fontSize: 15.5,
+                    fontWeight: FontWeight.w700,
+                    color: palette.textPrimary,
+                  ),
                 ),
                 if (item.description.isNotEmpty) ...[
                   const SizedBox(height: 3),
@@ -358,9 +458,10 @@ class _MenuItemCard extends StatelessWidget {
                     item.description,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: tt.bodySmall?.copyWith(
+                    style: TextStyle(
+                      fontSize: 12.5,
                       height: 1.35,
-                      color: cs.onSurfaceVariant,
+                      color: palette.textSecondary,
                     ),
                   ),
                 ],
@@ -368,28 +469,304 @@ class _MenuItemCard extends StatelessWidget {
             ),
           ),
           const SizedBox(width: AppSpacing.sm),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                _price(item.price),
-                style: tt.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: cs.primary,
-                ),
-              ),
-              if (item.hasDiscount)
+          _priceColumn(),
+        ],
+      ),
+    );
+  }
+
+  // Vorlagen „Liste (2 Spalten)" und „Galerie": Bild oben, Text darunter.
+  Widget _imageTopCard({required double imageAspect}) {
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: _cardDecoration,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          AspectRatio(
+            aspectRatio: imageAspect,
+            child: _image(item.imageUrl),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(AppSpacing.sm),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
                 Text(
-                  _price(item.originalPrice!),
-                  style: tt.bodySmall?.copyWith(
-                    color: cs.onSurfaceVariant,
-                    decoration: TextDecoration.lineThrough,
+                  item.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: palette.textPrimary,
                   ),
                 ),
-            ],
+                if (item.description.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    item.description,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: palette.textSecondary,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Text(
+                      _price(item.price),
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: palette.accent,
+                      ),
+                    ),
+                    if (item.hasDiscount) ...[
+                      const SizedBox(width: 6),
+                      Text(
+                        _price(item.originalPrice!),
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          color: palette.textSecondary,
+                          decoration: TextDecoration.lineThrough,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
+
+  // Vorlage „Kompakt": klassische Textzeile mit Trennlinie, ohne Bild.
+  Widget _compactRow() {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: palette.cardBorder)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.name,
+                  style: TextStyle(
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w700,
+                    color: palette.textPrimary,
+                  ),
+                ),
+                if (item.description.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    item.description,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12,
+                      height: 1.3,
+                      color: palette.textSecondary,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          _priceColumn(),
+        ],
+      ),
+    );
+  }
+
+  // Vorlage „Magazin": großes Bild mit Text-Overlay.
+  Widget _heroCard({required double height}) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(AppRadius.large),
+      child: SizedBox(
+        height: height,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (item.imageUrl != null)
+              _image(item.imageUrl)
+            else
+              DecoratedBox(
+                decoration: BoxDecoration(gradient: palette.headerGradient),
+              ),
+            const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Colors.transparent, Colors.black87],
+                  stops: [0.4, 1],
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: Align(
+                alignment: Alignment.bottomLeft,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                      ),
+                    ),
+                    if (item.description.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        item.description,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          color: Colors.white.withValues(alpha: 0.85),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: palette.accent,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            _price(item.price),
+                            style: const TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                        if (item.hasDiscount) ...[
+                          const SizedBox(width: 8),
+                          Text(
+                            _price(item.originalPrice!),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.white.withValues(alpha: 0.8),
+                              decoration: TextDecoration.lineThrough,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _priceColumn() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Text(
+          _price(item.price),
+          style: TextStyle(
+            fontSize: 14.5,
+            fontWeight: FontWeight.w700,
+            color: palette.accent,
+          ),
+        ),
+        if (item.hasDiscount)
+          Text(
+            _price(item.originalPrice!),
+            style: TextStyle(
+              fontSize: 12,
+              color: palette.textSecondary,
+              decoration: TextDecoration.lineThrough,
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _image(String? url) {
+    if (url == null) return _placeholder();
+    return CachedNetworkImage(
+      imageUrl: url,
+      fit: BoxFit.cover,
+      placeholder: (context, _) => Container(color: palette.placeholder),
+      errorWidget: (context, _, error) => _placeholder(),
+    );
+  }
+
+  Widget _placeholder() {
+    return Container(
+      color: palette.placeholder,
+      child: Center(
+        child: Icon(
+          Icons.restaurant_rounded,
+          color: palette.accent.withValues(alpha: 0.7),
+          size: 24,
+        ),
+      ),
+    );
+  }
+}
+
+/// Aufgelöste Farben der Kundenkarte aus dem [MenuDesign] (Hell/Dunkel + Akzent).
+class _MenuPalette {
+  _MenuPalette(this.style)
+      : accent = style.accent,
+        dark = style.darkMode;
+
+  final MenuDesign style;
+  final Color accent;
+  final bool dark;
+
+  Color get pageBg =>
+      dark ? const Color(0xFF121417) : const Color(0xFFF6F7F4);
+  Color get cardBg => dark ? const Color(0xFF1E2126) : Colors.white;
+  Color get cardBorder =>
+      dark ? const Color(0xFF2C3036) : const Color(0xFFE7E9E3);
+  Color get textPrimary =>
+      dark ? const Color(0xFFF1F3F5) : const Color(0xFF1A1C1A);
+  Color get textSecondary =>
+      dark ? const Color(0xFFAEB4BB) : const Color(0xFF6B6F69);
+  Color get placeholder =>
+      dark ? const Color(0xFF2C3036) : const Color(0xFFEDEFEA);
+
+  LinearGradient get headerGradient => LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [accent, _darken(accent, 0.22)],
+      );
+}
+
+Color _darken(Color color, double amount) {
+  final hsl = HSLColor.fromColor(color);
+  return hsl.withLightness((hsl.lightness - amount).clamp(0.0, 1.0)).toColor();
 }

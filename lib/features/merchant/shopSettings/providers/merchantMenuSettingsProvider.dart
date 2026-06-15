@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../../../../core/models/menuDesign.dart';
 import '../services/merchantMenuSettingsService.dart';
 
 enum MenuSaveResult { success, missingUrl, error }
@@ -18,6 +19,9 @@ class MerchantMenuSettingsProvider extends ChangeNotifier {
   bool externalEnabled = false;
   bool integratedEnabled = false;
 
+  /// Gestaltung der Kundenkarte (Vorlage, Farbe, Theme, Spalten).
+  MenuDesign style = const MenuDesign();
+
   Future<void> load() async {
     try {
       isLoading = true;
@@ -27,6 +31,7 @@ class MerchantMenuSettingsProvider extends ChangeNotifier {
       externalUrl = data.externalUrl;
       externalEnabled = data.externalEnabled;
       integratedEnabled = data.integratedEnabled;
+      style = data.style;
     } catch (e) {
       // Technische Exception auf i18n-Key mappen; StateError trägt schon einen.
       error = e is StateError ? e.message : 'merchant.menu.error.load';
@@ -47,6 +52,26 @@ class MerchantMenuSettingsProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setLayout(MenuLayoutStyle layout) {
+    style = style.copyWith(layout: layout);
+    notifyListeners();
+  }
+
+  void setAccentColor(int accentColor) {
+    style = style.copyWith(accentColor: accentColor);
+    notifyListeners();
+  }
+
+  void setDarkMode(bool value) {
+    style = style.copyWith(darkMode: value);
+    notifyListeners();
+  }
+
+  void setColumns(int columns) {
+    style = style.copyWith(columns: columns);
+    notifyListeners();
+  }
+
   Future<MenuSaveResult> save({required String url}) async {
     final trimmed = url.trim();
     if (externalEnabled && trimmed.isEmpty) return MenuSaveResult.missingUrl;
@@ -57,6 +82,7 @@ class MerchantMenuSettingsProvider extends ChangeNotifier {
         externalUrl: trimmed,
         externalEnabled: externalEnabled,
         integratedEnabled: integratedEnabled,
+        style: style,
       ));
       externalUrl = trimmed;
       return MenuSaveResult.success;

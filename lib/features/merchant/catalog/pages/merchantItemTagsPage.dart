@@ -94,7 +94,7 @@ class _TagGroup extends StatelessWidget {
                 icon: const Icon(Icons.add_rounded),
                 style: IconButton.styleFrom(
                   backgroundColor: MerchantPremiumColors.ink,
-                  foregroundColor: Colors.white,
+                  foregroundColor: MerchantPremiumColors.base,
                 ),
               ),
             ],

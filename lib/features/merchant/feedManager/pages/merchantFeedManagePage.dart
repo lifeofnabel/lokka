@@ -261,7 +261,7 @@ class _FeedPostCard extends StatelessWidget {
                   label: Text(texts.text('merchant.feedManage.publishNow')),
                   style: FilledButton.styleFrom(
                     backgroundColor: MerchantPremiumColors.ink,
-                    foregroundColor: Colors.white,
+                    foregroundColor: MerchantPremiumColors.base,
                   ),
                 ),
               OutlinedButton(

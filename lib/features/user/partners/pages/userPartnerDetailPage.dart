@@ -363,6 +363,7 @@ class _UserPartnerDetailPageState extends State<UserPartnerDetailPage> {
           merchantId: widget.merchant.merchantId,
           shopName: widget.merchant.shopName,
           tablesEnabled: widget.merchant.featuresPublic.contains('tables'),
+          style: widget.merchant.menuStyle,
         ),
       ),
     );

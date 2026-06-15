@@ -180,7 +180,7 @@ class _InviteCard extends StatelessWidget {
                   label: Text(texts.text('merchant.invite.whatsapp')),
                   style: FilledButton.styleFrom(
                     backgroundColor: MerchantPremiumColors.ink,
-                    foregroundColor: Colors.white,
+                    foregroundColor: MerchantPremiumColors.base,
                   ),
                 ),
               ),

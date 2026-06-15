@@ -2243,7 +2243,7 @@ void _showCompletionSheet(BuildContext context, List<String> missingFields) {
                 onPressed: () => Navigator.of(context).pop(),
                 style: FilledButton.styleFrom(
                   backgroundColor: MerchantPremiumColors.ink,
-                  foregroundColor: Colors.white,
+                  foregroundColor: MerchantPremiumColors.base,
                   minimumSize: const Size.fromHeight(52),
                 ),
                 child: Text(texts.text('common.ok')),

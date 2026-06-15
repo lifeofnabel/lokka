@@ -215,15 +215,18 @@ class AppTheme {
   /// Google-Home-Dark Theme für den Merchant-Bereich (dunkel, neutral, Grün-
   /// Akzent). Wird über die Merchant-Routen gelegt, damit Material-Widgets
   /// (Eingabefelder, Dialoge, Sheets) dunkel rendern.
+  // WICHTIG: Werte mit `MerchantPremiumColors` (merchantPremiumUi.dart) synchron
+  // halten – beide beschreiben dieselbe Merchant-Palette (Material-Widgets hier,
+  // direkte Tokens dort). Aufgehellt + helleres Grün für besseren Kontrast.
   static ThemeData get merchantDark {
-    const base = Color(0xFF17181B);
-    const elevated = Color(0xFF202327);
-    const surface = Color(0xFF24272B);
-    const surfaceAlt = Color(0xFF2E3137);
-    const ink = Color(0xFFF1F3F5);
-    const muted = Color(0xFFAEB4BB);
-    const line = Color(0xFF3C4047);
-    const accent = Color(0xFF45C9A4);
+    const base = Color(0xFF1E2126);
+    const elevated = Color(0xFF262A30);
+    const surface = Color(0xFF2C3036);
+    const surfaceAlt = Color(0xFF373C44);
+    const ink = Color(0xFFF5F7F9);
+    const muted = Color(0xFFBBC2CA);
+    const line = Color(0xFF49505A);
+    const accent = Color(0xFF55D8B0);
 
     final scheme = ColorScheme.fromSeed(
       seedColor: accent,

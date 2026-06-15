@@ -326,17 +326,24 @@ class MerchantPrimaryButton extends StatelessWidget {
   final IconData? icon;
   final bool isLoading;
 
+  // Dunkle On-Color-Schrift auf Coral – deutlich lesbarer als Weiß (Kontrast).
+  static const Color _onCoral = Color(0xFF2E1107);
+
   @override
   Widget build(BuildContext context) {
     return FilledButton.icon(
       onPressed: isLoading ? null : onPressed,
       icon: isLoading
-          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+          ? const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2, color: _onCoral),
+            )
           : Icon(icon ?? Icons.check_rounded),
       label: Text(label),
       style: FilledButton.styleFrom(
         backgroundColor: MerchantPremiumColors.coral,
-        foregroundColor: Colors.white,
+        foregroundColor: _onCoral,
         minimumSize: const Size.fromHeight(56),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
       ),
