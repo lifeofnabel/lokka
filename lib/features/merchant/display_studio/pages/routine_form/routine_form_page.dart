@@ -265,6 +265,23 @@ class _RoutineFormPageState extends State<RoutineFormPage> {
           const SnackBar(content: Text('Bitte einen Titel eingeben.')));
       return;
     }
+    // Eine Routine ohne Tage/Displays/Layouts kann nie etwas auslösen (#14) –
+    // vor dem Speichern blockieren statt eine wirkungslose Routine anzulegen.
+    if (_days.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Bitte mindestens einen Tag wählen.')));
+      return;
+    }
+    if (_selectedDeviceIds.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Bitte mindestens ein Display wählen.')));
+      return;
+    }
+    if (_selectedLayoutIds.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Bitte mindestens ein Layout wählen.')));
+      return;
+    }
     setState(() => _isSaving = true);
 
     try {
