@@ -13,27 +13,74 @@ class MerchantOrdersProvider extends ChangeNotifier {
   bool isLoading = true;
   bool isSaving = false;
   String? error;
-  String filter = 'active';
+  String filter = 'all'; // all (= Neue + In Arbeit) | new | preparing | done | cancelled
+  String tableAreaFilter = 'all'; // Bereich-Filter der Tisch-Einsicht ('' = ohne Bereich)
+  String search = '';
   List<OrderModel> orders = [];
   OrderModel? selectedOrder;
   StreamSubscription<List<OrderModel>>? _ordersSubscription;
   StreamSubscription<OrderModel?>? _orderSubscription;
 
-  List<OrderModel> get visibleOrders {
+  /// Status + Suche kombiniert (Reihenfolge bleibt jüngste zuerst).
+  List<OrderModel> get visibleOrders => orders
+      .where((order) => _matchesStatus(order) && _matchesSearch(order))
+      .toList();
+
+  bool _matchesStatus(OrderModel order) {
     return switch (filter) {
-      'new' => orders.where((order) => order.status == 'new').toList(),
-      'preparing' => orders.where((order) => order.status == 'preparing').toList(),
-      'done' => orders.where((order) => order.status == 'done').toList(),
-      'cancelled' => orders.where((order) => order.status == 'cancelled').toList(),
-      'all' => orders,
-      _ => orders.where((order) => order.status == 'new' || order.status == 'preparing').toList(),
+      'new' => order.status == 'new',
+      'preparing' => order.status == 'preparing',
+      'done' => order.status == 'done',
+      'cancelled' => order.status == 'cancelled',
+      // „Alle" zeigt bewusst nur die aktiven Bestellungen (Neue + In Arbeit).
+      _ => order.isOpen,
     };
+  }
+
+  bool _matchesSearch(OrderModel order) {
+    final query = search.trim().toLowerCase();
+    if (query.isEmpty) return true;
+    return order.orderCode.toLowerCase().contains(query) ||
+        order.placeLabel.toLowerCase().contains(query) ||
+        order.tableLabel.toLowerCase().contains(query) ||
+        order.itemsText.toLowerCase().contains(query);
   }
 
   int get newCount => orders.where((order) => order.status == 'new').length;
   int get preparingCount => orders.where((order) => order.status == 'preparing').length;
   int get doneCount => orders.where((order) => order.status == 'done').length;
   int get activeCount => newCount + preparingCount;
+
+  /// Bereich eines Tisches (leer = „Ohne Bereich").
+  String areaOf(OrderModel order) => order.areaName.trim();
+
+  /// Distinkte Bereiche aller aktiven Tisch-Bestellungen – für den Bereich-
+  /// Filter der Tisch-Einsicht. '' steht für „Ohne Bereich".
+  List<String> get tableAreaNames {
+    final set = <String>{};
+    for (final order in orders) {
+      if (!order.isTableOrder || order.status == 'cancelled') continue;
+      set.add(areaOf(order));
+    }
+    final list = set.toList()..sort();
+    return list;
+  }
+
+  /// Aktive Tisch-Bestellungen, gruppiert nach Tisch (Tisch-Einsicht),
+  /// optional auf einen Bereich gefiltert. Stornierte werden ausgeblendet.
+  Map<String, List<OrderModel>> get tableGroups {
+    final groups = <String, List<OrderModel>>{};
+    for (final order in orders) {
+      if (!order.isTableOrder || order.status == 'cancelled') continue;
+      if (tableAreaFilter != 'all' && areaOf(order) != tableAreaFilter) continue;
+      groups.putIfAbsent(order.tableKey, () => []).add(order);
+    }
+    return groups;
+  }
+
+  /// Alle (auch erledigten) Bestellungen eines Tisches – für die Tisch-Detailseite.
+  List<OrderModel> ordersForTable(String tableKey) =>
+      orders.where((order) => order.isTableOrder && order.tableKey == tableKey).toList();
 
   Future<void> load({String? orderId}) async {
     try {
@@ -113,6 +160,50 @@ class MerchantOrdersProvider extends ChangeNotifier {
   void setFilter(String value) {
     filter = value;
     notifyListeners();
+  }
+
+  void setSearch(String value) {
+    search = value;
+    notifyListeners();
+  }
+
+  void setTableAreaFilter(String value) {
+    tableAreaFilter = value;
+    notifyListeners();
+  }
+
+  /// „Tisch abschließen": markiert alle noch offenen Bestellungen des Tisches
+  /// als fertig. Danach hat der Tisch keine offenen Bestellungen mehr und gilt
+  /// als beendet.
+  Future<void> closeTable(String tableKey) async {
+    final open = orders
+        .where((o) => o.isTableOrder && o.tableKey == tableKey && o.isOpen)
+        .toList();
+    if (open.isEmpty) return;
+    try {
+      isSaving = true;
+      error = null;
+      notifyListeners();
+      for (final order in open) {
+        await service.updateStatus(order.id, 'done');
+      }
+    } catch (e) {
+      error = e.toString();
+    } finally {
+      isSaving = false;
+      notifyListeners();
+    }
+  }
+
+  /// Vor-Kasse-Bestellung per Code bestätigen (Kasse). Gibt true bei Erfolg.
+  Future<bool> confirmByCode(String code) async {
+    try {
+      return await service.confirmPendingByCode(code);
+    } catch (e) {
+      error = e.toString();
+      notifyListeners();
+      return false;
+    }
   }
 
   Future<void> updateStatus(String orderId, String status) async {

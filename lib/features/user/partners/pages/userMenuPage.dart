@@ -546,46 +546,79 @@ class _MenuItemTile extends StatelessWidget {
     );
   }
 
-  // Vorlage „Kompakt": klassische Textzeile mit Trennlinie, ohne Bild.
+  // Vorlage „Klassisch": Name · · · Preis mit Führungspunkten, ohne Bild.
   Widget _compactRow() {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
       decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: palette.cardBorder)),
       ),
-      child: Row(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Flexible(
+                child: Text(
                   item.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 14.5,
                     fontWeight: FontWeight.w700,
                     color: palette.textPrimary,
                   ),
                 ),
-                if (item.description.isNotEmpty) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    item.description,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 12,
-                      height: 1.3,
-                      color: palette.textSecondary,
-                    ),
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 8, right: 8, bottom: 4),
+                  child: _LeaderDots(
+                    color: palette.textSecondary.withValues(alpha: 0.45),
                   ),
-                ],
-              ],
-            ),
+                ),
+              ),
+              Text(
+                _price(item.price),
+                style: TextStyle(
+                  fontSize: 14.5,
+                  fontWeight: FontWeight.w800,
+                  color: palette.accent,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: AppSpacing.sm),
-          _priceColumn(),
+          if (item.hasDiscount) ...[
+            const SizedBox(height: 2),
+            Align(
+              alignment: Alignment.centerRight,
+              child: Text(
+                _price(item.originalPrice!),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: palette.textSecondary,
+                  decoration: TextDecoration.lineThrough,
+                ),
+              ),
+            ),
+          ],
+          if (item.description.isNotEmpty) ...[
+            const SizedBox(height: 3),
+            Padding(
+              padding: const EdgeInsets.only(right: 40),
+              child: Text(
+                item.description,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12,
+                  height: 1.3,
+                  color: palette.textSecondary,
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -769,4 +802,44 @@ class _MenuPalette {
 Color _darken(Color color, double amount) {
   final hsl = HSLColor.fromColor(color);
   return hsl.withLightness((hsl.lightness - amount).clamp(0.0, 1.0)).toColor();
+}
+
+/// Führungspunkte (· · ·) zwischen Name und Preis der „Klassisch"-Vorlage.
+class _LeaderDots extends StatelessWidget {
+  const _LeaderDots({required this.color});
+
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 5,
+      child: CustomPaint(
+        painter: _LeaderDotsPainter(color),
+        size: Size.infinite,
+      ),
+    );
+  }
+}
+
+class _LeaderDotsPainter extends CustomPainter {
+  _LeaderDotsPainter(this.color);
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..color = color;
+    const radius = 1.0;
+    const gap = 5.0;
+    final y = size.height - radius;
+    // Von rechts nach links zeichnen, damit die Punkte bündig am Preis enden.
+    for (double x = size.width; x >= 0; x -= gap) {
+      canvas.drawCircle(Offset(x, y), radius, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _LeaderDotsPainter oldDelegate) =>
+      oldDelegate.color != color;
 }

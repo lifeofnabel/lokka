@@ -1,12 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../../../../core/config/appConfig.dart';
 import '../../../../core/services/authService.dart';
+import '../../../../core/services/firestoreService.dart';
 import '../../../../core/services/languageService.dart';
+import '../../../public/shop/services/publicShopService.dart';
 import '../../../../core/theme/appRadius.dart';
 import '../../../../core/theme/appSpacing.dart';
+import '../../../../core/utils/shareUtils.dart';
 import '../../shared/widgets/merchantPremiumUi.dart';
+import '../../tools/services/merchantToolsService.dart';
 import '../../tools/widgets/merchantToolUi.dart';
 
 class MerchantCatalogPage extends StatelessWidget {
@@ -28,7 +34,17 @@ class MerchantCatalogPage extends StatelessWidget {
               context.push('/shop/$merchantId');
             },
           ),
+          const SizedBox(height: AppSpacing.sm),
+          const _ShopLinkActions(),
           const SizedBox(height: AppSpacing.md),
+          _CatalogAction(
+            icon: Icons.palette_rounded,
+            title: texts.text('merchant.catalog.design'),
+            subtitle: texts.text('merchant.catalog.designSubtitle'),
+            tooltip: texts.text('merchant.catalog.designTip'),
+            onTap: () => context.push('/merchant/catalog/design'),
+          ),
+          const _ModeTile(),
           _CatalogAction(
             icon: Icons.inventory_2_rounded,
             title: texts.text('merchant.catalog.items'),
@@ -66,6 +82,122 @@ class MerchantCatalogPage extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Zeigt je nach aktivem Modus die passende Kachel: Runner-Modus → „Runner",
+/// sonst → „QR-Codes & Links".
+class _ModeTile extends StatefulWidget {
+  const _ModeTile();
+
+  @override
+  State<_ModeTile> createState() => _ModeTileState();
+}
+
+class _ModeTileState extends State<_ModeTile> {
+  bool _runner = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final uid = context.read<AuthService>().currentUser?.uid;
+    if (uid == null || uid.isEmpty) return;
+    // Services VOR dem await greifen (context danach evtl. nicht mehr gültig).
+    final auth = context.read<AuthService>();
+    final firestore = context.read<FirestoreService>();
+    try {
+      final config = await PublicShopService(firestoreService: firestore)
+          .loadCatalogConfig(uid);
+      if (mounted) setState(() => _runner = config.modeRunner);
+    } catch (_) {/* Default bleibt QR-Kachel */}
+    // Öffentliche Speisekarte-URL automatisch im Merchant-Doc hinterlegen.
+    try {
+      await MerchantToolsService(authService: auth, firestoreService: firestore)
+          .saveShopUrl('${AppConfig.shopLinkBase}/shop/$uid');
+    } catch (_) {/* nicht kritisch fürs Rendern */}
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final texts = context.watch<LanguageService>();
+    if (_runner) {
+      return _CatalogAction(
+        icon: Icons.directions_run_rounded,
+        title: texts.text('merchant.catalog.runners'),
+        subtitle: texts.text('merchant.catalog.runnersSubtitle'),
+        tooltip: texts.text('merchant.catalog.runnersTip'),
+        onTap: () => context.push('/merchant/catalog/runners'),
+      );
+    }
+    return _CatalogAction(
+      icon: Icons.qr_code_2_rounded,
+      title: texts.text('merchant.catalog.qrCodes'),
+      subtitle: texts.text('merchant.catalog.qrCodesSubtitle'),
+      tooltip: texts.text('merchant.catalog.qrCodesTip'),
+      onTap: () => context.push('/merchant/catalog/qr'),
+    );
+  }
+}
+
+/// Aktionen für den öffentlichen Speisekarte-Link (Kundenansicht): kopieren
+/// oder teilen – zum Veröffentlichen/Weitergeben.
+class _ShopLinkActions extends StatelessWidget {
+  const _ShopLinkActions();
+
+  String? _link(BuildContext context) {
+    final uid = context.read<AuthService>().currentUser?.uid;
+    if (uid == null || uid.isEmpty) return null;
+    return '${AppConfig.shopLinkBase}/shop/$uid';
+  }
+
+  void _copy(BuildContext context, String link) {
+    final texts = context.read<LanguageService>();
+    Clipboard.setData(ClipboardData(text: link));
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(content: Text(texts.text('merchant.catalog.linkCopied'))),
+      );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final texts = context.watch<LanguageService>();
+    return Row(
+      children: [
+        TextButton.icon(
+          onPressed: () {
+            final link = _link(context);
+            if (link != null) _copy(context, link);
+          },
+          icon: const Icon(Icons.link_rounded, size: 18),
+          label: Text(texts.text('merchant.catalog.copyLink')),
+          style: TextButton.styleFrom(foregroundColor: MerchantPremiumColors.gold),
+        ),
+        TextButton.icon(
+          onPressed: () async {
+            final link = _link(context);
+            if (link == null) return;
+            try {
+              await ShareUtils.shareText(
+                link,
+                subject: texts.text('merchant.catalog.previewTitle'),
+              );
+            } catch (_) {
+              // Teilen nicht verfügbar (z.B. Desktop-Web) → in Zwischenablage.
+              if (context.mounted) _copy(context, link);
+            }
+          },
+          icon: const Icon(Icons.ios_share_rounded, size: 18),
+          label: Text(texts.text('merchant.catalog.shareLink')),
+          style: TextButton.styleFrom(foregroundColor: MerchantPremiumColors.gold),
+        ),
+      ],
     );
   }
 }

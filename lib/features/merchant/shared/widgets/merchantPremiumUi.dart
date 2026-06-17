@@ -9,16 +9,16 @@ class MerchantPremiumColors {
   // Aufgehellt (weiches Anthrazit statt Fast-Schwarz) + helleres Grün für
   // besseren Kontrast/Lesbarkeit – bleibt aber dunkler als der User-Bereich.
   // WICHTIG: Werte mit `AppTheme.merchantDark` (appTheme.dart) synchron halten.
-  static const Color base = Color(0xFF1E2126); // Hintergrund (weiches Anthrazit)
-  static const Color baseElevated = Color(0xFF262A30);
-  static const Color baseSoft = Color(0xFF2F343B);
-  static const Color surface = Color(0xFF2C3036); // Karten (klar abgesetzt)
-  static const Color surfaceAlt = Color(0xFF373C44);
-  static const Color surfaceWarm = Color(0xFF3E434C);
-  static const Color ink = Color(0xFFF5F7F9); // Primärtext (hoher Kontrast)
-  static const Color muted = Color(0xFFBBC2CA); // Sekundärtext (klar lesbar)
-  static const Color mutedLight = Color(0xFFDBDFE4);
-  static const Color line = Color(0xFF49505A); // Border/Divider (sichtbar)
+  static const Color base = Color(0xFF24272D); // Hintergrund (helleres Anthrazit)
+  static const Color baseElevated = Color(0xFF2B2F36);
+  static const Color baseSoft = Color(0xFF343941);
+  static const Color surface = Color(0xFF313640); // Karten (klar abgesetzt)
+  static const Color surfaceAlt = Color(0xFF3C424C);
+  static const Color surfaceWarm = Color(0xFF454B56);
+  static const Color ink = Color(0xFFF6F8FA); // Primärtext (hoher Kontrast)
+  static const Color muted = Color(0xFFC2C9D1); // Sekundärtext (klar lesbar)
+  static const Color mutedLight = Color(0xFFDFE3E8);
+  static const Color line = Color(0xFF565C68); // Border/Divider (sichtbar)
   static const Color gold = Color(0xFF55D8B0); // Akzent = Grün (heller)
   static const Color goldSoft = Color(0xFF1D4A3D); // grüner Container
   static const Color mint = Color(0xFF9CEFD4);

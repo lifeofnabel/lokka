@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:share_plus/share_plus.dart';
 
 /// Dünner Wrapper um share_plus (v13 API: SharePlus.instance.share).
@@ -6,6 +8,21 @@ class ShareUtils {
 
   static Future<void> shareText(String text, {String? subject}) async {
     await SharePlus.instance.share(ShareParams(text: text, subject: subject));
+  }
+
+  /// Teilt/exportiert ein Bild (z.B. einen QR-Code als PNG) über das System-
+  /// Teilen-Menü – dort kann der Nutzer es speichern/herunterladen.
+  static Future<void> shareImage(
+    Uint8List bytes, {
+    required String filename,
+    String? text,
+  }) async {
+    await SharePlus.instance.share(
+      ShareParams(
+        files: [XFile.fromData(bytes, mimeType: 'image/png', name: filename)],
+        text: text,
+      ),
+    );
   }
 
   /// Teilt einen Feed-Beitrag als lesbaren Text.

@@ -53,7 +53,13 @@ class MerchantMenuSettingsProvider extends ChangeNotifier {
   }
 
   void setLayout(MenuLayoutStyle layout) {
-    style = style.copyWith(layout: layout);
+    if (style.layout == layout) return;
+    // Galerie wirkt im 2-Spalten-Karten-Look am besten – als sinnvolle
+    // Vorgabe mitsetzen (Merchant kann die Spalten weiterhin umstellen).
+    style = style.copyWith(
+      layout: layout,
+      columns: layout == MenuLayoutStyle.gallery ? 2 : style.columns,
+    );
     notifyListeners();
   }
 
@@ -70,6 +76,23 @@ class MerchantMenuSettingsProvider extends ChangeNotifier {
   void setColumns(int columns) {
     style = style.copyWith(columns: columns);
     notifyListeners();
+  }
+
+  /// Speichert ausschließlich die Gestaltung der Kundenkarte (Design-Seite im
+  /// Katalog) – ohne externer-Link-/Integration-Felder. Gibt Erfolg zurück.
+  Future<bool> saveDesignOnly() async {
+    try {
+      isSaving = true;
+      notifyListeners();
+      await service.saveDesign(style);
+      return true;
+    } catch (e) {
+      debugPrint('MerchantMenuSettingsProvider.saveDesignOnly failed: $e');
+      return false;
+    } finally {
+      isSaving = false;
+      notifyListeners();
+    }
   }
 
   Future<MenuSaveResult> save({required String url}) async {

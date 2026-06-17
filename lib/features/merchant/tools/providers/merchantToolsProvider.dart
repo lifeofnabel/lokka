@@ -165,11 +165,13 @@ class MerchantItemsProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<String?> uploadImage() async {
+  Future<String?> uploadImage({bool wide = false}) async {
     try {
       isSaving = true;
       notifyListeners();
-      final media = await uploadService.pickAndUploadOptimizedImage(type: UploadImageType.item);
+      final media = await uploadService.pickAndUploadOptimizedImage(
+        type: wide ? UploadImageType.itemWide : UploadImageType.item,
+      );
       return media?.secureUrl.isNotEmpty == true ? media!.secureUrl : media?.url;
     } catch (e) {
       error = e.toString();
@@ -194,6 +196,8 @@ class MerchantItemsProvider extends ChangeNotifier {
     required bool isActive,
     required bool isAvailable,
     required bool isPrivate,
+    String imageRatio = 'square',
+    List<ItemOptionGroup> optionGroups = const [],
   }) async {
     final matchingCategories = categories.where((item) => item.id == categoryId).toList();
     if (matchingCategories.isEmpty) {
@@ -217,6 +221,8 @@ class MerchantItemsProvider extends ChangeNotifier {
           isActive: isActive,
           isAvailable: isAvailable,
           isPrivate: isPrivate,
+          imageRatio: imageRatio,
+          optionGroups: optionGroups,
         ));
     await load();
   }
@@ -556,3 +562,70 @@ class MerchantTablesProvider extends ChangeNotifier {
 
 const _fallbackShopTypes = ['Food', 'Cafe', 'Kiosk', 'Beauty', 'Barber', 'Fitness', 'Retail', 'Service'];
 const _fallbackAreas = ['Westend', 'Ostend', 'Innenstadt', 'Bahnhofsviertel', 'Sachsenhausen', 'Bornheim'];
+
+/// Verwaltung der Runner (Name + PIN) für den Runner-Modus.
+class MerchantRunnersProvider extends ChangeNotifier {
+  MerchantRunnersProvider({required this.service});
+
+  final MerchantToolsService service;
+
+  bool isLoading = true;
+  bool isSaving = false;
+  String? error;
+  List<RunnerData> runners = [];
+
+  Future<void> load() async {
+    try {
+      isLoading = true;
+      error = null;
+      notifyListeners();
+      runners = await service.loadRunners();
+    } catch (e) {
+      error = e.toString();
+    } finally {
+      isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  int _seq = 0;
+
+  Future<void> addRunner(String name) {
+    final id = 'r${DateTime.now().microsecondsSinceEpoch}_${_seq++}';
+    return _save([...runners, RunnerData(id: id, name: name.trim())]);
+  }
+
+  Future<void> renameRunner(String id, String name) {
+    return _save([
+      for (final runner in runners)
+        if (runner.id == id) runner.copyWith(name: name.trim()) else runner,
+    ]);
+  }
+
+  /// Verfügbarkeit umschalten (wer steht zur Auswahl in der Karte?).
+  Future<void> setAvailable(String id, bool available) {
+    return _save([
+      for (final runner in runners)
+        if (runner.id == id) runner.copyWith(available: available) else runner,
+    ]);
+  }
+
+  Future<void> deleteRunner(String id) {
+    return _save(runners.where((runner) => runner.id != id).toList());
+  }
+
+  Future<void> _save(List<RunnerData> next) async {
+    try {
+      isSaving = true;
+      error = null;
+      notifyListeners();
+      await service.saveRunners(next);
+      runners = next;
+    } catch (e) {
+      error = e.toString();
+    } finally {
+      isSaving = false;
+      notifyListeners();
+    }
+  }
+}

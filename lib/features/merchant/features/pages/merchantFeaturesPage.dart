@@ -106,17 +106,21 @@ const Map<String, _FeatureCopy> _featureCopy = {
 };
 
 const Map<String, _FeatureCopy> _optionCopy = {
-  'catalogOrderQrCashier': _FeatureCopy(
-    'Bestellen per QR-Code',
-    'Kunden scannen einen Code bei dir im Laden und bestellen selbst.',
+  'catalogModeRunner': _FeatureCopy(
+    'Runner-Modus',
+    'Nur dein Personal (Runner) nimmt Bestellungen am Tisch auf und sendet sie an „Bestellungen". Runner legst du auf der Speisekarte-Seite an (Name + PIN). Schaltet die anderen Modi aus.',
   ),
-  'catalogOrderSendCashier': _FeatureCopy(
-    'Bestellung an die Kasse',
-    'Bestellungen deiner Kunden kommen direkt bei dir an der Kasse an.',
-  ),
-  'catalogTableOrders': _FeatureCopy(
+  'catalogModeTable': _FeatureCopy(
     'Bestellen am Tisch',
-    'Kunden bestellen direkt von ihrem Tisch aus.',
+    'Kunden scannen den QR an ihrem Tisch, bestellen selbst und senden direkt an „Bestellungen". Die Tisch-QR-Codes findest du auf der Speisekarte-Seite.',
+  ),
+  'catalogModeCashier': _FeatureCopy(
+    'Bestellen & an Kasse zeigen',
+    'Kunden stellen ihre Bestellung zusammen und bekommen einen QR-Code. Die Bestellung erscheint erst unter „Bestellungen", wenn dein Personal den Code an der Kasse bestätigt.',
+  ),
+  'catalogModeMenuOnly': _FeatureCopy(
+    'Nur Speisekarte',
+    'Reine Ansicht: Kunden sehen deine Karte (mit Übersetzung & Bildern), können aber nicht bestellen. Teilbarer QR-Code auf der Speisekarte-Seite. Schaltet die anderen Modi aus.',
   ),
 };
 
@@ -284,6 +288,7 @@ class _CatalogFeatureCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final provider = context.watch<MerchantFeaturesProvider>();
     final enabled = provider.isEnabled(module);
+    // Nur die 4 Modi (Vor Ort/Mitnehmen + Abholzeit sind immer im Warenkorb).
     final orderOptions =
         module.options.where((option) => option.key != 'catalogOnly').toList();
 
@@ -359,7 +364,6 @@ class _CatalogFeatureCard extends StatelessWidget {
                 child: _CatalogOptionRow(module: module, option: option),
               ),
             ),
-            const _MenuSettingsButton(),
           ],
         ],
       ),
@@ -401,30 +405,24 @@ class _CatalogOptionRow extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  copy?.name ?? option.key,
-                  style: const TextStyle(
-                    color: MerchantPremiumColors.ink,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  copy?.description ?? '',
-                  style: const TextStyle(
-                    color: MerchantPremiumColors.muted,
-                    fontSize: 12.5,
-                    height: 1.3,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
+            child: Text(
+              copy?.name ?? option.key,
+              style: const TextStyle(
+                color: MerchantPremiumColors.ink,
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
+          if ((copy?.description ?? '').isNotEmpty)
+            Tooltip(
+              message: copy!.description,
+              triggerMode: TooltipTriggerMode.tap,
+              showDuration: const Duration(seconds: 8),
+              margin: const EdgeInsets.symmetric(horizontal: 24),
+              child: const Icon(Icons.info_outline_rounded,
+                  size: 18, color: MerchantPremiumColors.muted),
+            ),
           const SizedBox(width: 8),
           Switch(
             value: enabled,
@@ -432,48 +430,6 @@ class _CatalogOptionRow extends StatelessWidget {
                 provider.setOptionEnabled(module, option, value),
           ),
         ],
-      ),
-    );
-  }
-}
-
-/// Verlinkt die Speisekarten-Einstellung (Kunden-Sicht der Karte).
-class _MenuSettingsButton extends StatelessWidget {
-  const _MenuSettingsButton();
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: MerchantPremiumColors.surfaceAlt,
-      borderRadius: BorderRadius.circular(AppRadius.large),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(AppRadius.large),
-        onTap: () => context.go('/merchant/menu'),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(AppRadius.large),
-            border: Border.all(color: MerchantPremiumColors.line),
-          ),
-          child: Row(
-            children: const [
-              Icon(Icons.restaurant_menu_rounded,
-                  color: MerchantPremiumColors.ink, size: 20),
-              SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'Speisekarte für Kunden einrichten',
-                  style: TextStyle(
-                    color: MerchantPremiumColors.ink,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              Icon(Icons.chevron_right_rounded,
-                  color: MerchantPremiumColors.muted),
-            ],
-          ),
-        ),
       ),
     );
   }

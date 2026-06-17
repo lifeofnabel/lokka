@@ -1,5 +1,19 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+class OrderItemOption {
+  const OrderItemOption({required this.name, required this.price});
+
+  final String name;
+  final num price;
+
+  factory OrderItemOption.fromMap(Map<String, dynamic> map) {
+    return OrderItemOption(
+      name: (map['name'] ?? '').toString(),
+      price: map['price'] as num? ?? 0,
+    );
+  }
+}
+
 class OrderItemModel {
   const OrderItemModel({
     required this.itemId,
@@ -7,6 +21,8 @@ class OrderItemModel {
     required this.quantity,
     required this.unitPrice,
     required this.totalPrice,
+    this.note = '',
+    this.options = const [],
   });
 
   final String itemId;
@@ -15,13 +31,29 @@ class OrderItemModel {
   final num unitPrice;
   final num totalPrice;
 
+  /// Pro-Artikel-Notiz des Kunden (z.B. „ohne Zwiebeln").
+  final String note;
+
+  /// Gewählte Optionen (Name + Aufpreis) – fürs Personal/Küche sichtbar.
+  final List<OrderItemOption> options;
+
+  String get optionsText => options.map((option) => option.name).join(', ');
+
   factory OrderItemModel.fromMap(Map<String, dynamic> map) {
+    final rawOptions = map['options'];
     return OrderItemModel(
       itemId: (map['itemId'] ?? '').toString(),
       title: (map['title'] ?? map['name'] ?? '').toString(),
       quantity: (map['quantity'] as num?)?.toInt() ?? 1,
       unitPrice: map['unitPrice'] as num? ?? 0,
       totalPrice: map['totalPrice'] as num? ?? 0,
+      note: (map['note'] ?? '').toString(),
+      options: rawOptions is Iterable
+          ? rawOptions
+              .whereType<Map>()
+              .map((option) => OrderItemOption.fromMap(Map<String, dynamic>.from(option)))
+              .toList()
+          : const [],
     );
   }
 }
@@ -39,6 +71,14 @@ class OrderModel {
     required this.totalPrice,
     required this.isDemo,
     required this.isArchived,
+    this.tableId = '',
+    this.tableLabel = '',
+    this.areaName = '',
+    this.serviceType = 'vor_ort',
+    this.pickupTime = '',
+    this.fulfillment = 'sent',
+    this.customerNote = '',
+    this.runnerId = '',
     this.createdAt,
     this.updatedAt,
   });
@@ -54,10 +94,72 @@ class OrderModel {
   final num totalPrice;
   final bool isDemo;
   final bool isArchived;
+
+  /// Tisch-Kontext (von `publicShopService.createOrder` gesetzt). Leer bei
+  /// Speisekarten-/Katalog-Bestellungen.
+  final String tableId;
+  final String tableLabel;
+  final String areaName;
+
+  /// Bestelltyp 'vor_ort' | 'mitnehmen'.
+  final String serviceType;
+
+  /// Gewünschte Abholzeit (bei „Mitnehmen", sonst leer).
+  final String pickupTime;
+
+  /// Abschluss-Art 'qr_cashier' (an Kasse zeigen) | 'sent' (direkt gesendet).
+  final String fulfillment;
+
+  /// Wunschtext/Notiz für die gesamte Bestellung.
+  final String customerNote;
+
+  /// Runner-ID (Mitarbeiter), der die Bestellung aufgenommen hat – für die
+  /// „Meine Bestellungen"-Zuordnung im Runner-Modus (leer bei Kundenbestellung).
+  final String runnerId;
+
+  bool get isTakeaway => serviceType == 'mitnehmen';
+  bool get isQrCashier => fulfillment == 'qr_cashier';
+
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
   String get itemsText => items.map((item) => '${item.quantity}x ${item.title}').join(', ');
+
+  int get itemCount => items.fold<int>(0, (acc, item) => acc + item.quantity);
+
+  /// Tischbestellung (vs. Speisekarte/Abholung).
+  bool get isTableOrder =>
+      orderType.toLowerCase() == 'table' ||
+      tableId.trim().isNotEmpty ||
+      tableLabel.trim().isNotEmpty;
+
+  /// Offen = muss noch bearbeitet werden (für Zähler/Badges).
+  bool get isOpen => status == 'new' || status == 'preparing';
+
+  /// Stabiler Gruppierungs-Schlüssel pro Tisch (Tisch-Einsicht).
+  String get tableKey =>
+      tableId.trim().isNotEmpty ? tableId.trim() : tableLabel.trim().toLowerCase();
+
+  /// Anzuzeigender Tischname (mit Bereich, falls vorhanden).
+  String get tableDisplayLabel {
+    final label = tableLabel.trim().isNotEmpty ? tableLabel.trim() : placeLabel.trim();
+    final area = areaName.trim();
+    if (label.isNotEmpty && area.isNotEmpty) return '$area · $label';
+    if (label.isNotEmpty) return label;
+    return 'Tisch';
+  }
+
+  String get timeText {
+    final dt = createdAt;
+    if (dt == null) return '–';
+    return '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+  }
+
+  String get dateText {
+    final dt = createdAt;
+    if (dt == null) return '–';
+    return '${dt.day.toString().padLeft(2, '0')}.${dt.month.toString().padLeft(2, '0')}.${dt.year}';
+  }
 
   factory OrderModel.fromMap(Map<String, dynamic> map) {
     final rawItems = map['items'];
@@ -78,6 +180,14 @@ class OrderModel {
       totalPrice: map['totalPrice'] as num? ?? 0,
       isDemo: map['isDemo'] as bool? ?? false,
       isArchived: map['isArchived'] as bool? ?? false,
+      tableId: (map['tableId'] ?? '').toString(),
+      tableLabel: (map['tableLabel'] ?? '').toString(),
+      areaName: (map['areaName'] ?? '').toString(),
+      serviceType: (map['serviceType'] ?? 'vor_ort').toString(),
+      pickupTime: (map['pickupTime'] ?? '').toString(),
+      fulfillment: (map['fulfillment'] ?? 'sent').toString(),
+      customerNote: (map['customerNote'] ?? '').toString(),
+      runnerId: (map['runnerId'] ?? '').toString(),
       createdAt: _readDateTime(map['createdAt']),
       updatedAt: _readDateTime(map['updatedAt']),
     );

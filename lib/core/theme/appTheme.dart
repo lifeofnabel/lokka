@@ -219,13 +219,13 @@ class AppTheme {
   // halten – beide beschreiben dieselbe Merchant-Palette (Material-Widgets hier,
   // direkte Tokens dort). Aufgehellt + helleres Grün für besseren Kontrast.
   static ThemeData get merchantDark {
-    const base = Color(0xFF1E2126);
-    const elevated = Color(0xFF262A30);
-    const surface = Color(0xFF2C3036);
-    const surfaceAlt = Color(0xFF373C44);
-    const ink = Color(0xFFF5F7F9);
-    const muted = Color(0xFFBBC2CA);
-    const line = Color(0xFF49505A);
+    const base = Color(0xFF24272D);
+    const elevated = Color(0xFF2B2F36);
+    const surface = Color(0xFF313640);
+    const surfaceAlt = Color(0xFF3C424C);
+    const ink = Color(0xFFF6F8FA);
+    const muted = Color(0xFFC2C9D1);
+    const line = Color(0xFF565C68);
     const accent = Color(0xFF55D8B0);
 
     final scheme = ColorScheme.fromSeed(

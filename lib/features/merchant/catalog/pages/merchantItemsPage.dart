@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../core/services/authService.dart';
@@ -251,6 +252,8 @@ class _ItemCard extends StatelessWidget {
                   isActive: item.isActive,
                   isAvailable: !item.isAvailable,
                   isPrivate: item.isPrivate,
+                  imageRatio: item.imageRatio,
+                  optionGroups: item.optionGroups,
                 ),
                 child: Text(item.isAvailable ? texts.text('common.unavailable') : texts.text('common.available')),
               ),
@@ -269,6 +272,8 @@ class _ItemCard extends StatelessWidget {
                   isActive: item.isActive,
                   isAvailable: item.isAvailable,
                   isPrivate: !item.isPrivate,
+                  imageRatio: item.imageRatio,
+                  optionGroups: item.optionGroups,
                 ),
                 child: Text(item.isPrivate ? texts.text('common.public') : texts.text('common.private')),
               ),
@@ -314,7 +319,9 @@ class _StatusChip extends StatelessWidget {
   }
 }
 
-class _TagPicker extends StatelessWidget {
+/// Allergen-/Zusatzstoff-Auswahl. Zeigt standardmäßig nur die gewählten plus
+/// 3 weitere Chips; „Mehr anzeigen" klappt die komplette Liste auf (#Speisekarte).
+class _TagPicker extends StatefulWidget {
   const _TagPicker({
     required this.title,
     required this.tags,
@@ -328,15 +335,39 @@ class _TagPicker extends StatelessWidget {
   final ValueChanged<String> onToggle;
 
   @override
+  State<_TagPicker> createState() => _TagPickerState();
+}
+
+class _TagPickerState extends State<_TagPicker> {
+  static const _collapsedExtra = 3;
+  bool _expanded = false;
+
+  @override
   Widget build(BuildContext context) {
     final texts = context.watch<LanguageService>();
+    final tags = widget.tags;
+
+    // Eingeklappt: gewählte Tags immer + die ersten 3 ungewählten.
+    final List<ItemTagData> visible;
+    if (_expanded) {
+      visible = tags;
+    } else {
+      final selected = tags.where((tag) => widget.selectedIds.contains(tag.id)).toList();
+      final unselected = tags
+          .where((tag) => !widget.selectedIds.contains(tag.id))
+          .take(_collapsedExtra)
+          .toList();
+      visible = [...selected, ...unselected];
+    }
+    final hidden = tags.length - visible.length;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
             Expanded(
-              child: Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
+              child: Text(widget.title, style: const TextStyle(fontWeight: FontWeight.w900)),
             ),
             Tooltip(
               message: texts.text('merchant.itemTags.tooltip'),
@@ -347,23 +378,348 @@ class _TagPicker extends StatelessWidget {
         const SizedBox(height: AppSpacing.sm),
         if (tags.isEmpty)
           Text(texts.text('merchant.itemTags.empty'), style: const TextStyle(color: MerchantPremiumColors.muted))
-        else
+        else ...[
           Wrap(
             spacing: 8,
             runSpacing: 8,
-            children: tags
+            children: visible
                 .map(
                   (tag) => FilterChip(
                     label: Text('${tag.code} ${tag.name}'),
-                    selected: selectedIds.contains(tag.id),
-                    onSelected: (_) => onToggle(tag.id),
+                    selected: widget.selectedIds.contains(tag.id),
+                    onSelected: (_) => widget.onToggle(tag.id),
                   ),
                 )
                 .toList(),
           ),
+          if (hidden > 0 || _expanded)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () => setState(() => _expanded = !_expanded),
+                icon: Icon(_expanded ? Icons.expand_less_rounded : Icons.expand_more_rounded, size: 18),
+                label: Text(
+                  _expanded
+                      ? texts.text('merchant.itemTags.showLess')
+                      : '${texts.text('merchant.itemTags.showMore')} (+$hidden)',
+                ),
+                style: TextButton.styleFrom(
+                  foregroundColor: MerchantPremiumColors.gold,
+                  padding: EdgeInsets.zero,
+                ),
+              ),
+            ),
+        ],
       ],
     );
   }
+}
+
+/// Editor für Artikel-Optionen (Gruppen mit Einzel-/Mehrfachauswahl, Pflicht
+/// und Aufpreis je Option). Verwaltet eigene Controller; meldet Änderungen
+/// live über [onChanged] an das Eltern-Sheet.
+class _OptionGroupsEditor extends StatefulWidget {
+  const _OptionGroupsEditor({required this.initial, required this.onChanged});
+
+  final List<ItemOptionGroup> initial;
+  final ValueChanged<List<ItemOptionGroup>> onChanged;
+
+  @override
+  State<_OptionGroupsEditor> createState() => _OptionGroupsEditorState();
+}
+
+class _EditOption {
+  _EditOption({required this.id, required String name, required String price})
+      : nameCtrl = TextEditingController(text: name),
+        priceCtrl = TextEditingController(text: price);
+  final String id;
+  final TextEditingController nameCtrl;
+  final TextEditingController priceCtrl;
+  void dispose() {
+    nameCtrl.dispose();
+    priceCtrl.dispose();
+  }
+}
+
+class _EditGroup {
+  _EditGroup({
+    required this.id,
+    required String title,
+    required this.isMulti,
+    required this.isRequired,
+    required this.options,
+  }) : titleCtrl = TextEditingController(text: title);
+  final String id;
+  final TextEditingController titleCtrl;
+  bool isMulti;
+  bool isRequired;
+  List<_EditOption> options;
+  void dispose() {
+    titleCtrl.dispose();
+    for (final option in options) {
+      option.dispose();
+    }
+  }
+}
+
+class _OptionGroupsEditorState extends State<_OptionGroupsEditor> {
+  late List<_EditGroup> _groups;
+  int _idCounter = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _groups = widget.initial
+        .map(
+          (group) => _EditGroup(
+            id: group.id.isEmpty ? _newId('g') : group.id,
+            title: group.title,
+            isMulti: group.multiSelect,
+            isRequired: group.isRequired,
+            options: group.options
+                .map(
+                  (option) => _EditOption(
+                    id: option.id.isEmpty ? _newId('o') : option.id,
+                    name: option.name,
+                    price: option.price == 0 ? '' : _price(option.price),
+                  ),
+                )
+                .toList(),
+          ),
+        )
+        .toList();
+  }
+
+  @override
+  void dispose() {
+    for (final group in _groups) {
+      group.dispose();
+    }
+    super.dispose();
+  }
+
+  String _newId(String prefix) =>
+      '$prefix${DateTime.now().microsecondsSinceEpoch}_${_idCounter++}';
+
+  void _emit() {
+    widget.onChanged(
+      _groups
+          .map(
+            (group) => ItemOptionGroup(
+              id: group.id,
+              title: group.titleCtrl.text.trim(),
+              multiSelect: group.isMulti,
+              isRequired: group.isRequired,
+              options: group.options
+                  .map(
+                    (option) => ItemOption(
+                      id: option.id,
+                      name: option.nameCtrl.text.trim(),
+                      price: _parsePrice(option.priceCtrl.text) ?? 0,
+                    ),
+                  )
+                  .toList(),
+            ),
+          )
+          .toList(),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final texts = context.watch<LanguageService>();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(texts.text('merchant.items.options'),
+                  style: const TextStyle(fontWeight: FontWeight.w900)),
+            ),
+            Tooltip(
+              message: texts.text('merchant.items.optionsTip'),
+              triggerMode: TooltipTriggerMode.tap,
+              showDuration: const Duration(seconds: 6),
+              child: const Icon(Icons.info_outline_rounded,
+                  size: 18, color: MerchantPremiumColors.muted),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        for (var gi = 0; gi < _groups.length; gi++)
+          _groupCard(texts, _groups[gi], gi),
+        const SizedBox(height: 4),
+        OutlinedButton.icon(
+          onPressed: () => setState(() {
+            _groups.add(_EditGroup(
+                id: _newId('g'), title: '', isMulti: false, isRequired: false, options: []));
+            _emit();
+          }),
+          icon: const Icon(Icons.add_rounded, size: 18),
+          label: Text(texts.text('merchant.items.addOptionGroup')),
+        ),
+      ],
+    );
+  }
+
+  Widget _groupCard(LanguageService texts, _EditGroup group, int index) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: MerchantPremiumColors.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: MerchantPremiumColors.line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: group.titleCtrl,
+                  onChanged: (_) => _emit(),
+                  style: const TextStyle(
+                      color: MerchantPremiumColors.ink, fontWeight: FontWeight.w800),
+                  decoration: _denseDecoration(texts.text('merchant.items.optionGroupTitle')),
+                ),
+              ),
+              IconButton(
+                tooltip: texts.text('common.delete'),
+                onPressed: () => setState(() {
+                  group.dispose();
+                  _groups.removeAt(index);
+                  _emit();
+                }),
+                icon: const Icon(Icons.delete_outline_rounded,
+                    color: MerchantPremiumColors.danger),
+              ),
+            ],
+          ),
+          Row(
+            children: [
+              Expanded(
+                child: _toggle(
+                  label: texts.text('merchant.items.optionMulti'),
+                  value: group.isMulti,
+                  onChanged: (v) => setState(() {
+                    group.isMulti = v;
+                    _emit();
+                  }),
+                ),
+              ),
+              Expanded(
+                child: _toggle(
+                  label: texts.text('merchant.items.optionRequired'),
+                  value: group.isRequired,
+                  onChanged: (v) => setState(() {
+                    group.isRequired = v;
+                    _emit();
+                  }),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          for (var oi = 0; oi < group.options.length; oi++)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    flex: 3,
+                    child: TextField(
+                      controller: group.options[oi].nameCtrl,
+                      onChanged: (_) => _emit(),
+                      style: const TextStyle(color: MerchantPremiumColors.ink),
+                      decoration: _denseDecoration(texts.text('merchant.items.optionName')),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    flex: 2,
+                    child: TextField(
+                      controller: group.options[oi].priceCtrl,
+                      onChanged: (_) => _emit(),
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      inputFormatters: [_PriceInputFormatter()],
+                      style: const TextStyle(color: MerchantPremiumColors.ink),
+                      decoration: _denseDecoration(texts.text('merchant.items.optionPrice'))
+                          .copyWith(prefixText: '+ ', suffixText: '€'),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: texts.text('common.delete'),
+                    onPressed: () => setState(() {
+                      group.options[oi].dispose();
+                      group.options.removeAt(oi);
+                      _emit();
+                    }),
+                    icon: const Icon(Icons.close_rounded,
+                        size: 20, color: MerchantPremiumColors.muted),
+                  ),
+                ],
+              ),
+            ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: () => setState(() {
+                group.options.add(_EditOption(id: _newId('o'), name: '', price: ''));
+                _emit();
+              }),
+              icon: const Icon(Icons.add_rounded, size: 16),
+              label: Text(texts.text('merchant.items.addOption')),
+              style: TextButton.styleFrom(
+                  foregroundColor: MerchantPremiumColors.gold, padding: EdgeInsets.zero),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _toggle({
+    required String label,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return Row(
+      children: [
+        Switch(value: value, onChanged: onChanged),
+        Flexible(
+          child: Text(
+            label,
+            style: const TextStyle(
+                color: MerchantPremiumColors.muted, fontWeight: FontWeight.w700, fontSize: 12.5),
+          ),
+        ),
+      ],
+    );
+  }
+
+  InputDecoration _denseDecoration(String hint) => InputDecoration(
+        isDense: true,
+        hintText: hint,
+        hintStyle: const TextStyle(color: MerchantPremiumColors.muted),
+        filled: true,
+        fillColor: MerchantPremiumColors.baseElevated,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: MerchantPremiumColors.line),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: MerchantPremiumColors.line),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: MerchantPremiumColors.gold, width: 1.3),
+        ),
+      );
 }
 
 Future<void> _openItemSheet(BuildContext context, {MerchantItemData? item}) async {
@@ -379,12 +735,21 @@ Future<void> _openItemSheet(BuildContext context, {MerchantItemData? item}) asyn
   final description = TextEditingController(text: item?.description ?? '');
   final price = TextEditingController(text: item == null ? '' : _price(item.price));
   final originalPrice = TextEditingController(text: item?.originalPrice == null ? '' : _price(item!.originalPrice!));
-  final articleNumber = TextEditingController(text: item?.articleNumber ?? '');
+  // Neue Artikel bekommen automatisch die nächsthöhere freie Nummer.
+  final articleNumber = TextEditingController(
+    text: item?.articleNumber ?? _nextArticleNumber(provider.items),
+  );
   var categoryId = initialCategoryId;
   var imageUrl = item?.imageUrl ?? '';
   var isActive = item?.isActive ?? true;
   var isAvailable = item?.isAvailable ?? true;
   var isPrivate = item?.isPrivate ?? false;
+  // „Alter Preis" nur sichtbar, wenn der Aktionspreis-Schalter an ist.
+  var showOldPrice = item?.originalPrice != null;
+  // Bildformat: 'square' (1:1) oder 'wide' (16:9, magazin-tauglich).
+  var imageRatio = item?.imageRatio ?? 'square';
+  // Optionsgruppen (live vom Options-Editor aktualisiert).
+  var optionGroups = item == null ? <ItemOptionGroup>[] : [...item.optionGroups];
   var allergenIds = item == null ? <String>[] : [...item.allergenIds];
   var additiveIds = item == null ? <String>[] : [...item.additiveIds];
   final allergens = provider.itemTags.where((tag) => tag.type == ItemTagType.allergen).toList();
@@ -422,15 +787,34 @@ Future<void> _openItemSheet(BuildContext context, {MerchantItemData? item}) asyn
                 const SizedBox(height: AppSpacing.md),
                 MerchantTextField(controller: description, label: texts.text('common.description'), maxLines: 3),
                 const SizedBox(height: AppSpacing.md),
+                MerchantTextField(controller: price, label: texts.text('merchant.items.price'), keyboardType: TextInputType.number),
+                const SizedBox(height: AppSpacing.sm),
                 Row(
                   children: [
-                    Expanded(child: MerchantTextField(controller: price, label: texts.text('merchant.items.price'), keyboardType: TextInputType.number)),
-                    const SizedBox(width: AppSpacing.sm),
-                    Expanded(child: MerchantTextField(controller: originalPrice, label: texts.text('merchant.items.originalPrice'), keyboardType: TextInputType.number)),
+                    Expanded(
+                      child: Text(
+                        texts.text('merchant.items.oldPriceToggle'),
+                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                    Tooltip(
+                      message: texts.text('merchant.items.oldPriceTooltip'),
+                      triggerMode: TooltipTriggerMode.tap,
+                      showDuration: const Duration(seconds: 6),
+                      child: const Icon(Icons.info_outline_rounded, size: 18, color: MerchantPremiumColors.muted),
+                    ),
+                    Switch(
+                      value: showOldPrice,
+                      onChanged: (value) => setState(() => showOldPrice = value),
+                    ),
                   ],
                 ),
+                if (showOldPrice) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  MerchantTextField(controller: originalPrice, label: texts.text('merchant.items.originalPrice'), keyboardType: TextInputType.number),
+                ],
                 const SizedBox(height: AppSpacing.md),
-                MerchantTextField(controller: articleNumber, label: texts.text('merchant.items.articleNumber')),
+                MerchantTextField(controller: articleNumber, label: texts.text('merchant.items.articleNumber'), keyboardType: TextInputType.number),
                 const SizedBox(height: AppSpacing.md),
                 _TagPicker(
                   title: texts.text('merchant.itemTags.allergens'),
@@ -446,9 +830,34 @@ Future<void> _openItemSheet(BuildContext context, {MerchantItemData? item}) asyn
                   onToggle: (id) => setState(() => additiveIds = _toggleId(additiveIds, id)),
                 ),
                 const SizedBox(height: AppSpacing.md),
+                _OptionGroupsEditor(
+                  initial: optionGroups,
+                  onChanged: (groups) => optionGroups = groups,
+                ),
+                const SizedBox(height: AppSpacing.md),
+                Text(texts.text('merchant.items.imageFormat'), style: const TextStyle(fontWeight: FontWeight.w900)),
+                const SizedBox(height: AppSpacing.sm),
+                SegmentedButton<String>(
+                  segments: [
+                    ButtonSegment(
+                      value: 'square',
+                      icon: const Icon(Icons.crop_square_rounded, size: 18),
+                      label: Text(texts.text('merchant.items.imageSquare')),
+                    ),
+                    ButtonSegment(
+                      value: 'wide',
+                      icon: const Icon(Icons.crop_16_9_rounded, size: 18),
+                      label: Text(texts.text('merchant.items.imageWide')),
+                    ),
+                  ],
+                  selected: {imageRatio},
+                  onSelectionChanged: (selection) => setState(() => imageRatio = selection.first),
+                  showSelectedIcon: false,
+                ),
+                const SizedBox(height: AppSpacing.sm),
                 OutlinedButton.icon(
                   onPressed: () async {
-                    final uploaded = await provider.uploadImage();
+                    final uploaded = await provider.uploadImage(wide: imageRatio == 'wide');
                     if (uploaded != null && uploaded.isNotEmpty) setState(() => imageUrl = uploaded);
                   },
                   icon: const Icon(Icons.image_rounded),
@@ -462,12 +871,23 @@ Future<void> _openItemSheet(BuildContext context, {MerchantItemData? item}) asyn
                   label: texts.text('common.save'),
                   onPressed: () async {
                     final parsedPrice = _parsePrice(price.text);
-                    final parsedOriginal = _parsePrice(originalPrice.text);
+                    final parsedOriginal = showOldPrice ? _parsePrice(originalPrice.text) : null;
                     // Sichtbare Validierung statt stillem return (#90/#91).
                     final error = _validateItem(texts, name.text, parsedPrice, parsedOriginal);
                     if (error != null) {
                       ScaffoldMessenger.of(sheetContext).showSnackBar(
                         SnackBar(content: Text(error)),
+                      );
+                      return;
+                    }
+                    // Artikelnummer darf nicht doppelt vergeben werden (#Speisekarte).
+                    final number = articleNumber.text.trim();
+                    final numberTaken = number.isNotEmpty &&
+                        provider.items.any((other) =>
+                            other.id != item?.id && other.articleNumber.trim() == number);
+                    if (numberTaken) {
+                      ScaffoldMessenger.of(sheetContext).showSnackBar(
+                        SnackBar(content: Text(texts.text('merchant.items.error.articleNumberTaken'))),
                       );
                       return;
                     }
@@ -485,6 +905,8 @@ Future<void> _openItemSheet(BuildContext context, {MerchantItemData? item}) asyn
                       isActive: isActive,
                       isAvailable: isAvailable,
                       isPrivate: isPrivate,
+                      imageRatio: imageRatio,
+                      optionGroups: _sanitizeOptionGroups(optionGroups),
                     );
                     if (sheetContext.mounted) Navigator.of(sheetContext).pop();
                   },
@@ -611,3 +1033,45 @@ List<String> _toggleId(List<String> values, String id) {
 }
 
 String _price(num value) => value.toStringAsFixed(value % 1 == 0 ? 0 : 2).replaceAll('.', ',');
+
+/// Entfernt leere Optionsgruppen/-optionen vor dem Speichern: Optionen ohne
+/// Namen und Gruppen ohne Titel oder ohne (gültige) Optionen fallen raus.
+List<ItemOptionGroup> _sanitizeOptionGroups(List<ItemOptionGroup> groups) {
+  final result = <ItemOptionGroup>[];
+  for (final group in groups) {
+    final title = group.title.trim();
+    final options = group.options.where((option) => option.name.trim().isNotEmpty).toList();
+    if (title.isEmpty || options.isEmpty) continue;
+    result.add(ItemOptionGroup(
+      id: group.id,
+      title: title,
+      multiSelect: group.multiSelect,
+      isRequired: group.isRequired,
+      options: options,
+    ));
+  }
+  return result;
+}
+
+/// Erlaubt nur eine gültige Dezimalzahl im Aufpreis-Feld (blockt Buchstaben
+/// und mehrfache Trennzeichen direkt bei der Eingabe).
+class _PriceInputFormatter extends TextInputFormatter {
+  static final _pattern = RegExp(r'^\d{0,5}([.,]\d{0,2})?$');
+
+  @override
+  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
+    if (newValue.text.isEmpty || _pattern.hasMatch(newValue.text)) return newValue;
+    return oldValue;
+  }
+}
+
+/// Nächste freie Artikelnummer = höchste vorhandene numerische Nummer + 1.
+/// Bereits vergebene Nummern werden so nie erneut vorgeschlagen.
+String _nextArticleNumber(List<MerchantItemData> items) {
+  var max = 0;
+  for (final item in items) {
+    final number = int.tryParse(item.articleNumber.trim());
+    if (number != null && number > max) max = number;
+  }
+  return (max + 1).toString();
+}

@@ -85,9 +85,20 @@ service cloud.firestore {
       match /feedPosts/{id}      { allow read: if true; allow write: if isMerchantOwner(mid); }
       match /openingHours/{id}   { allow read: if true; allow write: if isMerchantOwner(mid); }
 
-      // Alles Übrige bleibt privat beim Merchant (customers, orders,
-      // displayStudio (+ Sub: layouts/devices/routines/logs), shifts, tables,
-      // tableAreas, appointments, featureConfigs, campaigns …).
+      // Bestellungen: Kunde (öffentlich, ohne Login) darf aufgeben UND seine
+      // Bestellungen lesen – Status-Tracking auf der Bestätigung sowie
+      // „Meine Bestellungen" im Runner-Modus (list, gefiltert nach runnerId).
+      // Ändern/Löschen bleibt beim Merchant.
+      // Datenschutz-Hinweis: list ist öffentlich – für ein leichtgewichtiges
+      // Merchant-System vertretbar; später ggf. mit anonymem Auth härten.
+      match /orders/{orderId} {
+        allow get, list, create: if true;
+        allow update, delete: if isMerchantOwner(mid);
+      }
+
+      // Alles Übrige bleibt privat beim Merchant (customers, displayStudio
+      // (+ Sub: layouts/devices/routines/logs), shifts, tables, tableAreas,
+      // appointments, featureConfigs, campaigns …). Orders sind oben offen.
       match /{sub=**} {
         allow read, write: if isMerchantOwner(mid);
       }

@@ -1,17 +1,22 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../../../../core/config/appConfig.dart';
 import '../../../../core/constants/firebasePaths.dart';
 import '../../../../core/services/authService.dart';
 import '../../../../core/services/firestoreService.dart';
 import '../../../../core/services/geoapifyService.dart';
 import '../../catalog/models/itemCategoryData.dart';
+import '../../catalog/models/itemOptionGroup.dart';
 import '../../catalog/models/itemTagData.dart';
 import '../../catalog/models/merchantItemData.dart';
+import '../../catalog/models/runnerData.dart';
 import '../../tables/models/merchantTableData.dart';
 
 export '../../catalog/models/itemCategoryData.dart';
+export '../../catalog/models/itemOptionGroup.dart';
 export '../../catalog/models/itemTagData.dart';
 export '../../catalog/models/merchantItemData.dart';
+export '../../catalog/models/runnerData.dart';
 export '../../tables/models/merchantTableData.dart';
 
 class MerchantToolsService {
@@ -33,6 +38,35 @@ class MerchantToolsService {
 
   Future<Map<String, dynamic>?> loadMerchant() {
     return firestoreService.getMerchantProfile(merchantId);
+  }
+
+  /// Runner (Name + PIN) liegen als Liste im publicMerchants-Doc, damit das
+  /// Bestell-Gerät im Shop sie zum PIN-Login lesen kann.
+  Future<List<RunnerData>> loadRunners() async {
+    final data = await firestoreService.readDocument(
+      FirebasePaths.publicMerchant(merchantId),
+    );
+    return RunnerData.listFromRaw(data?['runners']);
+  }
+
+  Future<void> saveRunners(List<RunnerData> runners) {
+    return firestoreService.setDocument(
+      FirebasePaths.publicMerchant(merchantId),
+      {
+        'runners': runners.map((runner) => runner.toMap()).toList(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      },
+    );
+  }
+
+  /// Speichert die öffentliche Speisekarte-URL des Merchants im publicMerchants-
+  /// Doc (damit sie automatisch hinterlegt/abrufbar ist). Merge = überschreibt
+  /// nichts anderes.
+  Future<void> saveShopUrl(String url) {
+    return firestoreService.setDocument(
+      FirebasePaths.publicMerchant(merchantId),
+      {'shopUrl': url, 'updatedAt': FieldValue.serverTimestamp()},
+    );
   }
 
   Future<List<String>> loadChooserShopTypes() {
@@ -198,6 +232,8 @@ class MerchantToolsService {
     required bool isActive,
     required bool isAvailable,
     required bool isPrivate,
+    String imageRatio = 'square',
+    List<ItemOptionGroup> optionGroups = const [],
   }) async {
     final itemId = id?.isNotEmpty == true
         ? id!
@@ -222,6 +258,8 @@ class MerchantToolsService {
         'isActive': isActive,
         'isAvailable': isAvailable,
         'isPrivate': isPrivate,
+        'imageRatio': imageRatio,
+        'optionGroups': optionGroups.map((group) => group.toMap()).toList(),
         'type': 'merchant_item',
         'searchName': _normalize(name),
         if (isNew) 'createdAt': FieldValue.serverTimestamp(),
@@ -447,7 +485,7 @@ class MerchantToolsService {
       'areaName': areaName,
       'label': label.trim(),
       'seats': seats,
-      'qrUrl': '${_origin()}/shop/$merchantId/table/$id',
+      'qrUrl': '${AppConfig.shopLinkBase}/shop/$merchantId/table/$id',
       'isActive': isActive,
       if (isNew) 'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
@@ -569,6 +607,3 @@ bool _shopProfileComplete({
       values['openingHours'] is Map;
 }
 
-String _origin() {
-  return Uri.base.host.isEmpty ? 'https://lokka.app' : Uri.base.origin;
-}

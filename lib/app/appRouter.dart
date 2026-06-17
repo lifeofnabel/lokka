@@ -30,8 +30,12 @@ import '../features/invite/pages/merchantInvitePage.dart';
 import '../features/merchant/catalog/pages/merchantCategoriesPage.dart';
 import '../features/merchant/catalog/pages/merchantItemTagsPage.dart';
 import '../features/merchant/catalog/pages/merchantItemsPage.dart';
+import '../features/merchant/catalog/pages/merchantMenuDesignPage.dart';
+import '../features/merchant/catalog/pages/merchantQrCodesPage.dart';
+import '../features/merchant/catalog/pages/merchantRunnersPage.dart';
 import '../features/merchant/coupons/pages/merchantCouponEditPage.dart';
 import '../features/merchant/orders/pages/merchantOrderDetailPage.dart';
+import '../features/merchant/orders/pages/merchantOrderTablesPage.dart';
 import '../features/merchant/orders/pages/merchantOrdersPage.dart';
 import '../features/merchant/points/pages/merchantPointRewardEditPage.dart';
 import '../features/merchant/points/pages/merchantPointSystemEditPage.dart';
@@ -395,6 +399,19 @@ class AppRouter {
         builder: (context, state) => _merchantDark(const MerchantCatalogPage()),
       ),
       GoRoute(
+        path: '/merchant/catalog/design',
+        builder: (context, state) =>
+            _merchantDark(const MerchantMenuDesignPage()),
+      ),
+      GoRoute(
+        path: '/merchant/catalog/qr',
+        builder: (context, state) => _merchantDark(const MerchantQrCodesPage()),
+      ),
+      GoRoute(
+        path: '/merchant/catalog/runners',
+        builder: (context, state) => _merchantDark(const MerchantRunnersPage()),
+      ),
+      GoRoute(
         path: '/merchant/catalog/demo',
         redirect: (_, _) => '/merchant/catalog',
       ),
@@ -426,6 +443,20 @@ class AppRouter {
       GoRoute(
         path: '/merchant/orders',
         builder: (context, state) => _merchantDark(const MerchantOrdersPage()),
+      ),
+      // Tisch-Routen VOR ':orderId', sonst matcht "tables" als orderId.
+      GoRoute(
+        path: '/merchant/orders/tables',
+        builder: (context, state) =>
+            _merchantDark(const MerchantOrderTablesPage()),
+      ),
+      GoRoute(
+        path: '/merchant/orders/tables/:tableKey',
+        builder: (context, state) => _merchantDark(
+          MerchantTableOrdersPage(
+            tableKey: state.pathParameters['tableKey'] ?? '',
+          ),
+        ),
       ),
       GoRoute(
         path: '/merchant/orders/:orderId',

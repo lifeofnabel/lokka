@@ -61,4 +61,16 @@ class MerchantMenuSettingsService {
       },
     );
   }
+
+  /// Speichert nur die Gestaltung der Kundenkarte (Design-Seite im Katalog).
+  /// Dank `merge` bleiben externer Link & Integration unberührt.
+  Future<void> saveDesign(MenuDesign style) {
+    return firestoreService.setDocument(
+      FirebasePaths.publicMerchant(_merchantId),
+      {
+        ...style.toMap(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      },
+    );
+  }
 }

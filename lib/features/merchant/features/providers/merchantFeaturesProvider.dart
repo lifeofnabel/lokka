@@ -49,16 +49,58 @@ class MerchantFeaturesProvider extends ChangeNotifier {
     }
   }
 
+  /// Bestell-Modi der Speisekarte (genau diese Keys steuern Exklusivität/Pflicht).
+  static const _catalogModes = [
+    'catalogModeRunner',
+    'catalogModeTable',
+    'catalogModeCashier',
+    'catalogModeMenuOnly',
+  ];
+  static const _catalogExclusiveModes = ['catalogModeRunner', 'catalogModeMenuOnly'];
+
   void setEnabled(MerchantFeatureModule module, bool enabled) {
     if (module.isRequired || module.comingSoon) return;
     draftStates = {...draftStates, module.key: enabled};
+    // Speisekarte einschalten ⇒ mind. 1 Modus Pflicht: Standard „Nur Speisekarte".
+    if (enabled && module.key == 'menuCatalog') {
+      final current = {...?draftSettings[module.key]};
+      if (!_catalogModes.any((m) => current[m] == true)) {
+        current['catalogModeMenuOnly'] = true;
+        current['catalogOnly'] = true;
+        draftSettings = {...draftSettings, module.key: current};
+      }
+    }
     notifyListeners();
   }
 
   void setOptionEnabled(MerchantFeatureModule module, MerchantFeatureOption option, bool enabled) {
     if (module.isRequired || module.comingSoon || option.key == 'catalogOnly') return;
     final current = {...?draftSettings[module.key]};
-    current[option.key] = enabled;
+
+    if (_catalogModes.contains(option.key)) {
+      if (enabled) {
+        if (_catalogExclusiveModes.contains(option.key)) {
+          // Runner / Nur-Karte: alle anderen Modi aus.
+          for (final mode in _catalogModes) {
+            current[mode] = mode == option.key;
+          }
+        } else {
+          // Tisch / Vor-Kasse: exklusive Modi aus, den anderen kombinierbaren behalten.
+          current['catalogModeRunner'] = false;
+          current['catalogModeMenuOnly'] = false;
+          current[option.key] = true;
+        }
+      } else {
+        // ≥1 Pflicht: letzten aktiven Modus nicht abschaltbar.
+        final stillOneLeft =
+            _catalogModes.any((mode) => mode != option.key && current[mode] == true);
+        if (!stillOneLeft) return;
+        current[option.key] = false;
+      }
+    } else {
+      current[option.key] = enabled;
+    }
+
     current['catalogOnly'] = true;
     draftSettings = {...draftSettings, module.key: current};
     notifyListeners();

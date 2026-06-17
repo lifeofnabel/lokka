@@ -12,11 +12,15 @@ class PublicShopHero extends StatelessWidget {
     required this.merchant,
     required this.tableLabel,
     required this.darkMode,
+    this.footer,
   });
 
   final Map<String, dynamic> merchant;
   final String tableLabel;
   final bool darkMode;
+
+  /// Optionale Leiste am unteren Cover-Rand (Kontakt/Öffnungszeiten).
+  final Widget? footer;
 
   @override
   Widget build(BuildContext context) {
@@ -30,8 +34,9 @@ class PublicShopHero extends StatelessWidget {
       (merchant['shopTypePrimary'] ?? merchant['shopType'] ?? '').toString(),
     ].where((value) => value.trim().isNotEmpty).join(' | ');
 
+    final base = description.trim().isEmpty ? 238.0 : 268.0;
     return Container(
-      height: description.trim().isEmpty ? 238 : 268,
+      height: base + (footer != null ? 52 : 0),
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: AppColors.black,
@@ -147,6 +152,10 @@ class PublicShopHero extends StatelessWidget {
                 if (tableLabel.isNotEmpty) ...[
                   const SizedBox(height: 12),
                   _HeroPill(label: texts.text('public.shop.table').replaceAll('{table}', tableLabel)),
+                ],
+                if (footer != null) ...[
+                  const SizedBox(height: 12),
+                  footer!,
                 ],
               ],
             ),

@@ -15,7 +15,7 @@ class MerchantToolScaffold extends StatelessWidget {
     required this.child,
     this.trailing,
     this.backPath,
-    this.showHeader = true,
+    this.showHeader = false,
   });
 
   final String title;
@@ -24,8 +24,10 @@ class MerchantToolScaffold extends StatelessWidget {
   final Widget? trailing;
   final String? backPath;
 
-  /// Wenn false, rendert die Seite ihren eigenen Topper im Body und der
-  /// große Header-Block hier wird weggelassen (vermeidet doppelte Titel).
+  /// Großer Body-Header (Titel + Untertitel). Standardmäßig AUS: die AppBar
+  /// zeigt den Titel bereits, ein zweiter wäre doppelt – und die Detail-Info
+  /// steckt im Info-Tooltip (Klick). Nur auf true setzen, wenn eine Seite den
+  /// großen Header ausnahmsweise doch braucht.
   final bool showHeader;
 
   @override
@@ -131,6 +133,11 @@ class MerchantInfoTooltip extends StatelessWidget {
   Widget build(BuildContext context) {
     return Tooltip(
       message: message,
+      // „Mehr Info beim Klick": antippen zeigt den Text (statt nur Hover/
+      // Long-Press) und lässt ihn lange genug zum Lesen stehen.
+      triggerMode: TooltipTriggerMode.tap,
+      showDuration: const Duration(seconds: 8),
+      preferBelow: true,
       child: Container(
         width: 36,
         height: 36,

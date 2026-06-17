@@ -8,7 +8,7 @@ enum MenuLayoutStyle {
   /// Bildliste: Foto links, Text rechts (Standard, bisheriges Verhalten).
   list,
 
-  /// Kompakte Textliste: Name … Preis, klassische Restaurantkarte ohne Bilder.
+  /// Klassische Speisekarte: Name · · · Preis mit Führungspunkten, ohne Bilder.
   compact,
 
   /// Galerie: Karten mit großem Foto oben, Text darunter.
@@ -19,15 +19,15 @@ enum MenuLayoutStyle {
 
   String get label => switch (this) {
         MenuLayoutStyle.list => 'Liste',
-        MenuLayoutStyle.compact => 'Kompakt',
+        MenuLayoutStyle.compact => 'Klassisch',
         MenuLayoutStyle.gallery => 'Galerie',
         MenuLayoutStyle.magazine => 'Magazin',
       };
 
   String get description => switch (this) {
         MenuLayoutStyle.list => 'Foto links, Text rechts',
-        MenuLayoutStyle.compact => 'Nur Text, klassisch',
-        MenuLayoutStyle.gallery => 'Große Fotos in Karten',
+        MenuLayoutStyle.compact => 'Name · · · Preis',
+        MenuLayoutStyle.gallery => 'Foto-Karten, 2 Spalten',
         MenuLayoutStyle.magazine => 'Große Hero-Karten',
       };
 

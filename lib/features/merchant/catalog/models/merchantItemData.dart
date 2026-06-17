@@ -1,3 +1,5 @@
+import 'itemOptionGroup.dart';
+
 class MerchantItemData {
   const MerchantItemData({
     required this.id,
@@ -15,6 +17,8 @@ class MerchantItemData {
     required this.isAvailable,
     required this.isPrivate,
     required this.isArchived,
+    this.imageRatio = 'square',
+    this.optionGroups = const [],
   });
 
   final String id;
@@ -33,6 +37,16 @@ class MerchantItemData {
   final bool isPrivate;
   final bool isArchived;
 
+  /// Bild-Seitenverhältnis: 'square' (1:1) oder 'wide' (16:9, magazin-tauglich).
+  final String imageRatio;
+
+  bool get isWideImage => imageRatio == 'wide';
+
+  /// Optionsgruppen (z.B. „Soße", „Extras") mit Aufpreis-Optionen.
+  final List<ItemOptionGroup> optionGroups;
+
+  bool get hasOptions => optionGroups.isNotEmpty;
+
   factory MerchantItemData.fromMap(Map<String, dynamic> map) {
     return MerchantItemData(
       id: map['id'] as String? ?? '',
@@ -50,8 +64,21 @@ class MerchantItemData {
       isAvailable: map['isAvailable'] as bool? ?? true,
       isPrivate: map['isPrivate'] as bool? ?? false,
       isArchived: map['isArchived'] as bool? ?? false,
+      imageRatio: (map['imageRatio'] as String?) == 'wide' ? 'wide' : 'square',
+      optionGroups: _readOptionGroups(map['optionGroups']),
     );
   }
+}
+
+List<ItemOptionGroup> _readOptionGroups(dynamic value) {
+  if (value is! List) return const [];
+  final groups = <ItemOptionGroup>[];
+  for (final raw in value) {
+    if (raw is Map) {
+      groups.add(ItemOptionGroup.fromMap(Map<String, dynamic>.from(raw)));
+    }
+  }
+  return groups;
 }
 
 List<String> _stringList(dynamic value) {

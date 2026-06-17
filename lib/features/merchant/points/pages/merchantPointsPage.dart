@@ -90,10 +90,9 @@ class _MerchantPointsViewState extends State<_MerchantPointsView> {
             ),
             const SizedBox(height: AppSpacing.xl),
 
-            // ── 2 · DIE GROSSE ENTSCHEIDUNG: Welches System? ────────────────
-            _BigDecisionSection(
+            // ── 2 · Modus-Schalter: Monthly Rewards ↔ Punkte-Shop ───────────
+            _ModeSwitch(
               selected: mode,
-              hasSystem: system != null,
               onChoose: (next) => _onChooseMode(context, provider, system, next),
             ),
             const SizedBox(height: AppSpacing.xl),
@@ -377,171 +376,78 @@ class _StatusHero extends StatelessWidget {
 }
 
 // ════════════════════════════════════════════════════════════════════════
-//  DIE GROSSE ENTSCHEIDUNG
+//  PROGRAMM-SCHALTER (Monthly Rewards ↔ Punkte-Shop)
 // ════════════════════════════════════════════════════════════════════════
 
-class _BigDecisionSection extends StatelessWidget {
-  const _BigDecisionSection({
+/// Kompakter Umschalter zwischen den beiden Punkte-Programmen.
+/// Statt zwei großer Auswahlkarten: ein platzsparender Segment-Schalter mit
+/// kleinem Info-Tooltip, der beide Varianten erklärt.
+class _ModeSwitch extends StatelessWidget {
+  const _ModeSwitch({
     required this.selected,
-    required this.hasSystem,
     required this.onChoose,
   });
 
   final String selected;
-  final bool hasSystem;
   final ValueChanged<String> onChoose;
 
   @override
   Widget build(BuildContext context) {
     final texts = context.watch<LanguageService>();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _SectionLabel(
-          title: _t(texts, 'merchant.points.decisionTitle',
-              'Welches System möchtest du?'),
-          hint: _t(texts, 'merchant.points.decisionHint',
-              'Wähle eine von zwei Möglichkeiten. Du kannst später wechseln.'),
-        ),
-        const SizedBox(height: AppSpacing.md),
-        _BigOptionCard(
-          title: _t(texts, 'merchant.points.mode.monthlyRewards',
-              'Monatliche Geschenke'),
-          description: _t(
-            texts,
-            'merchant.points.decisionMonthlyDesc',
-            'Kunden sammeln den ganzen Monat Punkte und bekommen feste Geschenke, je mehr Punkte – desto größer das Geschenk.',
-          ),
-          icon: Icons.calendar_month_rounded,
-          selected: selected == PointsProgramMode.monthlyRewards,
-          onTap: () => onChoose(PointsProgramMode.monthlyRewards),
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        _BigOptionCard(
-          title: _t(texts, 'merchant.points.mode.pointsShopRewards',
-              'Punkteshop'),
-          description: _t(
-            texts,
-            'merchant.points.decisionShopDesc',
-            'Kunden lösen ihre Punkte jederzeit gegen Artikel aus deinem kleinen Punkteshop ein.',
-          ),
-          icon: Icons.shopping_bag_rounded,
-          selected: selected == PointsProgramMode.pointsShopRewards,
-          onTap: () => onChoose(PointsProgramMode.pointsShopRewards),
-        ),
-      ],
-    );
-  }
-}
-
-class _BigOptionCard extends StatelessWidget {
-  const _BigOptionCard({
-    required this.title,
-    required this.description,
-    required this.icon,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String title;
-  final String description;
-  final IconData icon;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(26),
-        child: Container(
-          padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(
-            color: selected
-                ? MerchantPremiumColors.goldSoft
-                : MerchantPremiumColors.surface,
-            borderRadius: BorderRadius.circular(26),
-            border: Border.all(
-              color: selected
-                  ? MerchantPremiumColors.gold
-                  : MerchantPremiumColors.line,
-              width: selected ? 1.6 : 1,
-            ),
-            boxShadow: selected ? null : MerchantPremiumShadows.soft,
-          ),
-          child: Row(
+    return MerchantPremiumCard(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              Container(
-                width: 58,
-                height: 58,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: selected
-                      ? MerchantPremiumColors.gold
-                      : MerchantPremiumColors.surfaceAlt,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: selected
-                        ? MerchantPremiumColors.gold
-                        : MerchantPremiumColors.line,
+              Expanded(
+                child: Text(
+                  _t(texts, 'merchant.points.modeTitle', 'Programm'),
+                  style: const TextStyle(
+                    color: MerchantPremiumColors.ink,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
                   ),
                 ),
-                child: Icon(
-                  icon,
-                  size: 28,
-                  color: selected
-                      ? MerchantPremiumColors.base
-                      : MerchantPremiumColors.ink,
-                ),
               ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: MerchantPremiumColors.ink,
-                              fontSize: 18,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                        Icon(
-                          selected
-                              ? Icons.check_circle_rounded
-                              : Icons.circle_outlined,
-                          size: 24,
-                          color: selected
-                              ? MerchantPremiumColors.gold
-                              : MerchantPremiumColors.muted,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 5),
-                    Text(
-                      description,
-                      style: const TextStyle(
-                        color: MerchantPremiumColors.muted,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        height: 1.3,
-                      ),
-                    ),
-                  ],
+              // Kleiner Tooltip erklärt beide Varianten – gleiche Optik wie
+              // sonst im Merchant-Bereich.
+              MerchantInfoTooltip(
+                message: _t(
+                  texts,
+                  'merchant.points.modeTooltip',
+                  'Monthly Rewards: Kund:innen sammeln den ganzen Monat Punkte und bekommen feste Geschenke – je mehr Punkte, desto größer.\n\nPunkte-Shop: Kund:innen lösen ihre Punkte jederzeit gegen Artikel aus deinem Punkteshop ein.',
                 ),
               ),
             ],
           ),
-        ),
+          const SizedBox(height: AppSpacing.md),
+          SizedBox(
+            width: double.infinity,
+            child: SegmentedButton<String>(
+              segments: [
+                ButtonSegment<String>(
+                  value: PointsProgramMode.monthlyRewards,
+                  icon: const Icon(Icons.calendar_month_rounded, size: 18),
+                  label: Text(
+                    _t(texts, 'merchant.points.modeMonthly', 'Monthly Rewards'),
+                  ),
+                ),
+                ButtonSegment<String>(
+                  value: PointsProgramMode.pointsShopRewards,
+                  icon: const Icon(Icons.storefront_rounded, size: 18),
+                  label: Text(
+                    _t(texts, 'merchant.points.modeShop', 'Punkte-Shop'),
+                  ),
+                ),
+              ],
+              selected: {selected},
+              onSelectionChanged: (selection) => onChoose(selection.first),
+              showSelectedIcon: false,
+            ),
+          ),
+        ],
       ),
     );
   }
