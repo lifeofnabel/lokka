@@ -23,6 +23,9 @@ class MerchantFeaturesProvider extends ChangeNotifier {
   }
 
   bool optionEnabled(MerchantFeatureModule module, MerchantFeatureOption option) {
+    // catalogOnly ist KEINE eigenständig persistierte Option, sondern wird
+    // ausschließlich hier aus isEnabled abgeleitet (#59 – eine Quelle statt der
+    // früheren dreifachen impliziten Kopplung in load/setEnabled/setOption).
     if (option.key == 'catalogOnly') return isEnabled(module);
     return draftSettings[module.key]?[option.key] ?? false;
   }
@@ -32,7 +35,8 @@ class MerchantFeaturesProvider extends ChangeNotifier {
       isLoading = true;
       error = null;
       notifyListeners();
-      await service.ensureRequiredFeatures();
+      // feedPosts wird bereits bei der Registrierung angelegt; loadFeatureStates
+      // heilt fehlende Alt-Docs selbst, daher kein separater Write hier (#59).
       final bundle = await service.loadFeatureStates();
       states = bundle.states;
       draftStates = {...bundle.states};
@@ -66,7 +70,6 @@ class MerchantFeaturesProvider extends ChangeNotifier {
       final current = {...?draftSettings[module.key]};
       if (!_catalogModes.any((m) => current[m] == true)) {
         current['catalogModeMenuOnly'] = true;
-        current['catalogOnly'] = true;
         draftSettings = {...draftSettings, module.key: current};
       }
     }
@@ -101,7 +104,8 @@ class MerchantFeaturesProvider extends ChangeNotifier {
       current[option.key] = enabled;
     }
 
-    current['catalogOnly'] = true;
+    // catalogOnly NICHT mehr persistieren – wird in optionEnabled aus isEnabled
+    // abgeleitet (#59).
     draftSettings = {...draftSettings, module.key: current};
     notifyListeners();
   }

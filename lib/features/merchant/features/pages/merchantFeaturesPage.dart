@@ -12,10 +12,13 @@ import '../models/merchantFeatureModule.dart';
 import '../providers/merchantFeaturesProvider.dart';
 import '../services/merchantFeaturesService.dart';
 
-/// „Funktionen" – bewusst einfach gehalten: pro Funktion eine ruhige Karte
-/// mit großem Namen, einem Satz Erklärung (was der Kunde sieht) und einem
-/// Schalter. Inline-Deutsch statt i18n-Keys, damit die Texte hier klar und
-/// alltagstauglich bleiben. Toggle-/Speicher-Logik ist unverändert.
+/// „Funktionen verwalten" – bewusst einfach gehalten: pro Funktion eine ruhige
+/// Karte mit großem Namen, einem Satz Erklärung (was der Kunde sieht) und einem
+/// Schalter. Inline-Deutsch statt i18n-Keys ist hier die bewusste Entscheidung
+/// (#59): die Copy ist alltagstauglicher als die knappen merchant.features.*-
+/// Keys; die früheren ungenutzten titleKey/tooltipKey/releaseKey im Modell
+/// wurden entfernt, damit es keine Doppelpflege/Toten Ballast mehr gibt.
+/// Toggle-/Speicher-Logik ist unverändert.
 class MerchantFeaturesPage extends StatelessWidget {
   const MerchantFeaturesPage({super.key});
 
@@ -41,9 +44,14 @@ class _MerchantFeaturesView extends StatelessWidget {
     final provider = context.watch<MerchantFeaturesProvider>();
 
     return MerchantToolScaffold(
-      title: 'Funktionen',
+      // Begriff identisch zur Einstiegskachel im Shop-Bereich („Funktionen
+      // verwalten") – kein Vokabular-Bruch zwischen Einstieg und Ziel (#59).
+      title: 'Funktionen verwalten',
       subtitle:
           'Schalte ein, was dein Laden anbietet – alles andere bleibt für Kunden unsichtbar.',
+      // MerchantLoadingCards/MerchantErrorState sind die Standard-States des
+      // dunklen MerchantPremium-Themes (durchgängig in allen Merchant-Seiten);
+      // AppLoadingState/AppErrorState gehören zum hellen User-Bereich (#59).
       child: provider.isLoading
           ? const MerchantLoadingCards(count: 5)
           : provider.error != null
@@ -135,7 +143,9 @@ class _FeatureControls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final provider = context.watch<MerchantFeaturesProvider>();
+    // Struktur ist statisch – hier KEIN watch (#59): so rebuildet ein Toggle
+    // nur die betroffene Karte (jede Karte/Option watcht selektiv) und der
+    // Save-Button (eigener Selector), nicht der gesamte Funktionen-Baum.
     final feed = merchantFeatureModuleByKey('feedPosts')!;
     final stamps = merchantFeatureModuleByKey('stampCards')!;
     final points = merchantFeatureModuleByKey('pointsSystems')!;
@@ -156,12 +166,29 @@ class _FeatureControls extends StatelessWidget {
         const SizedBox(height: AppSpacing.lg),
         _ComingSoonCard(modules: comingSoon),
         const SizedBox(height: AppSpacing.lg),
-        MerchantPrimaryButton(
-          label: 'Speichern',
-          isLoading: provider.isSaving,
-          onPressed: provider.hasChanges ? () => _confirmSave(context) : null,
-        ),
+        const _SaveButton(),
       ],
+    );
+  }
+}
+
+/// Save-Button rebuildet nur bei Änderung von hasChanges/isSaving (#59) –
+/// Selector statt context.watch des ganzen Providers.
+class _SaveButton extends StatelessWidget {
+  const _SaveButton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Selector<MerchantFeaturesProvider, (bool, bool)>(
+      selector: (_, provider) => (provider.hasChanges, provider.isSaving),
+      builder: (context, state, _) {
+        final (hasChanges, isSaving) = state;
+        return MerchantPrimaryButton(
+          label: 'Speichern',
+          isLoading: isSaving,
+          onPressed: hasChanges ? () => _confirmSave(context) : null,
+        );
+      },
     );
   }
 }
@@ -225,8 +252,11 @@ class _FeatureCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final provider = context.watch<MerchantFeaturesProvider>();
-    final enabled = provider.isEnabled(module);
+    // Nur auf den Enabled-Zustand DIESES Moduls hören (#59) – nicht den ganzen
+    // Provider, sonst rebuildet jede Karte bei jedem fremden Toggle.
+    final enabled = context.select<MerchantFeaturesProvider, bool>(
+      (provider) => provider.isEnabled(module),
+    );
 
     return MerchantPremiumCard(
       padding: const EdgeInsets.all(AppSpacing.md),
@@ -236,28 +266,35 @@ class _FeatureCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              _FeatureIcon(icon: module.icon, active: enabled),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Text(
-                  _featureName(module),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: MerchantPremiumColors.ink,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
+          MergeSemantics(
+            child: Row(
+              children: [
+                _FeatureIcon(icon: module.icon, active: enabled),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Text(
+                    _featureName(module),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: MerchantPremiumColors.ink,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Switch(
-                value: enabled,
-                onChanged: (value) => provider.setEnabled(module, value),
-              ),
-            ],
+                const SizedBox(width: 8),
+                Semantics(
+                  label: _featureName(module),
+                  child: Switch(
+                    value: enabled,
+                    onChanged: (value) => context
+                        .read<MerchantFeaturesProvider>()
+                        .setEnabled(module, value),
+                  ),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 10),
           Text(
@@ -286,8 +323,11 @@ class _CatalogFeatureCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final provider = context.watch<MerchantFeaturesProvider>();
-    final enabled = provider.isEnabled(module);
+    // Karte hört nur auf den Enabled-Zustand der Speisekarte (#59); die
+    // Modus-Schalter watchen einzeln in _CatalogOptionRow.
+    final enabled = context.select<MerchantFeaturesProvider, bool>(
+      (provider) => provider.isEnabled(module),
+    );
     // Nur die 4 Modi (Vor Ort/Mitnehmen + Abholzeit sind immer im Warenkorb).
     final orderOptions =
         module.options.where((option) => option.key != 'catalogOnly').toList();
@@ -300,28 +340,35 @@ class _CatalogFeatureCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              _FeatureIcon(icon: module.icon, active: enabled),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Text(
-                  _featureName(module),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: MerchantPremiumColors.ink,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
+          MergeSemantics(
+            child: Row(
+              children: [
+                _FeatureIcon(icon: module.icon, active: enabled),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Text(
+                    _featureName(module),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: MerchantPremiumColors.ink,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Switch(
-                value: enabled,
-                onChanged: (value) => provider.setEnabled(module, value),
-              ),
-            ],
+                const SizedBox(width: 8),
+                Semantics(
+                  label: _featureName(module),
+                  child: Switch(
+                    value: enabled,
+                    onChanged: (value) => context
+                        .read<MerchantFeaturesProvider>()
+                        .setEnabled(module, value),
+                  ),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 10),
           Text(
@@ -337,7 +384,11 @@ class _CatalogFeatureCard extends StatelessWidget {
           _StatusPill(label: enabled ? 'Aktiv' : 'Aus', active: enabled),
           if (enabled) ...[
             const SizedBox(height: AppSpacing.md),
-            Container(height: 1, color: MerchantPremiumColors.line),
+            const Divider(
+              height: 1,
+              thickness: 1,
+              color: MerchantPremiumColors.line,
+            ),
             const SizedBox(height: AppSpacing.md),
             const Text(
               'Wie können Kunden bestellen?',
@@ -379,9 +430,12 @@ class _CatalogOptionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final provider = context.watch<MerchantFeaturesProvider>();
-    final enabled = provider.optionEnabled(module, option);
+    // Nur auf diesen Modus hören (#59) – nicht den ganzen Provider.
+    final enabled = context.select<MerchantFeaturesProvider, bool>(
+      (provider) => provider.optionEnabled(module, option),
+    );
     final copy = _optionCopy[option.key];
+    final name = copy?.name ?? option.key;
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -394,42 +448,53 @@ class _CatalogOptionRow extends StatelessWidget {
               : MerchantPremiumColors.line,
         ),
       ),
-      child: Row(
-        children: [
-          Icon(
-            option.icon,
-            size: 22,
-            color: enabled
-                ? MerchantPremiumColors.gold
-                : MerchantPremiumColors.muted,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              copy?.name ?? option.key,
-              style: const TextStyle(
-                color: MerchantPremiumColors.ink,
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
+      child: MergeSemantics(
+        child: Row(
+          children: [
+            Icon(
+              option.icon,
+              size: 22,
+              color: enabled
+                  ? MerchantPremiumColors.gold
+                  : MerchantPremiumColors.muted,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                name,
+                style: const TextStyle(
+                  color: MerchantPremiumColors.ink,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
-          ),
-          if ((copy?.description ?? '').isNotEmpty)
-            Tooltip(
-              message: copy!.description,
-              triggerMode: TooltipTriggerMode.tap,
-              showDuration: const Duration(seconds: 8),
-              margin: const EdgeInsets.symmetric(horizontal: 24),
-              child: const Icon(Icons.info_outline_rounded,
-                  size: 18, color: MerchantPremiumColors.muted),
+            if ((copy?.description ?? '').isNotEmpty)
+              Tooltip(
+                message: copy!.description,
+                triggerMode: TooltipTriggerMode.tap,
+                showDuration: const Duration(seconds: 8),
+                margin: const EdgeInsets.symmetric(horizontal: 24),
+                // 44px Tap-Target für das Info-Icon (#59 – Touch-Target).
+                child: const SizedBox(
+                  width: 44,
+                  height: 44,
+                  child: Icon(Icons.info_outline_rounded,
+                      size: 18, color: MerchantPremiumColors.muted),
+                ),
+              ),
+            const SizedBox(width: 8),
+            Semantics(
+              label: name,
+              child: Switch(
+                value: enabled,
+                onChanged: (value) => context
+                    .read<MerchantFeaturesProvider>()
+                    .setOptionEnabled(module, option, value),
+              ),
             ),
-          const SizedBox(width: 8),
-          Switch(
-            value: enabled,
-            onChanged: (value) =>
-                provider.setOptionEnabled(module, option, value),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -535,7 +600,8 @@ class _StatusPill extends StatelessWidget {
             label,
             style: TextStyle(
               color: foreground,
-              fontSize: 12.5,
+              // Mindestens 13px für Lesbarkeit (#59 – keine Mini-Texte <13px).
+              fontSize: 13,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -577,71 +643,58 @@ class _FeatureIcon extends StatelessWidget {
   }
 }
 
+// Dunkle On-Color für Text/Icon auf dem grünen „gold"-Akzent – sattes Dunkel
+// statt goldSoft (das auf gold zu kontrastarm war, #59). Kontrast deutlich
+// >=4.5:1.
+const Color _onGold = Color(0xFF13261F);
+
 Future<void> _confirmSave(BuildContext context) async {
   final provider = context.read<MerchantFeaturesProvider>();
-  final confirmed = await showModalBottomSheet<bool>(
+  // Geteilte BottomSheet-Hülle (dunkler Grund, Drag-Handle, SafeArea) mit
+  // isScrollControlled, damit das Sheet bei großer Schrift nicht überläuft (#59).
+  final confirmed = await showMerchantBottomSheet<bool>(
     context: context,
-    backgroundColor: Colors.transparent,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-    ),
-    builder: (context) => Padding(
-      padding: const EdgeInsets.all(14),
-      child: MerchantPremiumCard(
-        padding: const EdgeInsets.fromLTRB(18, 14, 18, 22),
-        radius: 32,
-        child: SafeArea(
-          top: false,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Center(
-                child: Container(
-                  width: 42,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: MerchantPremiumColors.line,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              const Text(
-                'Änderungen speichern?',
-                style: TextStyle(
-                  color: MerchantPremiumColors.ink,
-                  fontSize: 23,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              const Text(
-                'Deine Kunden sehen die Änderungen sofort in der App.',
-                style: TextStyle(
-                  color: MerchantPremiumColors.muted,
-                  height: 1.35,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              FilledButton(
-                onPressed: () => Navigator.of(context).pop(true),
-                style: FilledButton.styleFrom(
-                  backgroundColor: MerchantPremiumColors.gold,
-                  foregroundColor: MerchantPremiumColors.goldSoft,
-                  minimumSize: const Size.fromHeight(54),
-                ),
-                child: const Text('Ja, speichern'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: const Text('Abbrechen'),
-              ),
-            ],
+    isScrollControlled: true,
+    builder: (context) => Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Text(
+          'Änderungen speichern?',
+          style: TextStyle(
+            color: MerchantPremiumColors.ink,
+            fontSize: 23,
+            fontWeight: FontWeight.w700,
           ),
         ),
-      ),
+        const SizedBox(height: AppSpacing.sm),
+        const Text(
+          'Deine Kunden sehen die Änderungen sofort in der App.',
+          style: TextStyle(
+            color: MerchantPremiumColors.muted,
+            height: 1.35,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(true),
+          style: FilledButton.styleFrom(
+            backgroundColor: MerchantPremiumColors.gold,
+            foregroundColor: _onGold,
+            minimumSize: const Size.fromHeight(54),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(999),
+            ),
+          ),
+          child: const Text('Ja, speichern'),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        MerchantSecondaryButton(
+          label: 'Abbrechen',
+          onPressed: () => Navigator.of(context).pop(false),
+        ),
+      ],
     ),
   );
 

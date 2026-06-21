@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../../core/constants/firebasePaths.dart';
@@ -21,19 +23,26 @@ class MerchantFeaturesService {
   }
 
   Future<MerchantFeatureStateBundle> loadFeatureStates() async {
+    // Bewusst alle Doc-IDs der Collection lesen, aber begrenzt: es kann nie
+    // mehr Configs als bekannte Module geben (#59 – Schutz gegen unbeabsichtigt
+    // unbeschränktes get()).
     final snapshot = await firestoreService
         .collection(FirebasePaths.merchantFeatureConfigs(merchantId))
+        .limit(merchantFeatureModules.length)
         .get();
     final states = {
       for (final module in merchantFeatureModules)
         module.key: module.isRequired,
     };
+    // catalogOnly wird bewusst NICHT in den Settings geführt – es ist kein
+    // persistierter Schalter, sondern wird in der UI aus isEnabled abgeleitet
+    // (#59). Sonst meldete hasChanges bei jedem Laden falsche Änderungen.
     final settings = <String, Map<String, bool>>{
       for (final module in merchantFeatureModules)
         if (module.options.isNotEmpty)
           module.key: {
             for (final option in module.options)
-              option.key: option.key == 'catalogOnly',
+              if (option.key != 'catalogOnly') option.key: false,
           },
     };
 
@@ -49,14 +58,23 @@ class MerchantFeaturesService {
       if (rawSettings is Map && module.options.isNotEmpty) {
         settings[doc.id] = {
           for (final option in module.options)
-            option.key: option.key == 'catalogOnly'
-                ? true
-                : rawSettings[option.key] == true,
+            if (option.key != 'catalogOnly')
+              option.key: rawSettings[option.key] == true,
         };
       }
     }
 
     states['feedPosts'] = true;
+
+    // Selbstheilung für Alt-Merchants, die vor dem feedPosts-Write in
+    // createMerchantProfile registriert wurden: nur schreiben, wenn das Doc
+    // fehlt (#59 – kein redundanter Write bei jedem Seitenaufruf). Bewusst
+    // „fire and forget", da der Zustand im Speicher ohnehin feedPosts=true ist.
+    final hasFeedDoc = snapshot.docs.any((doc) => doc.id == 'feedPosts');
+    if (!hasFeedDoc) {
+      unawaited(saveFeatureState(moduleKey: 'feedPosts', enabled: true));
+    }
+
     return MerchantFeatureStateBundle(states: states, settings: settings);
   }
 
@@ -81,7 +99,10 @@ class MerchantFeaturesService {
         'module': moduleKey,
         'isEnabled': isEnabled,
         'status': status,
-        if (settings.isNotEmpty) 'settings': settings,
+        // settings IMMER schreiben (auch leer): bei merge:true kann ein
+        // ausgelassenes Feld nicht zurückgesetzt werden (#59). Nur für Module
+        // ohne Optionen weglassen, damit dort kein leeres Map-Feld entsteht.
+        if (module.options.isNotEmpty) 'settings': settings,
         'updatedAt': FieldValue.serverTimestamp(),
       },
     );
@@ -111,7 +132,9 @@ class MerchantFeaturesService {
           'module': module.key,
           'isEnabled': isEnabled,
           'status': status,
-          if (moduleSettings.isNotEmpty) 'settings': moduleSettings,
+          // settings IMMER schreiben (auch leer) für Module mit Optionen, damit
+          // ein abgewählter Modus bei merge:true wirklich verschwindet (#59).
+          if (module.options.isNotEmpty) 'settings': moduleSettings,
           'updatedAt': FieldValue.serverTimestamp(),
         },
         SetOptions(merge: true),
@@ -120,10 +143,6 @@ class MerchantFeaturesService {
     }
     if (count == 0) return;
     await batch.commit();
-  }
-
-  Future<void> ensureRequiredFeatures() {
-    return saveFeatureState(moduleKey: 'feedPosts', enabled: true);
   }
 }
 
