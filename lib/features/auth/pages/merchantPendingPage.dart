@@ -35,12 +35,18 @@ class _MerchantPendingPageState extends State<MerchantPendingPage> {
     final user = auth.currentUser;
     if (user == null) return;
     await auth.reloadCurrentUser();
+    final verified = auth.currentUser?.emailVerified ?? false;
     final merchant = await firestore.getMerchantProfile(user.uid);
-    final status = merchant?['verificationStatus'] as String?;
+    var status = merchant?['verificationStatus'] as String?;
+    // E-Mail verifiziert ⇒ Merchant freischalten.
+    if (verified && status != 'approved') {
+      await firestore.setMerchantVerificationStatus(user.uid, 'approved');
+      status = 'approved';
+    }
     if (!mounted) return;
     setState(() {
       _status = status ?? _status;
-      _emailVerified = auth.currentUser?.emailVerified ?? false;
+      _emailVerified = verified;
     });
   }
 

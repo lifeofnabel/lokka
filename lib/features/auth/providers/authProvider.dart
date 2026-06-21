@@ -326,7 +326,14 @@ class AuthProvider extends ChangeNotifier {
       final merchant = await _firestoreService.getMerchantProfile(uid);
       if (merchant == null) return AuthDestination.emailVerificationMerchant;
 
-      return switch (merchant['verificationStatus'] as String? ?? 'pending') {
+      var status = merchant['verificationStatus'] as String? ?? 'pending';
+      // E-Mail verifiziert ⇒ Merchant freischalten (verificationStatus = approved).
+      if (status != 'approved' &&
+          (_authService.currentUser?.emailVerified ?? false)) {
+        await _firestoreService.setMerchantVerificationStatus(uid, 'approved');
+        status = 'approved';
+      }
+      return switch (status) {
         'approved' => AuthDestination.merchantDashboard,
         _ => AuthDestination.merchantPending,
       };

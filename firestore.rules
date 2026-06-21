@@ -84,6 +84,11 @@ service cloud.firestore {
       match /coupons/{id}        { allow read: if true; allow write: if isMerchantOwner(mid); }
       match /feedPosts/{id}      { allow read: if true; allow write: if isMerchantOwner(mid); }
       match /openingHours/{id}   { allow read: if true; allow write: if isMerchantOwner(mid); }
+      // Öffentlich lesbar für die Kundenkarte: Katalog-Modus-Config (steuert ob
+      // & wie bestellt werden kann) + Tische/Bereiche (Tischwahl im Warenkorb).
+      match /featureConfigs/{id} { allow read: if true; allow write: if isMerchantOwner(mid); }
+      match /tables/{id}         { allow read: if true; allow write: if isMerchantOwner(mid); }
+      match /tableAreas/{id}     { allow read: if true; allow write: if isMerchantOwner(mid); }
 
       // Bestellungen: Kunde (öffentlich, ohne Login) darf aufgeben UND seine
       // Bestellungen lesen – Status-Tracking auf der Bestätigung sowie
@@ -97,8 +102,8 @@ service cloud.firestore {
       }
 
       // Alles Übrige bleibt privat beim Merchant (customers, displayStudio
-      // (+ Sub: layouts/devices/routines/logs), shifts, tables, tableAreas,
-      // appointments, featureConfigs, campaigns …). Orders sind oben offen.
+      // (+ Sub: layouts/devices/routines/logs), shifts, appointments,
+      // campaigns …). Orders/featureConfigs/tables(+Areas) sind oben offen.
       match /{sub=**} {
         allow read, write: if isMerchantOwner(mid);
       }

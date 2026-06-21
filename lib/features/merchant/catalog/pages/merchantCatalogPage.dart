@@ -11,6 +11,7 @@ import '../../../public/shop/services/publicShopService.dart';
 import '../../../../core/theme/appRadius.dart';
 import '../../../../core/theme/appSpacing.dart';
 import '../../../../core/utils/shareUtils.dart';
+import '../../orders/widgets/merchantRevenueWidgets.dart';
 import '../../shared/widgets/merchantPremiumUi.dart';
 import '../../tools/services/merchantToolsService.dart';
 import '../../tools/widgets/merchantToolUi.dart';
@@ -37,6 +38,8 @@ class MerchantCatalogPage extends StatelessWidget {
           const SizedBox(height: AppSpacing.sm),
           const _ShopLinkActions(),
           const SizedBox(height: AppSpacing.md),
+          // Tagesumsatz (≈) – nur im Runner-Modus sichtbar, sonst unsichtbar.
+          const MerchantTagesumsatz(),
           _CatalogAction(
             icon: Icons.palette_rounded,
             title: texts.text('merchant.catalog.design'),
@@ -217,17 +220,13 @@ class _CatalogPreviewHero extends StatelessWidget {
         width: double.infinity,
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: MerchantPremiumColors.ink,
           gradient: const LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              MerchantPremiumColors.ink,
-              MerchantPremiumColors.baseElevated,
-            ],
+            colors: [Color(0xFF5A67E6), Color(0xFF2B2F66)],
           ),
           borderRadius: BorderRadius.circular(34),
-          border: Border.all(color: MerchantPremiumColors.gold.withValues(alpha: 0.20)),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
           boxShadow: MerchantPremiumShadows.card,
         ),
         child: Row(
@@ -236,10 +235,10 @@ class _CatalogPreviewHero extends StatelessWidget {
               width: 58,
               height: 58,
               decoration: BoxDecoration(
-                color: MerchantPremiumColors.gold.withValues(alpha: 0.16),
+                color: Colors.white.withValues(alpha: 0.16),
                 borderRadius: BorderRadius.circular(22),
               ),
-              child: const Icon(Icons.phone_iphone_rounded, color: MerchantPremiumColors.goldSoft),
+              child: const Icon(Icons.phone_iphone_rounded, color: Colors.white),
             ),
             const SizedBox(width: AppSpacing.md),
             Expanded(
@@ -249,20 +248,10 @@ class _CatalogPreviewHero extends StatelessWidget {
                   Text(
                     texts.text('merchant.catalog.previewTitle'),
                     style: const TextStyle(
-                      color: MerchantPremiumColors.surface,
+                      color: Colors.white,
                       fontSize: 22,
                       fontWeight: FontWeight.w900,
                       height: 1.05,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    texts.text('merchant.catalog.previewSubtitle'),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: MerchantPremiumColors.mutedLight,
-                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ],

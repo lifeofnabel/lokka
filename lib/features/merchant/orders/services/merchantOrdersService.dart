@@ -77,6 +77,55 @@ class MerchantOrdersService {
     );
   }
 
+  /// Schließt eine Bestellung ab: fertig + bezahlt (für „Tisch abschließen" und
+  /// das Nachbuchen offener Bestellungen). [excludeFromDaily] = während einer
+  /// Tagesumsatz-Pause abgeschlossen → zählt nicht in den Tageszähler.
+  Future<void> closeOrderPaid(String orderId, {bool excludeFromDaily = false}) {
+    return firestoreService.setDocument(
+      FirebasePaths.merchantOrder(merchantId, orderId),
+      {
+        'status': 'done',
+        'paid': true,
+        'paidAt': FieldValue.serverTimestamp(),
+        'excludeFromDaily': excludeFromDaily,
+        'doneAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      },
+    );
+  }
+
+  /// „Tisch aufräumen": Bestellung aus der Tisch-Einsicht entfernen (cleared).
+  /// [markPaid] = falls noch unbezahlt → jetzt als bezahlt zählen (fertig).
+  Future<void> clearOrder(String orderId,
+      {required bool markPaid, bool excludeFromDaily = false}) {
+    return firestoreService.setDocument(
+      FirebasePaths.merchantOrder(merchantId, orderId),
+      {
+        'cleared': true,
+        'updatedAt': FieldValue.serverTimestamp(),
+        if (markPaid) 'status': 'done',
+        if (markPaid) 'paid': true,
+        if (markPaid) 'paidAt': FieldValue.serverTimestamp(),
+        if (markPaid) 'excludeFromDaily': excludeFromDaily,
+      },
+    );
+  }
+
+  /// Tagesumsatz-Pause (pro Konto) – liegt im privaten Merchant-Doc.
+  Future<bool> loadRevenuePaused() async {
+    final data = await firestoreService.readDocument(
+      FirebasePaths.merchant(merchantId),
+    );
+    return data?['revenuePaused'] as bool? ?? false;
+  }
+
+  Future<void> setRevenuePaused(bool paused) {
+    return firestoreService.setDocument(
+      FirebasePaths.merchant(merchantId),
+      {'revenuePaused': paused, 'updatedAt': FieldValue.serverTimestamp()},
+    );
+  }
+
   /// Bestätigt eine verborgene Vor-Kasse-Bestellung anhand ihres Codes
   /// (Personal an der Kasse). Gibt true zurück, wenn eine passende offene
   /// QR-Bestellung gefunden und auf „neu" gesetzt wurde.
@@ -106,6 +155,24 @@ class MerchantOrdersService {
       }
     }
     return false;
+  }
+
+  /// Bezahlte Bestellungen ab [since] (optional bis < [until]) – für die
+  /// Finanzen-Auswertung. Einzelfeld-Range auf `paidAt` (kein Composite-Index
+  /// nötig); `paid` wird clientseitig gefiltert.
+  Future<List<OrderModel>> loadPaidOrdersBetween(
+      DateTime since, DateTime? until) async {
+    Query<Map<String, dynamic>> query = firestoreService
+        .collection(FirebasePaths.merchantOrders(merchantId))
+        .where('paidAt', isGreaterThanOrEqualTo: Timestamp.fromDate(since));
+    if (until != null) {
+      query = query.where('paidAt', isLessThan: Timestamp.fromDate(until));
+    }
+    final snapshot = await query.get();
+    return snapshot.docs
+        .map((doc) => OrderModel.fromMap({'id': doc.id, ...doc.data()}))
+        .where((order) => order.paid)
+        .toList();
   }
 
   List<OrderModel> _mapOrders(QuerySnapshot<Map<String, dynamic>> snapshot) {

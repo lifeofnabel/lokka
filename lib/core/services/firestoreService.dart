@@ -104,6 +104,15 @@ class FirestoreService {
     }
   }
 
+  /// Setzt den Freigabe-Status des Merchants (z. B. nach E-Mail-Verifikation
+  /// auf „approved").
+  Future<void> setMerchantVerificationStatus(String uid, String status) {
+    return setDocument(FirebasePaths.merchant(uid), {
+      'verificationStatus': status,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
   Future<void> updateUserSession({
     required String uid,
     bool updateLastLogin = false,

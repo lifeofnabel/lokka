@@ -169,19 +169,22 @@ Future<void> _openRunnerSheet(BuildContext context, {RunnerData? runner}) async 
           MerchantPrimaryButton(
             label: texts.text('common.save'),
             icon: Icons.save_rounded,
-            onPressed: () async {
-              if (name.text.trim().isEmpty) {
+            onPressed: () {
+              final value = name.text.trim();
+              if (value.isEmpty) {
                 ScaffoldMessenger.of(sheetContext).showSnackBar(
                   SnackBar(content: Text(texts.text('merchant.runners.error.name'))),
                 );
                 return;
               }
+              // Erst das Sheet schließen, DANN speichern – sonst trifft das
+              // notifyListeners das gerade schließende Sheet (Assertion).
+              Navigator.of(sheetContext).pop();
               if (runner == null) {
-                await provider.addRunner(name.text);
+                provider.addRunner(value);
               } else {
-                await provider.renameRunner(runner.id, name.text);
+                provider.renameRunner(runner.id, value);
               }
-              if (sheetContext.mounted) Navigator.of(sheetContext).pop();
             },
           ),
         ],

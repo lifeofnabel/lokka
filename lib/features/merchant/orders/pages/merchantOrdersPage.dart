@@ -1,7 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../../../../core/alert/orderAlert.dart';
+import '../../../../core/cache/localCacheStorage.dart';
 import '../../../../core/services/authService.dart';
 import '../../../../core/services/firestoreService.dart';
 import '../../../../core/services/languageService.dart';
@@ -44,30 +48,195 @@ class _MerchantOrdersView extends StatefulWidget {
 class _MerchantOrdersViewState extends State<_MerchantOrdersView> {
   String? _selectedId;
 
+  // Neue-Bestellung-Alarm (Ton + Banner). Einstellungen pro Gerät.
+  bool _muted = false;
+  bool _ringLoop = true; // true = klingeln bis berührt, false = einmal
+  bool _alerting = false;
+  int _lastSignal = 0;
+  Timer? _beepTimer;
+
+  static const _muteKey = 'lokka_orders_muted';
+  static const _ringLoopKey = 'lokka_orders_ringloop';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAlertPrefs();
+  }
+
+  Future<void> _loadAlertPrefs() async {
+    final muted = await LocalCacheStorage.read(_muteKey);
+    final loop = await LocalCacheStorage.read(_ringLoopKey);
+    if (!mounted) return;
+    setState(() {
+      _muted = muted == '1';
+      _ringLoop = loop == null ? true : loop == '1';
+    });
+  }
+
+  @override
+  void dispose() {
+    _beepTimer?.cancel();
+    super.dispose();
+  }
+
+  void _triggerAlert() {
+    if (_muted || !mounted) return;
+    final texts = context.read<LanguageService>();
+    OrderAlert.prime();
+    if (OrderAlert.isPageHidden()) {
+      OrderAlert.showNotification(
+        texts.text('merchant.orders.alertTitle'),
+        texts.text('merchant.orders.alertBody'),
+      );
+    }
+    OrderAlert.playTone();
+    setState(() => _alerting = true);
+    _beepTimer?.cancel();
+    if (_ringLoop) {
+      _beepTimer = Timer.periodic(const Duration(milliseconds: 700), (_) {
+        if (_muted || !mounted) {
+          _acknowledge();
+          return;
+        }
+        OrderAlert.playTone();
+      });
+    } else {
+      Timer(const Duration(seconds: 5), () {
+        if (mounted) setState(() => _alerting = false);
+      });
+    }
+  }
+
+  void _acknowledge() {
+    _beepTimer?.cancel();
+    _beepTimer = null;
+    if (_alerting && mounted) setState(() => _alerting = false);
+  }
+
+  void _toggleMute() {
+    // Geste nutzen, um Audio/Benachrichtigungen scharf zu machen (Autoplay).
+    OrderAlert.prime();
+    OrderAlert.ensurePermission();
+    setState(() => _muted = !_muted);
+    LocalCacheStorage.write(_muteKey, _muted ? '1' : '0');
+    if (_muted) _acknowledge();
+  }
+
+  Future<void> _openRingModeSheet() async {
+    final texts = context.read<LanguageService>();
+    final choice = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: MerchantPremiumColors.baseElevated,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 14),
+            Text(
+              texts.text('merchant.orders.alertModeTitle'),
+              style: const TextStyle(
+                color: MerchantPremiumColors.ink,
+                fontSize: 17,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 6),
+            ListTile(
+              leading: const Icon(Icons.notifications_active_rounded,
+                  color: MerchantPremiumColors.gold),
+              title: Text(
+                texts.text('merchant.orders.alertModeLoop'),
+                style: const TextStyle(
+                    color: MerchantPremiumColors.ink,
+                    fontWeight: FontWeight.w800),
+              ),
+              trailing: _ringLoop
+                  ? const Icon(Icons.check_rounded,
+                      color: MerchantPremiumColors.gold)
+                  : null,
+              onTap: () => Navigator.of(sheetContext).pop(true),
+            ),
+            ListTile(
+              leading: const Icon(Icons.notifications_none_rounded,
+                  color: MerchantPremiumColors.muted),
+              title: Text(
+                texts.text('merchant.orders.alertModeOnce'),
+                style: const TextStyle(
+                    color: MerchantPremiumColors.ink,
+                    fontWeight: FontWeight.w800),
+              ),
+              trailing: !_ringLoop
+                  ? const Icon(Icons.check_rounded,
+                      color: MerchantPremiumColors.gold)
+                  : null,
+              onTap: () => Navigator.of(sheetContext).pop(false),
+            ),
+            const SizedBox(height: 14),
+          ],
+        ),
+      ),
+    );
+    if (choice == null || !mounted) return;
+    setState(() => _ringLoop = choice);
+    LocalCacheStorage.write(_ringLoopKey, choice ? '1' : '0');
+  }
+
   @override
   Widget build(BuildContext context) {
     final texts = context.watch<LanguageService>();
     final provider = context.watch<MerchantOrdersProvider>();
+
+    // Neue Bestellung erkannt → Alarm nach dem Frame auslösen.
+    final signal = provider.newOrderSignal;
+    if (signal != _lastSignal) {
+      _lastSignal = signal;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _triggerAlert());
+    }
+
     return MerchantToolScaffold(
       title: texts.text('merchant.orders.title'),
       subtitle: texts.text('merchant.orders.subtitle'),
       backPath: '/merchant/catalog',
-      // Tisch-Einsicht oben rechts neben dem Info-Tooltip.
+      // Glocke (stummschalten) + Tisch-Einsicht + Info, oben rechts.
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
+          _MuteBell(
+            muted: _muted,
+            onTap: _toggleMute,
+            onLongPress: _openRingModeSheet,
+            tooltip: texts.text(_muted
+                ? 'merchant.orders.alertUnmute'
+                : 'merchant.orders.alertMute'),
+          ),
+          const SizedBox(width: 8),
           _TableViewAction(count: provider.tableGroups.length),
           const SizedBox(width: 8),
           MerchantInfoTooltip(message: texts.text('merchant.orders.tooltip')),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _ControlBox(provider: provider),
-          const SizedBox(height: AppSpacing.md),
-          _ordersArea(context, provider, texts),
-        ],
+      child: Listener(
+        // Jede Berührung stoppt den (wiederholenden) Alarm.
+        onPointerDown: (_) {
+          OrderAlert.prime();
+          if (_alerting) _acknowledge();
+        },
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (_alerting) ...[
+              _AlertBanner(texts: texts, onTap: _acknowledge),
+              const SizedBox(height: AppSpacing.md),
+            ],
+            _ControlBox(provider: provider),
+            const SizedBox(height: AppSpacing.md),
+            _ordersArea(context, provider, texts),
+          ],
+        ),
       ),
     );
   }
@@ -319,6 +488,108 @@ class _ControlBox extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Glocke oben rechts: Tippen = stummschalten, lang drücken = Klingel-Modus.
+class _MuteBell extends StatelessWidget {
+  const _MuteBell({
+    required this.muted,
+    required this.onTap,
+    required this.onLongPress,
+    required this.tooltip,
+  });
+
+  final bool muted;
+  final VoidCallback onTap;
+  final VoidCallback onLongPress;
+  final String tooltip;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: GestureDetector(
+        onTap: onTap,
+        onLongPress: onLongPress,
+        child: Container(
+          width: 36,
+          height: 36,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: muted
+                ? MerchantPremiumColors.surfaceAlt
+                : MerchantPremiumColors.goldSoft,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: MerchantPremiumColors.line),
+          ),
+          child: Icon(
+            muted
+                ? Icons.notifications_off_rounded
+                : Icons.notifications_active_rounded,
+            size: 18,
+            color: muted ? MerchantPremiumColors.muted : MerchantPremiumColors.gold,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Auffälliges Banner bei neuer Bestellung – tippen stoppt den Alarm.
+class _AlertBanner extends StatelessWidget {
+  const _AlertBanner({required this.texts, required this.onTap});
+
+  final LanguageService texts;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: MerchantPremiumColors.gold,
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.notifications_active_rounded,
+                  color: MerchantPremiumColors.base),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      texts.text('merchant.orders.alertTitle'),
+                      style: const TextStyle(
+                        color: MerchantPremiumColors.base,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    Text(
+                      texts.text('merchant.orders.alertTapToStop'),
+                      style: TextStyle(
+                        color: MerchantPremiumColors.base.withValues(alpha: 0.8),
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.close_rounded, color: MerchantPremiumColors.base),
+            ],
+          ),
+        ),
       ),
     );
   }

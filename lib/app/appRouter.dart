@@ -34,6 +34,7 @@ import '../features/merchant/catalog/pages/merchantMenuDesignPage.dart';
 import '../features/merchant/catalog/pages/merchantQrCodesPage.dart';
 import '../features/merchant/catalog/pages/merchantRunnersPage.dart';
 import '../features/merchant/coupons/pages/merchantCouponEditPage.dart';
+import '../features/merchant/orders/pages/merchantFinancePage.dart';
 import '../features/merchant/orders/pages/merchantOrderDetailPage.dart';
 import '../features/merchant/orders/pages/merchantOrderTablesPage.dart';
 import '../features/merchant/orders/pages/merchantOrdersPage.dart';
@@ -115,7 +116,11 @@ Future<_MerchantAccess> _resolveMerchantAccess(
       status = merchant?['verificationStatus'] as String? ?? 'pending';
     }
     final access = _MerchantAccess(role, status);
-    _accessCache[uid] = access;
+    // Nur finalen Zustand cachen – „pending" muss neu geprüft werden, damit
+    // eine frische Freigabe (approved) sofort greift (nicht hängen bleibt).
+    if (role == 'user' || status == 'approved') {
+      _accessCache[uid] = access;
+    }
     return access;
   } catch (_) {
     // Lesefehler (offline/Rules): als unbekannt behandeln, NICHT cachen.
@@ -318,6 +323,10 @@ class AppRouter {
         path: '/merchant/dashboard',
         name: merchantDashboard,
         builder: (context, state) => _merchantDark(const MerchantDashboardPage()),
+      ),
+      GoRoute(
+        path: '/merchant/finance',
+        builder: (context, state) => _merchantDark(const MerchantFinancePage()),
       ),
       GoRoute(
         path: '/merchant/features',

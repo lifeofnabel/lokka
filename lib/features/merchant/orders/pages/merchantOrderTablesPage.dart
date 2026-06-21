@@ -277,6 +277,7 @@ class _MerchantTableOrdersViewState extends State<_MerchantTableOrdersView> {
               hasOpen: orders.any((order) => order.isOpen),
               isSaving: provider.isSaving,
               onClose: () => _closeTable(context, provider),
+              onClean: () => _cleanTable(context, provider),
             ),
             const SizedBox(height: AppSpacing.md),
             _tableOrdersArea(context, provider, orders, texts),
@@ -317,6 +318,40 @@ class _MerchantTableOrdersViewState extends State<_MerchantTableOrdersView> {
     messenger.showSnackBar(
       SnackBar(content: Text(texts.text('merchant.orders.tableClosedToast'))),
     );
+  }
+
+  /// „Tisch aufräumen": leert den Tisch (entfernt ihn aus der Einsicht) und
+  /// zählt alle noch offenen Bestellungen als bezahlt. Danach zurück zur Liste.
+  Future<void> _cleanTable(
+    BuildContext context,
+    MerchantOrdersProvider provider,
+  ) async {
+    final texts = context.read<LanguageService>();
+    final messenger = ScaffoldMessenger.of(context);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(texts.text('merchant.orders.cleanTable')),
+        content: Text(texts.text('merchant.orders.cleanTableConfirm')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(texts.text('common.cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(texts.text('merchant.orders.cleanTable')),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    await provider.cleanTable(widget.tableKey);
+    if (!context.mounted) return;
+    messenger.showSnackBar(
+      SnackBar(content: Text(texts.text('merchant.orders.tableCleanedToast'))),
+    );
+    if (context.mounted) context.pop();
   }
 
   Widget _tableOrdersArea(
@@ -618,38 +653,28 @@ class _CloseTableBar extends StatelessWidget {
     required this.hasOpen,
     required this.isSaving,
     required this.onClose,
+    required this.onClean,
   });
 
   final bool hasOpen;
   final bool isSaving;
   final VoidCallback onClose;
+  final VoidCallback onClean;
 
   @override
   Widget build(BuildContext context) {
     final texts = context.watch<LanguageService>();
     if (!hasOpen) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-        decoration: BoxDecoration(
-          color: MerchantPremiumColors.success.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-              color: MerchantPremiumColors.success.withValues(alpha: 0.30)),
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.check_circle_rounded,
-                color: MerchantPremiumColors.success, size: 20),
-            const SizedBox(width: 10),
-            Text(
-              texts.text('merchant.orders.tableStatusClosed'),
-              style: const TextStyle(
-                color: MerchantPremiumColors.success,
-                fontWeight: FontWeight.w900,
-                fontSize: 14,
-              ),
-            ),
-          ],
+      // Tisch ist fertig → „Aufräumen" (leeren + alles als bezahlt zählen).
+      return FilledButton.icon(
+        onPressed: isSaving ? null : onClean,
+        icon: const Icon(Icons.cleaning_services_rounded),
+        label: Text(texts.text('merchant.orders.cleanTable')),
+        style: FilledButton.styleFrom(
+          backgroundColor: MerchantPremiumColors.success,
+          foregroundColor: MerchantPremiumColors.base,
+          minimumSize: const Size.fromHeight(52),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         ),
       );
     }

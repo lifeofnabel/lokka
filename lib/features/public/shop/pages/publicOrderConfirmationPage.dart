@@ -61,7 +61,7 @@ class _PublicOrderConfirmationPageState
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(texts.text('public.shop.added'))));
     // Zurück zum Shop – der neue Warenkorb ist jetzt aktiv.
-    Navigator.of(context).popUntil((route) => route.isFirst);
+    Navigator.of(context).pop();
   }
 
   @override
@@ -191,7 +191,7 @@ class _PublicOrderConfirmationPageState
             const SizedBox(height: AppSpacing.lg),
             OutlinedButton.icon(
               onPressed: () =>
-                  Navigator.of(context).popUntil((route) => route.isFirst),
+                  Navigator.of(context).pop(),
               icon: const Icon(Icons.storefront_rounded),
               label: Text(texts.text('public.shop.backToShop')),
               style: OutlinedButton.styleFrom(

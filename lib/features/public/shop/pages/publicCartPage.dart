@@ -103,22 +103,27 @@ class _PublicCartPageState extends State<PublicCartPage> {
     final needsTable = tableBased && !showQr && !hasTable;
     final showSend = config.showSend && !needsTable;
 
+    // Leerer Warenkorb -> kompletter Screen schwarz (auf Wunsch).
+    final cartEmpty = provider.cart.isEmpty;
+    final scaffoldBg = cartEmpty ? Colors.black : _p.background;
+    final barFg = cartEmpty ? Colors.white : _p.ink;
+
     return Scaffold(
-      backgroundColor: _p.background,
+      backgroundColor: scaffoldBg,
       appBar: AppBar(
-        backgroundColor: _p.background,
-        foregroundColor: _p.ink,
+        backgroundColor: scaffoldBg,
+        foregroundColor: barFg,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         title: Text(
           texts.text('public.shop.cart'),
-          style: TextStyle(color: _p.ink, fontWeight: FontWeight.w900),
+          style: TextStyle(color: barFg, fontWeight: FontWeight.w900),
         ),
       ),
       body: SafeArea(
         top: false,
-        child: provider.cart.isEmpty
-            ? Center(child: _EmptyCart(palette: _p, texts: texts))
+        child: cartEmpty
+            ? Center(child: _EmptyCart(texts: texts))
             : ListView(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
                 children: [
@@ -788,9 +793,8 @@ class _CartItemRow extends StatelessWidget {
 }
 
 class _EmptyCart extends StatelessWidget {
-  const _EmptyCart({required this.palette, required this.texts});
+  const _EmptyCart({required this.texts});
 
-  final PublicShopPalette palette;
   final LanguageService texts;
 
   @override
@@ -800,12 +804,12 @@ class _EmptyCart extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.shopping_bag_outlined, size: 44, color: palette.muted),
+          const Icon(Icons.shopping_bag_outlined, size: 44, color: Colors.white60),
           const SizedBox(height: 12),
           Text(
             texts.text('public.shop.cartEmpty'),
             textAlign: TextAlign.center,
-            style: TextStyle(color: palette.muted, fontWeight: FontWeight.w800),
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 16),
           OutlinedButton.icon(
@@ -813,8 +817,8 @@ class _EmptyCart extends StatelessWidget {
             icon: const Icon(Icons.restaurant_menu_rounded),
             label: Text(texts.text('public.shop.backToMenu')),
             style: OutlinedButton.styleFrom(
-              foregroundColor: palette.ink,
-              side: BorderSide(color: palette.line),
+              foregroundColor: Colors.white,
+              side: const BorderSide(color: Colors.white24),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             ),
           ),

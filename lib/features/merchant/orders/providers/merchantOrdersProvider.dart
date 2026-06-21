@@ -18,6 +18,12 @@ class MerchantOrdersProvider extends ChangeNotifier {
   String search = '';
   List<OrderModel> orders = [];
   OrderModel? selectedOrder;
+
+  /// Zählt hoch, sobald eine NEUE Bestellung (Status „new") eintrifft – die UI
+  /// löst daraufhin den Alarm aus. Beim ersten Laden wird NICHT alarmiert.
+  int newOrderSignal = 0;
+  final Set<String> _seenNewIds = {};
+  bool _alertInitialized = false;
   StreamSubscription<List<OrderModel>>? _ordersSubscription;
   StreamSubscription<OrderModel?>? _orderSubscription;
 
@@ -71,7 +77,11 @@ class MerchantOrdersProvider extends ChangeNotifier {
   Map<String, List<OrderModel>> get tableGroups {
     final groups = <String, List<OrderModel>>{};
     for (final order in orders) {
-      if (!order.isTableOrder || order.status == 'cancelled') continue;
+      if (!order.isTableOrder ||
+          order.status == 'cancelled' ||
+          order.cleared) {
+        continue;
+      }
       if (tableAreaFilter != 'all' && areaOf(order) != tableAreaFilter) continue;
       groups.putIfAbsent(order.tableKey, () => []).add(order);
     }
@@ -79,8 +89,10 @@ class MerchantOrdersProvider extends ChangeNotifier {
   }
 
   /// Alle (auch erledigten) Bestellungen eines Tisches – für die Tisch-Detailseite.
-  List<OrderModel> ordersForTable(String tableKey) =>
-      orders.where((order) => order.isTableOrder && order.tableKey == tableKey).toList();
+  List<OrderModel> ordersForTable(String tableKey) => orders
+      .where((order) =>
+          order.isTableOrder && order.tableKey == tableKey && !order.cleared)
+      .toList();
 
   Future<void> load({String? orderId}) async {
     try {
@@ -108,6 +120,7 @@ class MerchantOrdersProvider extends ChangeNotifier {
       _ordersSubscription = service.watchOrders().listen(
         (nextOrders) {
           orders = nextOrders;
+          _detectNewOrders(nextOrders);
           if (orderId != null && orderId.isNotEmpty) {
             selectedOrder = _find(orderId);
           }
@@ -176,16 +189,50 @@ class MerchantOrdersProvider extends ChangeNotifier {
   /// als fertig. Danach hat der Tisch keine offenen Bestellungen mehr und gilt
   /// als beendet.
   Future<void> closeTable(String tableKey) async {
-    final open = orders
-        .where((o) => o.isTableOrder && o.tableKey == tableKey && o.isOpen)
+    // Alle nicht-stornierten, noch unbezahlten Bestellungen des Tisches
+    // abschließen = fertig + bezahlt (auch schon „fertige"). Während einer
+    // Tagesumsatz-Pause zählen sie nicht in den Tageszähler.
+    final toClose = orders
+        .where((o) =>
+            o.isTableOrder &&
+            o.tableKey == tableKey &&
+            o.status != 'cancelled' &&
+            !o.paid)
         .toList();
-    if (open.isEmpty) return;
+    if (toClose.isEmpty) return;
     try {
       isSaving = true;
       error = null;
       notifyListeners();
-      for (final order in open) {
-        await service.updateStatus(order.id, 'done');
+      final paused = await service.loadRevenuePaused();
+      for (final order in toClose) {
+        await service.closeOrderPaid(order.id, excludeFromDaily: paused);
+      }
+    } catch (e) {
+      error = e.toString();
+    } finally {
+      isSaving = false;
+      notifyListeners();
+    }
+  }
+
+  /// „Tisch aufräumen": ALLE nicht-stornierten Bestellungen (auch vorbereitete/
+  /// fertige) als bezahlt zählen (falls noch offen) und den Tisch aus der
+  /// Tisch-Einsicht entfernen (cleared).
+  Future<void> cleanTable(String tableKey) async {
+    final list = orders
+        .where((o) =>
+            o.isTableOrder && o.tableKey == tableKey && o.status != 'cancelled')
+        .toList();
+    if (list.isEmpty) return;
+    try {
+      isSaving = true;
+      error = null;
+      notifyListeners();
+      final paused = await service.loadRevenuePaused();
+      for (final order in list) {
+        await service.clearOrder(order.id,
+            markPaid: !order.paid, excludeFromDaily: paused);
       }
     } catch (e) {
       error = e.toString();
@@ -218,6 +265,25 @@ class MerchantOrdersProvider extends ChangeNotifier {
       isSaving = false;
       notifyListeners();
     }
+  }
+
+  /// Erkennt frisch eingetroffene „new"-Bestellungen (für den Alarm). Beim
+  /// ersten Stream-Ereignis werden bestehende nur gemerkt, nicht gemeldet.
+  void _detectNewOrders(List<OrderModel> next) {
+    final currentNew =
+        next.where((o) => o.status == 'new').map((o) => o.id).toSet();
+    if (!_alertInitialized) {
+      _seenNewIds
+        ..clear()
+        ..addAll(currentNew);
+      _alertInitialized = true;
+      return;
+    }
+    final fresh = currentNew.difference(_seenNewIds);
+    if (fresh.isNotEmpty) newOrderSignal += fresh.length;
+    _seenNewIds
+      ..clear()
+      ..addAll(currentNew);
   }
 
   OrderModel? _find(String id) {

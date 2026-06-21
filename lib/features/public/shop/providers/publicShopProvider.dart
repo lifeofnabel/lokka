@@ -5,6 +5,7 @@ import '../../../merchant/catalog/models/itemCategoryData.dart';
 import '../../../merchant/catalog/models/itemOptionGroup.dart';
 import '../../../merchant/catalog/models/itemTagData.dart';
 import '../../../merchant/catalog/models/merchantItemData.dart';
+import '../../../../core/cache/localCacheStorage.dart';
 import '../../../merchant/catalog/models/runnerData.dart';
 import '../../../merchant/tables/models/merchantTableData.dart';
 import '../services/publicShopService.dart';
@@ -107,6 +108,10 @@ class PublicShopProvider extends ChangeNotifier {
   /// Freitext-Suche in der Karte (v.a. Runner-Modus, schnelles Finden).
   String itemSearch = '';
 
+  /// Merchant-ID dieser Sitzung – für die geräte-lokale Runner-Vorauswahl.
+  String _merchantId = '';
+  static const _lastRunnerKeyPrefix = 'lokka_last_runner_';
+
   bool get catalogAvailable => catalogConfig.catalogEnabled;
 
   /// Bestellen möglich = Katalog aktiv und ein Bestell-Modus (Tisch/Vor-Kasse/
@@ -128,6 +133,29 @@ class PublicShopProvider extends ChangeNotifier {
     activeRunner = runner;
     runnerChosen = true;
     notifyListeners();
+    // Geräte-lokal merken, wer zuletzt gewählt war (nur dieses Gerät).
+    if (_merchantId.isNotEmpty) {
+      LocalCacheStorage.write(
+          '$_lastRunnerKeyPrefix$_merchantId', runner?.id ?? '');
+    }
+  }
+
+  /// Setzt beim Laden den zuletzt an DIESEM Gerät gewählten Runner vor (nur
+  /// Runner-Modus, nur wenn er noch verfügbar ist) – spart die Abfrage. Rein
+  /// lokal, nicht über Geräte hinweg.
+  Future<void> _restoreLastRunner() async {
+    if (!catalogConfig.modeRunner || runnerChosen || _merchantId.isEmpty) return;
+    final saved =
+        await LocalCacheStorage.read('$_lastRunnerKeyPrefix$_merchantId');
+    if (saved == null || saved.isEmpty) return;
+    for (final runner in runners) {
+      if (runner.id == saved && runner.available) {
+        activeRunner = runner;
+        runnerChosen = true;
+        notifyListeners();
+        return;
+      }
+    }
   }
 
   void setItemSearch(String value) {
@@ -173,6 +201,8 @@ class PublicShopProvider extends ChangeNotifier {
       selectedTable = table; // QR-Tisch vorgewählt, im Warenkorb änderbar.
       design = MenuDesign.fromMap(merchant);
       runners = RunnerData.listFromRaw(merchant?['runners']);
+      _merchantId = merchantId;
+      await _restoreLastRunner();
       if (!catalogAvailable) {
         categories = [];
         items = [];

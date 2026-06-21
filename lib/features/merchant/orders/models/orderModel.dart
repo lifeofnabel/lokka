@@ -79,6 +79,10 @@ class OrderModel {
     this.fulfillment = 'sent',
     this.customerNote = '',
     this.runnerId = '',
+    this.paid = false,
+    this.paidAt,
+    this.excludeFromDaily = false,
+    this.cleared = false,
     this.createdAt,
     this.updatedAt,
   });
@@ -116,6 +120,18 @@ class OrderModel {
   /// Runner-ID (Mitarbeiter), der die Bestellung aufgenommen hat – für die
   /// „Meine Bestellungen"-Zuordnung im Runner-Modus (leer bei Kundenbestellung).
   final String runnerId;
+
+  /// Bezahlt-Status (wird beim „Tisch abschließen" gesetzt) + Zeitpunkt.
+  final bool paid;
+  final DateTime? paidAt;
+
+  /// Wurde während einer Tagesumsatz-Pause abgeschlossen → zählt NICHT in den
+  /// Tageszähler, aber sehr wohl in die Finanzen-Historie.
+  final bool excludeFromDaily;
+
+  /// „Aufgeräumt" – der Tisch wurde geleert; die Bestellung verschwindet aus der
+  /// Tisch-Einsicht (zählt aber weiter in Tagesumsatz/Finanzen, da bezahlt).
+  final bool cleared;
 
   bool get isTakeaway => serviceType == 'mitnehmen';
   bool get isQrCashier => fulfillment == 'qr_cashier';
@@ -188,6 +204,10 @@ class OrderModel {
       fulfillment: (map['fulfillment'] ?? 'sent').toString(),
       customerNote: (map['customerNote'] ?? '').toString(),
       runnerId: (map['runnerId'] ?? '').toString(),
+      paid: map['paid'] as bool? ?? false,
+      paidAt: _readDateTime(map['paidAt']),
+      excludeFromDaily: map['excludeFromDaily'] as bool? ?? false,
+      cleared: map['cleared'] as bool? ?? false,
       createdAt: _readDateTime(map['createdAt']),
       updatedAt: _readDateTime(map['updatedAt']),
     );

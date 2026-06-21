@@ -940,6 +940,13 @@ const _toolEntries = [
     path: '/merchant/shop',
   ),
   _ToolEntry(
+    titleKey: 'merchant.finance.title',
+    subtitleKey: 'merchant.finance.subtitle',
+    tooltipKey: 'merchant.finance.tooltip',
+    icon: Icons.insights_rounded,
+    path: '/merchant/finance',
+  ),
+  _ToolEntry(
     titleKey: 'merchant.support.title',
     subtitleKey: 'merchant.support.subtitle',
     tooltipKey: 'merchant.support.subtitle',
