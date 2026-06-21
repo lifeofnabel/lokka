@@ -47,7 +47,7 @@ class MerchantMetricCard extends StatelessWidget {
                   style: const TextStyle(
                     color: MerchantPremiumColors.ink,
                     fontSize: 20,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w700,
                     height: 1,
                   ),
                 ),
@@ -58,8 +58,8 @@ class MerchantMetricCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: MerchantPremiumColors.muted,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
                   ),
                 ),
               ],

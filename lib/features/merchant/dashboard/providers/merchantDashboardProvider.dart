@@ -22,8 +22,11 @@ class MerchantDashboardProvider extends ChangeNotifier {
 
     try {
       _data = await _service.loadDashboard();
-    } catch (error) {
-      _error = error.toString();
+    } catch (error, stack) {
+      // Nutzer sieht eine lokalisierte, generische Meldung; der Roh-Fehler
+      // geht nur ins Log (#249). Page mappt _error -> texts.text(_error!).
+      _error = 'common.error.generic';
+      debugPrint('MerchantDashboardProvider.load failed: $error\n$stack');
     } finally {
       _isLoading = false;
       notifyListeners();

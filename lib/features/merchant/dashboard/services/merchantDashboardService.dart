@@ -6,15 +6,65 @@ import '../../../../core/services/firestoreService.dart';
 class MerchantDashboardData {
   const MerchantDashboardData({
     required this.merchant,
+    required this.hero,
     required this.metrics,
-    required this.activeModules,
     required this.moduleActive,
+    required this.ordersEnabled,
   });
 
   final Map<String, dynamic> merchant;
+  final MerchantHeroFields hero;
   final MerchantDashboardMetrics metrics;
-  final int activeModules;
   final Map<String, bool> moduleActive;
+
+  /// Vorberechnet im Service: Orders-Strip nur sichtbar, wenn Katalog aktiv
+  /// und mindestens ein Bestell-Sub-Flag gesetzt ist (#240).
+  final bool ordersEnabled;
+
+  /// Aufgelöste merchantId aus dem geladenen Snapshot (#237) – kein erneuter
+  /// AuthService-Read in der Page nötig.
+  String get merchantId => merchant['merchantId']?.toString() ?? '';
+}
+
+/// Typisierte, rein darstellende Hero-Felder (#238/#239).
+///
+/// Mapping/Parsing der Firestore-Rohdaten passiert hier im Service, die
+/// [MerchantHeroCard] bleibt rein darstellend.
+class MerchantHeroFields {
+  const MerchantHeroFields({
+    required this.shopName,
+    required this.logoUrl,
+    required this.coverUrl,
+    required this.typeLine,
+    required this.city,
+  });
+
+  final String shopName;
+  final String logoUrl;
+  final String coverUrl;
+  final String typeLine;
+  final String city;
+
+  factory MerchantHeroFields.fromMerchant(Map<String, dynamic> merchant) {
+    String text(String key) => merchant[key]?.toString() ?? '';
+
+    final shopTypes = merchant['shopTypes'];
+    final typeLine = shopTypes is Iterable
+        ? shopTypes
+            .map((item) => item.toString())
+            .where((item) => item.isNotEmpty)
+            .join(', ')
+        : text('shopType');
+
+    return MerchantHeroFields(
+      shopName: text('shopName'),
+      logoUrl: text('logoUrl'),
+      coverUrl: text('coverUrl'),
+      typeLine: typeLine,
+      // Geo-Migration: 'city' bevorzugen, 'area' nur als Legacy-Fallback (#239).
+      city: text('city').isNotEmpty ? text('city') : text('area'),
+    );
+  }
 }
 
 class MerchantDashboardMetrics {
@@ -62,19 +112,45 @@ class MerchantDashboardService {
       'feedPosts': true,
       ...await modulesFuture,
     };
-    final activeModules = moduleActive.values.where((active) => active).length;
+    // Nur echte Modul-Ebene zählen, abgeleitete catalog-Sub-Flags ausschließen,
+    // damit die 'Module'-Zahl nicht überzählt (#242).
+    final activeModules =
+        _moduleKeys.where((key) => moduleActive[key] == true).length;
+
+    final resolvedMerchant = {
+      ...merchant,
+      'merchantId': merchant['merchantId'] ?? uid,
+    };
 
     return MerchantDashboardData(
-      merchant: {...merchant, 'merchantId': merchant['merchantId'] ?? uid},
+      merchant: resolvedMerchant,
+      hero: MerchantHeroFields.fromMerchant(resolvedMerchant),
       metrics: MerchantDashboardMetrics(
         customers: customers,
         feedPosts: feedPosts,
         stampCards: stampCards,
         activeModules: activeModules,
       ),
-      activeModules: activeModules,
       moduleActive: moduleActive,
+      ordersEnabled: _ordersEnabled(moduleActive),
     );
+  }
+
+  /// Echte Modul-Schlüssel (ohne abgeleitete catalog-Sub-Flags) für die
+  /// activeModules-Zählung (#242).
+  static const _moduleKeys = [
+    'feedPosts',
+    'stampCards',
+    'pointsSystems',
+    'menuCatalog',
+  ];
+
+  /// Orders-Strip-Sichtbarkeit – einmalig im Service berechnet (#240).
+  bool _ordersEnabled(Map<String, bool> moduleActive) {
+    if (moduleActive['menuCatalog'] != true) return false;
+    return moduleActive['catalogOrderQrCashier'] == true ||
+        moduleActive['catalogOrderSendCashier'] == true ||
+        moduleActive['catalogTableOrders'] == true;
   }
 
   Future<int> _count(String collectionPath) async {

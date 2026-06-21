@@ -15,6 +15,10 @@ class MerchantTodaySummarySheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final texts = context.watch<LanguageService>();
+    // textScale-bewusste feste Höhe statt fixem AspectRatio, damit große
+    // Schriften nicht überlaufen (#250).
+    final textScale = MediaQuery.textScalerOf(context).scale(1.0).clamp(1.0, 1.6);
+    final cardExtent = 84.0 * textScale;
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
       child: Column(
@@ -26,7 +30,7 @@ class MerchantTodaySummarySheet extends StatelessWidget {
             style: const TextStyle(
               color: MerchantPremiumColors.ink,
               fontSize: 22,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w800,
             ),
           ),
           const SizedBox(height: 4),
@@ -41,11 +45,11 @@ class MerchantTodaySummarySheet extends StatelessWidget {
           GridView(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 2,
               mainAxisSpacing: 10,
               crossAxisSpacing: 10,
-              childAspectRatio: 1.35,
+              mainAxisExtent: cardExtent,
             ),
             children: [
               MerchantMetricCard(label: texts.text('merchant.customers.title'), value: data.metrics.customers.toString(), icon: Icons.groups_rounded),

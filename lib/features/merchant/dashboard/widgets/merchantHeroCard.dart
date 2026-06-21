@@ -11,63 +11,60 @@ import '../services/merchantDashboardService.dart';
 class MerchantHeroCard extends StatelessWidget {
   const MerchantHeroCard({
     super.key,
-    required this.merchant,
+    required this.hero,
     required this.metrics,
     required this.onShopTap,
     required this.onCustomersTap,
     required this.onSettingsTap,
+    required this.onFeedTap,
     required this.onTodayTap,
   });
 
-  final Map<String, dynamic> merchant;
+  final MerchantHeroFields hero;
   final MerchantDashboardMetrics metrics;
   final VoidCallback onShopTap;
   final VoidCallback onCustomersTap;
   final VoidCallback onSettingsTap;
+  final VoidCallback onFeedTap;
   final VoidCallback onTodayTap;
 
   @override
   Widget build(BuildContext context) {
     final texts = context.watch<LanguageService>();
-    final shopName = _text('shopName', fallback: texts.text('merchant.dashboard.yourShop'));
-    final logoUrl = _text('logoUrl');
-    final coverUrl = _text('coverUrl');
-    final shopTypes = merchant['shopTypes'];
-    final typeLine = shopTypes is Iterable
-        ? shopTypes.map((item) => item.toString()).where((item) => item.isNotEmpty).join(', ')
-        : _text('shopType');
-    final areaLine = [_text('area'), typeLine].where((value) => value.isNotEmpty).join(' | ');
+    final shopName =
+        hero.shopName.isEmpty ? texts.text('merchant.dashboard.yourShop') : hero.shopName;
+    final subtitle = [hero.city, hero.typeLine]
+        .where((value) => value.isNotEmpty)
+        .join(' | ');
 
     return Container(
       constraints: const BoxConstraints(minHeight: 284),
       decoration: BoxDecoration(
         color: MerchantPremiumColors.baseElevated,
         borderRadius: BorderRadius.circular(AppRadius.xxl),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        border: Border.all(color: MerchantPremiumColors.glassBorder),
         boxShadow: MerchantPremiumShadows.card,
       ),
       clipBehavior: Clip.antiAlias,
       child: Stack(
         children: [
           Positioned.fill(
-            child: coverUrl.isEmpty
-                ? const DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          MerchantPremiumColors.baseSoft,
-                          MerchantPremiumColors.base,
-                        ],
-                      ),
-                    ),
-                  )
-                : CachedNetworkImage(imageUrl: coverUrl, fit: BoxFit.cover),
+            child: hero.coverUrl.isEmpty
+                ? const _CoverFallback()
+                : CachedNetworkImage(
+                    imageUrl: hero.coverUrl,
+                    fit: BoxFit.cover,
+                    memCacheWidth: 1080,
+                    maxWidthDiskCache: 1080,
+                    placeholder: (_, _) => const _CoverFallback(),
+                    errorWidget: (_, _, _) => const _CoverFallback(),
+                  ),
           ),
           Positioned.fill(
             child: DecoratedBox(
               decoration: BoxDecoration(
+                // Bild-Scrim: bewusste Ausnahme – schwarzer Verlauf für
+                // Textlesbarkeit über beliebigen Cover-Bildern.
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
@@ -94,16 +91,24 @@ class MerchantHeroCard extends StatelessWidget {
                       onTap: onShopTap,
                     ),
                     const Spacer(),
-                    _IconGlassButton(icon: Icons.insights_rounded, tooltip: texts.text('merchant.dashboard.today'), onTap: onTodayTap),
+                    _IconGlassButton(
+                      icon: Icons.insights_rounded,
+                      tooltip: texts.text('merchant.dashboard.today'),
+                      onTap: onTodayTap,
+                    ),
                     const SizedBox(width: 8),
-                    _IconGlassButton(icon: Icons.tune_rounded, tooltip: 'Shopdaten', onTap: onSettingsTap),
+                    _IconGlassButton(
+                      icon: Icons.tune_rounded,
+                      tooltip: texts.text('merchant.shop.title'),
+                      onTap: onSettingsTap,
+                    ),
                   ],
                 ),
                 const SizedBox(height: 50),
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    _Logo(logoUrl: logoUrl, shopName: shopName),
+                    _Logo(logoUrl: hero.logoUrl, shopName: shopName),
                     const SizedBox(width: AppSpacing.md),
                     Expanded(
                       child: Column(
@@ -115,20 +120,22 @@ class MerchantHeroCard extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
-                              color: Colors.white,
+                              color: MerchantPremiumColors.ink,
                               fontSize: 27,
-                              fontWeight: FontWeight.w900,
+                              fontWeight: FontWeight.w700,
                               height: 1,
                             ),
                           ),
                           const SizedBox(height: 7),
                           Text(
-                            areaLine.isEmpty ? texts.text('merchant.dashboard.localPartner') : areaLine,
+                            subtitle.isEmpty
+                                ? texts.text('merchant.dashboard.localPartner')
+                                : subtitle,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               color: MerchantPremiumColors.mutedLight,
-                              fontWeight: FontWeight.w800,
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
                         ],
@@ -153,7 +160,7 @@ class MerchantHeroCard extends StatelessWidget {
                         label: texts.text('merchant.dashboard.feedHub'),
                         value: metrics.feedPosts.toString(),
                         icon: Icons.campaign_rounded,
-                        onTap: onSettingsTap,
+                        onTap: onFeedTap,
                       ),
                     ),
                   ],
@@ -165,8 +172,26 @@ class MerchantHeroCard extends StatelessWidget {
       ),
     );
   }
+}
 
-  String _text(String key, {String fallback = ''}) => merchant[key]?.toString() ?? fallback;
+class _CoverFallback extends StatelessWidget {
+  const _CoverFallback();
+
+  @override
+  Widget build(BuildContext context) {
+    return const DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            MerchantPremiumColors.baseSoft,
+            MerchantPremiumColors.base,
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _Logo extends StatelessWidget {
@@ -194,13 +219,31 @@ class _Logo extends StatelessWidget {
       ),
       clipBehavior: Clip.antiAlias,
       child: logoUrl.isEmpty
-          ? Center(
-              child: Text(
-                _initials(shopName),
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
-              ),
-            )
-          : CachedNetworkImage(imageUrl: logoUrl, fit: BoxFit.cover),
+          ? _LogoInitials(shopName: shopName)
+          : CachedNetworkImage(
+              imageUrl: logoUrl,
+              fit: BoxFit.cover,
+              memCacheWidth: 200,
+              maxWidthDiskCache: 200,
+              placeholder: (_, _) => _LogoInitials(shopName: shopName),
+              errorWidget: (_, _, _) => _LogoInitials(shopName: shopName),
+            ),
+    );
+  }
+}
+
+class _LogoInitials extends StatelessWidget {
+  const _LogoInitials({required this.shopName});
+
+  final String shopName;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Text(
+        _initials(shopName),
+        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+      ),
     );
   }
 }
@@ -226,7 +269,7 @@ class _HeroMetric extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.10),
+          color: MerchantPremiumColors.glass,
           borderRadius: BorderRadius.circular(22),
           border: Border.all(color: MerchantPremiumColors.gold.withValues(alpha: 0.28)),
         ),
@@ -238,14 +281,22 @@ class _HeroMetric extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(value, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900, height: 1)),
+                  Text(
+                    value,
+                    style: const TextStyle(
+                      color: MerchantPremiumColors.ink,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      height: 1,
+                    ),
+                  ),
                   const SizedBox(height: 3),
                   Text(
                     label,
                     style: const TextStyle(
                       color: MerchantPremiumColors.mutedLight,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ],
@@ -274,23 +325,26 @@ class _GlassButton extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(999),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-        decoration: _glassDecoration(),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: Colors.white, size: 17),
-            const SizedBox(width: 7),
-            Text(
-              label,
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w900,
-                fontSize: 12,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 48),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: _glassDecoration(),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: MerchantPremiumColors.ink, size: 17),
+              const SizedBox(width: 7),
+              Text(
+                label,
+                style: const TextStyle(
+                  color: MerchantPremiumColors.ink,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -316,10 +370,10 @@ class _IconGlassButton extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(999),
         child: Container(
-          width: 42,
-          height: 42,
+          width: 48,
+          height: 48,
           decoration: _glassDecoration(),
-          child: Icon(icon, color: Colors.white, size: 20),
+          child: Icon(icon, color: MerchantPremiumColors.ink, size: 20),
         ),
       ),
     );
@@ -328,7 +382,7 @@ class _IconGlassButton extends StatelessWidget {
 
 BoxDecoration _glassDecoration() {
   return BoxDecoration(
-    color: Colors.white.withValues(alpha: 0.12),
+    color: MerchantPremiumColors.glass,
     borderRadius: BorderRadius.circular(999),
     border: Border.all(color: MerchantPremiumColors.gold.withValues(alpha: 0.28)),
     boxShadow: [

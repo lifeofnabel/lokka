@@ -7,9 +7,13 @@ import '../../../../core/theme/appSpacing.dart';
 import '../../shared/widgets/merchantPremiumUi.dart';
 
 class ScannerCard extends StatelessWidget {
-  const ScannerCard({super.key, required this.onTap});
+  const ScannerCard({super.key, required this.onTap, this.comingSoon = false});
 
   final VoidCallback onTap;
+
+  /// Scanner ist noch nicht angebunden – sekundär/kleiner darstellen und klar
+  /// als „Demnächst" kennzeichnen, statt als gleichwertige Primäraktion (#233).
+  final bool comingSoon;
 
   @override
   Widget build(BuildContext context) {
@@ -18,35 +22,27 @@ class ScannerCard extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(AppRadius.xl),
       child: Container(
-        padding: const EdgeInsets.all(AppSpacing.lg),
+        padding: const EdgeInsets.all(AppSpacing.md),
         decoration: BoxDecoration(
           color: MerchantPremiumColors.surface,
-          gradient: const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              MerchantPremiumColors.surface,
-              MerchantPremiumColors.baseElevated,
-            ],
-          ),
           borderRadius: BorderRadius.circular(AppRadius.xl),
-          border: Border.all(color: MerchantPremiumColors.gold.withValues(alpha: 0.30)),
-          boxShadow: MerchantPremiumShadows.card,
+          border: Border.all(color: MerchantPremiumColors.line),
+          boxShadow: MerchantPremiumShadows.soft,
         ),
         child: Row(
           children: [
             Container(
-              width: 62,
-              height: 62,
+              width: 48,
+              height: 48,
               decoration: BoxDecoration(
-                color: MerchantPremiumColors.gold.withValues(alpha: 0.16),
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: MerchantPremiumColors.gold.withValues(alpha: 0.28)),
+                color: MerchantPremiumColors.surfaceAlt,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: MerchantPremiumColors.gold.withValues(alpha: 0.22)),
               ),
               child: const Icon(
                 Icons.qr_code_scanner_rounded,
                 color: MerchantPremiumColors.gold,
-                size: 31,
+                size: 24,
               ),
             ),
             const SizedBox(width: AppSpacing.md),
@@ -54,21 +50,36 @@ class ScannerCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    texts.text('merchant.dashboard.scanCustomer'),
-                    style: const TextStyle(
-                      color: MerchantPremiumColors.ink,
-                      fontSize: 25,
-                      fontWeight: FontWeight.w900,
-                      height: 1,
-                    ),
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          texts.text('merchant.dashboard.scanCustomer'),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: MerchantPremiumColors.ink,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                            height: 1,
+                          ),
+                        ),
+                      ),
+                      if (comingSoon) ...[
+                        const SizedBox(width: 8),
+                        const _ComingSoonBadge(),
+                      ],
+                    ],
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 4),
                   Text(
                     texts.text('merchant.dashboard.scanCustomerTip'),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       color: MerchantPremiumColors.muted,
                       height: 1.25,
+                      fontSize: 13,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -76,16 +87,37 @@ class ScannerCard extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 10),
-            Container(
-              width: 46,
-              height: 46,
-              decoration: const BoxDecoration(
-                color: MerchantPremiumColors.gold,
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.arrow_forward_rounded, color: MerchantPremiumColors.goldSoft),
+            const Icon(
+              Icons.arrow_forward_ios_rounded,
+              size: 16,
+              color: MerchantPremiumColors.muted,
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ComingSoonBadge extends StatelessWidget {
+  const _ComingSoonBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    final texts = context.watch<LanguageService>();
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: MerchantPremiumColors.gold.withValues(alpha: 0.16),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: MerchantPremiumColors.gold.withValues(alpha: 0.32)),
+      ),
+      child: Text(
+        texts.text('merchant.features.comingSoon'),
+        style: const TextStyle(
+          color: MerchantPremiumColors.gold,
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );
