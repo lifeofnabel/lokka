@@ -539,6 +539,7 @@ class LanguageService {
       'merchant.coupons.publish': 'Aktivieren',
       'merchant.coupons.pause': 'Pausieren',
       'merchant.coupons.archive': 'Archivieren',
+      'merchant.coupons.more': 'weitere',
       'merchant.coupons.type.percent': 'Prozent',
       'merchant.coupons.type.fixed': 'Euro Rabatt',
       'merchant.coupons.type.freeItem': 'Gratis Artikel',
@@ -552,10 +553,10 @@ class LanguageService {
           'Kurz und klar, damit Kunden den Vorteil sofort verstehen.',
       'merchant.coupons.section.value': 'Vorteil',
       'merchant.coupons.section.valueTip':
-          'Beschreibe den Rabatt oder Vorteil so, dass dein Team ihn einloesen kann.',
+          'Beschreibe den Rabatt oder Vorteil so, dass dein Team ihn einlösen kann.',
       'merchant.coupons.section.codes': 'Codes',
       'merchant.coupons.section.codesTip':
-          'Du kannst bis zu 100 Codes erzeugen. Einloesen wird später im Scanner angebunden.',
+          'Du kannst bis zu 100 Codes erzeugen. Einlösen wird später im Scanner angebunden.',
       'merchant.coupons.section.image': 'Bild',
       'merchant.coupons.section.imageTip':
           'Bilder werden vor dem Upload lokal zugeschnitten und komprimiert.',
@@ -565,7 +566,7 @@ class LanguageService {
       'merchant.coupons.field.title': 'Name des Gutscheins',
       'merchant.coupons.field.subtitle': 'Kurzer Untertitel',
       'merchant.coupons.field.valueText': 'Vorteil, z. B. 10 Prozent',
-      'merchant.coupons.field.codePrefix': 'Code-Wunsch',
+      'merchant.coupons.field.codePrefix': 'Code-Präfix',
       'merchant.coupons.field.codeCount': 'Anzahl Codes, maximal 100',
       'merchant.coupons.oncePerCode': 'Einmal pro Code',
       'merchant.coupons.multiUse': 'Mehrfach nutzbar',
@@ -573,9 +574,9 @@ class LanguageService {
       'merchant.coupons.viewCodes': 'Alle Codes ansehen',
       'merchant.coupons.codesTitle': 'Alle Codes',
       'merchant.coupons.codesTip':
-          'Markiere Codes, wenn sie eingeloest oder gesperrt sind.',
+          'Markiere Codes, wenn sie eingelöst oder gesperrt sind.',
       'merchant.coupons.code.available': 'Verfügbar',
-      'merchant.coupons.code.used': 'Eingeloest',
+      'merchant.coupons.code.used': 'Eingelöst',
       'merchant.coupons.code.blocked': 'Gesperrt',
       'merchant.coupons.publishTitle': 'Gutschein aktivieren?',
       'merchant.coupons.publishMessage':

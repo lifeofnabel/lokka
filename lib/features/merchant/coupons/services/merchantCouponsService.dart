@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../../../../core/constants/appLimits.dart';
 import '../../../../core/constants/firebasePaths.dart';
 import '../../../../core/services/authService.dart';
 import '../../../../core/services/firestoreService.dart';
@@ -23,8 +24,13 @@ class MerchantCouponsService {
   }
 
   Future<List<CouponModel>> loadCoupons() async {
+    // Server-seitig nach Aktualität sortieren und hart limitieren, damit sich
+    // archivierte Coupons nicht unbegrenzt zu Read-Kosten aufsummieren. Die
+    // feinere Status-Sortierung erfolgt anschließend clientseitig.
     final snapshot = await firestoreService
         .collection(FirebasePaths.merchantCoupons(merchantId))
+        .orderBy('updatedAt', descending: true)
+        .limit(AppLimits.couponsPageSize)
         .get();
     final coupons = snapshot.docs
         .map((doc) => CouponModel.fromMap({'id': doc.id, ...doc.data()}))
@@ -72,6 +78,7 @@ class MerchantCouponsService {
             .collection(FirebasePaths.merchantCoupons(merchantId))
             .doc()
             .id;
+    final isFirstPublish = coupon.publishedAt == null;
     final prepared = coupon.copyWith(
       id: couponId,
       merchantId: merchantId,
@@ -81,19 +88,16 @@ class MerchantCouponsService {
     );
     final data = prepared.toMap()
       ..['updatedAt'] = FieldValue.serverTimestamp()
-      ..['publishedAt'] = FieldValue.serverTimestamp()
       ..['activatedAt'] = FieldValue.serverTimestamp();
+    // publishedAt = Erstveröffentlichungsdatum: nur bei der ersten Aktivierung
+    // setzen. Beim Re-Aktivieren aus Pause bleibt das Originaldatum erhalten.
+    if (isFirstPublish) data['publishedAt'] = FieldValue.serverTimestamp();
     if (coupon.id.isEmpty) data['createdAt'] = FieldValue.serverTimestamp();
 
-    final batch = firestoreService.batch();
-    batch.set(
-      firestoreService.document(
-        FirebasePaths.merchantCoupon(merchantId, couponId),
-      ),
+    await firestoreService.setDocument(
+      FirebasePaths.merchantCoupon(merchantId, couponId),
       data,
-      SetOptions(merge: true),
     );
-    await batch.commit();
     return couponId;
   }
 

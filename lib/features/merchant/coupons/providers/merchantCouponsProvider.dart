@@ -43,22 +43,54 @@ class MerchantCouponsProvider extends ChangeNotifier {
   }
 
   Future<String?> publishCoupon(CouponModel coupon) async {
-    return _saving(() => service.publishCoupon(coupon));
+    final id = await _saving(() => service.publishCoupon(coupon));
+    if (id != null) {
+      // Lokal patchen statt der Liste – vermeidet einen vollen Collection-Reload.
+      _patchCoupon(
+        id,
+        (current) => current.copyWith(
+          status: CouponStatus.active,
+          isActive: true,
+          isArchived: false,
+        ),
+      );
+    }
+    return id;
   }
 
   Future<void> pauseCoupon(String couponId) async {
     await _savingVoid(() => service.pauseCoupon(couponId));
-    await load();
+    if (error == null) {
+      _patchCoupon(
+        couponId,
+        (current) => current.copyWith(
+          status: CouponStatus.paused,
+          isActive: false,
+        ),
+      );
+    }
   }
 
   Future<void> archiveCoupon(String couponId) async {
     await _savingVoid(() => service.archiveCoupon(couponId));
-    await load();
+    if (error == null) {
+      _patchCoupon(
+        couponId,
+        (current) => current.copyWith(
+          status: CouponStatus.archived,
+          isActive: false,
+          isArchived: true,
+        ),
+      );
+    }
   }
 
   Future<void> deleteDraftCoupon(String couponId) async {
     await _savingVoid(() => service.deleteDraftCoupon(couponId));
-    await load();
+    if (error == null) {
+      coupons = coupons.where((coupon) => coupon.id != couponId).toList();
+      notifyListeners();
+    }
   }
 
   Future<String?> uploadImage() async {
@@ -126,5 +158,17 @@ class MerchantCouponsProvider extends ChangeNotifier {
       if (coupon.id == id) return coupon;
     }
     return null;
+  }
+
+  /// Ersetzt den betroffenen Coupon lokal (per [update]) und benachrichtigt die
+  /// Listener – ohne die gesamte Collection erneut zu laden.
+  void _patchCoupon(String id, CouponModel Function(CouponModel current) update) {
+    var changed = false;
+    coupons = coupons.map((coupon) {
+      if (coupon.id != id) return coupon;
+      changed = true;
+      return update(coupon);
+    }).toList();
+    if (changed) notifyListeners();
   }
 }

@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -59,6 +60,8 @@ class _MerchantCouponEditViewState extends State<_MerchantCouponEditView> {
   List<String> _codes = [];
   Map<String, String> _codeStatuses = {};
 
+  MerchantCouponsProvider? _provider;
+
   @override
   void initState() {
     super.initState();
@@ -75,7 +78,22 @@ class _MerchantCouponEditViewState extends State<_MerchantCouponEditView> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Hydration als Provider-Listener statt als Seiteneffekt in build(): sobald
+    // der zu bearbeitende Coupon geladen ist, werden die Controller einmalig
+    // befüllt (Guard über _hydratedId).
+    final provider = context.read<MerchantCouponsProvider>();
+    if (!identical(provider, _provider)) {
+      _provider?.removeListener(_onProviderChanged);
+      _provider = provider..addListener(_onProviderChanged);
+      _onProviderChanged();
+    }
+  }
+
+  @override
   void dispose() {
+    _provider?.removeListener(_onProviderChanged);
     _title.dispose();
     _subtitle.dispose();
     _description.dispose();
@@ -83,6 +101,16 @@ class _MerchantCouponEditViewState extends State<_MerchantCouponEditView> {
     _codePrefix.dispose();
     _codeCount.dispose();
     super.dispose();
+  }
+
+  void _onProviderChanged() {
+    final provider = _provider;
+    if (provider == null || provider.isLoading) return;
+    final coupon =
+        provider.editingCoupon ?? CouponModel.empty(merchantId: provider.merchantId);
+    if (_hydratedId == coupon.id) return;
+    _hydrate(coupon);
+    if (mounted) setState(() {});
   }
 
   void _refreshPreview() {
@@ -115,8 +143,9 @@ class _MerchantCouponEditViewState extends State<_MerchantCouponEditView> {
       );
     }
 
+    // Hydration läuft als Provider-Listener (didChangeDependencies), nicht hier
+    // als Build-Seiteneffekt.
     final coupon = provider.editingCoupon ?? CouponModel.empty(merchantId: provider.merchantId);
-    _hydrate(coupon);
 
     return MerchantToolScaffold(
       title: widget.couponId == null
@@ -206,40 +235,39 @@ class _MerchantCouponEditViewState extends State<_MerchantCouponEditView> {
                   onSelected: (value) => setState(() => _maxUsesPerCode = value == '1' ? 1 : 99),
                 ),
                 const SizedBox(height: AppSpacing.md),
-                OutlinedButton.icon(
+                MerchantSecondaryButton(
+                  label: texts.text('merchant.coupons.generateCodes'),
+                  icon: Icons.qr_code_2_rounded,
                   onPressed: () => _generateCodes(provider),
-                  icon: const Icon(Icons.qr_code_2_rounded),
-                  label: Text(texts.text('merchant.coupons.generateCodes')),
                 ),
                 if (_codes.isNotEmpty) ...[
                   const SizedBox(height: AppSpacing.md),
-                  OutlinedButton.icon(
-                    onPressed: () async {
-                      final updated = await _openCodesSheet(
-                        context: context,
-                        codes: _codes,
-                        statuses: _codeStatuses,
-                      );
-                      if (updated != null) {
-                        setState(() => _codeStatuses = updated);
-                      }
-                    },
-                    icon: const Icon(Icons.list_alt_rounded),
-                    label: Text(texts.text('merchant.coupons.viewCodes')),
+                  MerchantSecondaryButton(
+                    label: texts.text('merchant.coupons.viewCodes'),
+                    icon: Icons.list_alt_rounded,
+                    onPressed: () => _openCodesSheetAndApply(context),
                   ),
                   const SizedBox(height: AppSpacing.md),
                   Align(
                     alignment: Alignment.centerLeft,
                     child: Text(
                       '${_codes.length} ${texts.text('merchant.coupons.codes')}',
-                      style: const TextStyle(fontWeight: FontWeight.w900),
+                      style: const TextStyle(fontWeight: FontWeight.w800),
                     ),
                   ),
                   const SizedBox(height: AppSpacing.sm),
                   Wrap(
                     spacing: 7,
                     runSpacing: 7,
-                    children: _codes.take(12).map((code) => _CodePill(code: code)).toList(),
+                    children: [
+                      ..._codes.take(12).map((code) => _CodePill(code: code)),
+                      if (_codes.length > 12)
+                        _CodePill(
+                          code:
+                              '+${_codes.length - 12} ${texts.text('merchant.coupons.more')}',
+                          onTap: () => _openCodesSheetAndApply(context),
+                        ),
+                    ],
                   ),
                 ],
               ],
@@ -254,15 +282,34 @@ class _MerchantCouponEditViewState extends State<_MerchantCouponEditView> {
                 if (_imageUrl.isNotEmpty) ...[
                   ClipRRect(
                     borderRadius: BorderRadius.circular(AppRadius.large),
-                    child: Image.network(
-                      _imageUrl,
+                    child: CachedNetworkImage(
+                      imageUrl: _imageUrl,
                       height: 170,
+                      width: double.infinity,
                       fit: BoxFit.cover,
+                      memCacheHeight: 340,
+                      placeholder: (_, __) => Container(
+                        height: 170,
+                        color: MerchantPremiumColors.surfaceAlt,
+                      ),
+                      errorWidget: (_, __, ___) => Container(
+                        height: 170,
+                        color: MerchantPremiumColors.surfaceAlt,
+                        alignment: Alignment.center,
+                        child: const Icon(
+                          Icons.broken_image_rounded,
+                          color: MerchantPremiumColors.muted,
+                        ),
+                      ),
                     ),
                   ),
                   const SizedBox(height: AppSpacing.md),
                 ],
-                OutlinedButton.icon(
+                MerchantSecondaryButton(
+                  label: _imageUrl.isEmpty
+                      ? texts.text('common.uploadImage')
+                      : texts.text('common.replaceImage'),
+                  icon: Icons.image_rounded,
                   onPressed: provider.isSaving
                       ? null
                       : () async {
@@ -271,12 +318,6 @@ class _MerchantCouponEditViewState extends State<_MerchantCouponEditView> {
                             setState(() => _imageUrl = uploaded);
                           }
                         },
-                  icon: const Icon(Icons.image_rounded),
-                  label: Text(
-                    _imageUrl.isEmpty
-                        ? texts.text('common.uploadImage')
-                        : texts.text('common.replaceImage'),
-                  ),
                 ),
               ],
             ),
@@ -287,15 +328,6 @@ class _MerchantCouponEditViewState extends State<_MerchantCouponEditView> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(
-                  texts.text('merchant.coupons.section.publishTip'),
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    fontWeight: FontWeight.w700,
-                    height: 1.35,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.md),
                 MerchantPrimaryButton(
                   label: texts.text('merchant.coupons.saveDraft'),
                   icon: Icons.save_rounded,
@@ -303,14 +335,12 @@ class _MerchantCouponEditViewState extends State<_MerchantCouponEditView> {
                   onPressed: () => _saveDraft(context, provider, coupon),
                 ),
                 const SizedBox(height: AppSpacing.sm),
-                OutlinedButton.icon(
-                  onPressed: provider.isSaving ? null : () => _publish(context, provider, coupon),
-                  icon: const Icon(Icons.rocket_launch_rounded),
-                  label: Text(texts.text('merchant.coupons.publish')),
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: const Size.fromHeight(54),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
-                  ),
+                MerchantSecondaryButton(
+                  label: texts.text('merchant.coupons.publish'),
+                  icon: Icons.rocket_launch_rounded,
+                  onPressed: provider.isSaving
+                      ? null
+                      : () => _publish(context, provider, coupon),
                 ),
               ],
             ),
@@ -334,12 +364,26 @@ class _MerchantCouponEditViewState extends State<_MerchantCouponEditView> {
     _maxUsesPerCode = coupon.maxUsesPerCode;
     _imageUrl = coupon.imageUrl;
     _codes = [...coupon.codes];
-    _codeStatuses = _normalizedStatuses(_codes, coupon.codeStatuses);
+    _codeStatuses = CouponCodeStatus.normalize(_codes, coupon.codeStatuses);
     _isHydrating = false;
   }
 
+  Future<void> _openCodesSheetAndApply(BuildContext context) async {
+    final updated = await _openCodesSheet(
+      context: context,
+      codes: _codes,
+      statuses: _codeStatuses,
+    );
+    if (updated != null && mounted) {
+      setState(() => _codeStatuses = updated);
+    }
+  }
+
   CouponModel _couponFromForm(MerchantCouponsProvider provider, CouponModel existing, {String? forcedStatus}) {
-    final status = forcedStatus ?? (existing.status == CouponStatus.active ? CouponStatus.active : CouponStatus.draft);
+    // Status beim Speichern erhalten: paused/archived dürfen durch einen
+    // Entwurf-Save NICHT auf draft zurückfallen. Nur ein expliziter forcedStatus
+    // (Publish) oder ein aktiver Coupon ändert/erhält den aktiven Zustand.
+    final status = forcedStatus ?? _preservedStatus(existing.status);
     return CouponModel(
       id: existing.id,
       merchantId: provider.merchantId,
@@ -350,13 +394,12 @@ class _MerchantCouponEditViewState extends State<_MerchantCouponEditView> {
       valueText: _valueText.text,
       codePrefix: _codePrefix.text,
       codes: _codes,
-      codeStatuses: _normalizedStatuses(_codes, _codeStatuses),
+      codeStatuses: CouponCodeStatus.normalize(_codes, _codeStatuses),
       maxUsesPerCode: _maxUsesPerCode,
       imageUrl: _imageUrl,
       status: status,
       isActive: status == CouponStatus.active,
       isArchived: status == CouponStatus.archived,
-      isPrivate: false,
       createdAt: existing.createdAt,
       updatedAt: existing.updatedAt,
       publishedAt: existing.publishedAt,
@@ -366,18 +409,41 @@ class _MerchantCouponEditViewState extends State<_MerchantCouponEditView> {
     );
   }
 
+  /// Behält bei einem Editor-Save den bestehenden Lebenszyklus-Status. Nur ein
+  /// unbekannter Status fällt auf draft zurück (Erst-Anlage).
+  String _preservedStatus(String existing) {
+    return switch (existing) {
+      CouponStatus.active => CouponStatus.active,
+      CouponStatus.paused => CouponStatus.paused,
+      CouponStatus.archived => CouponStatus.archived,
+      _ => CouponStatus.draft,
+    };
+  }
+
   void _generateCodes(MerchantCouponsProvider provider) {
     final count = (int.tryParse(_codeCount.text.trim()) ?? 20).clamp(1, 100).toInt();
     _codeCount.text = count.toString();
-    final generated = provider.generateCodes(
+    setState(() {
+      _codes = provider.generateCodes(
+        prefix: _codePrefix.text,
+        count: count,
+        existing: _codes,
+      );
+      _codeStatuses = CouponCodeStatus.normalize(_codes, _codeStatuses);
+    });
+  }
+
+  /// Stellt sicher, dass vor dem Speichern Codes vorhanden sind – als reine
+  /// Wertberechnung ohne setState/Controller-Listener-Kaskade (Speicher-Flow).
+  void _ensureCodes(MerchantCouponsProvider provider) {
+    if (_codes.isNotEmpty) return;
+    final count = (int.tryParse(_codeCount.text.trim()) ?? 20).clamp(1, 100).toInt();
+    _codes = provider.generateCodes(
       prefix: _codePrefix.text,
       count: count,
       existing: _codes,
     );
-    setState(() {
-      _codes = generated;
-      _codeStatuses = _normalizedStatuses(generated, _codeStatuses);
-    });
+    _codeStatuses = CouponCodeStatus.normalize(_codes, _codeStatuses);
   }
 
   Future<void> _saveDraft(
@@ -387,9 +453,15 @@ class _MerchantCouponEditViewState extends State<_MerchantCouponEditView> {
   ) async {
     final texts = context.read<LanguageService>();
     if (!_validate(context)) return;
-    if (_codes.isEmpty) _generateCodes(provider);
+    _ensureCodes(provider);
     final id = await provider.saveCoupon(_couponFromForm(provider, existing));
-    if (!context.mounted || id == null) return;
+    if (!context.mounted) return;
+    if (id == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(texts.text('common.error.generic'))),
+      );
+      return;
+    }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(texts.text('merchant.coupons.saved'))),
     );
@@ -401,14 +473,21 @@ class _MerchantCouponEditViewState extends State<_MerchantCouponEditView> {
     MerchantCouponsProvider provider,
     CouponModel existing,
   ) async {
+    final texts = context.read<LanguageService>();
     if (!_validate(context)) return;
-    if (_codes.isEmpty) _generateCodes(provider);
+    _ensureCodes(provider);
     final accepted = await _showPublishSheet(context);
     if (accepted != true || !context.mounted) return;
     final id = await provider.publishCoupon(
       _couponFromForm(provider, existing, forcedStatus: CouponStatus.active),
     );
-    if (!context.mounted || id == null) return;
+    if (!context.mounted) return;
+    if (id == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(texts.text('common.error.generic'))),
+      );
+      return;
+    }
     context.go('/merchant/coupons');
   }
 
@@ -445,11 +524,28 @@ class _CouponPreview extends StatelessWidget {
           if (coupon.imageUrl.isNotEmpty) ...[
             ClipRRect(
               borderRadius: BorderRadius.circular(22),
-              child: Image.network(
-                coupon.imageUrl,
+              child: CachedNetworkImage(
+                imageUrl: coupon.imageUrl,
                 width: 86,
                 height: 86,
                 fit: BoxFit.cover,
+                memCacheWidth: 172,
+                memCacheHeight: 172,
+                placeholder: (_, __) => Container(
+                  width: 86,
+                  height: 86,
+                  color: MerchantPremiumColors.surfaceAlt,
+                ),
+                errorWidget: (_, __, ___) => Container(
+                  width: 86,
+                  height: 86,
+                  color: MerchantPremiumColors.surfaceAlt,
+                  alignment: Alignment.center,
+                  child: const Icon(
+                    Icons.broken_image_rounded,
+                    color: MerchantPremiumColors.muted,
+                  ),
+                ),
               ),
             ),
             const SizedBox(width: AppSpacing.md),
@@ -466,7 +562,7 @@ class _CouponPreview extends StatelessWidget {
                     color: MerchantPremiumColors.ink,
                     fontSize: 25,
                     height: 1,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -517,7 +613,7 @@ class _SectionCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   title,
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
                 ),
               ),
               MerchantInfoTooltip(message: tooltip),
@@ -581,20 +677,27 @@ class _ChipWrap extends StatelessWidget {
 }
 
 class _CodePill extends StatelessWidget {
-  const _CodePill({required this.code});
+  const _CodePill({required this.code, this.onTap});
 
   final String code;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final pill = Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
         color: MerchantPremiumColors.surfaceAlt,
         borderRadius: BorderRadius.circular(999),
         border: Border.all(color: MerchantPremiumColors.line),
       ),
-      child: Text(code, style: const TextStyle(fontWeight: FontWeight.w900)),
+      child: Text(code, style: const TextStyle(fontWeight: FontWeight.w800)),
+    );
+    if (onTap == null) return pill;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(999),
+      child: pill,
     );
   }
 }
@@ -604,15 +707,10 @@ Future<Map<String, String>?> _openCodesSheet({
   required List<String> codes,
   required Map<String, String> statuses,
 }) {
-  final initial = _normalizedStatuses(codes, statuses);
-  return showModalBottomSheet<Map<String, String>>(
+  final initial = CouponCodeStatus.normalize(codes, statuses);
+  return showMerchantBottomSheet<Map<String, String>>(
     context: context,
-    showDragHandle: true,
     isScrollControlled: true,
-    backgroundColor: MerchantPremiumColors.surface,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-    ),
     builder: (sheetContext) => _CodesSheet(
       codes: codes,
       statuses: initial,
@@ -645,49 +743,43 @@ class _CodesSheetState extends State<_CodesSheet> {
   @override
   Widget build(BuildContext context) {
     final texts = context.watch<LanguageService>();
-    return SafeArea(
-      top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(18, 4, 18, 18),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              texts.text('merchant.coupons.codesTitle'),
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              texts.text('merchant.coupons.codesTip'),
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: MerchantPremiumColors.muted, fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            Flexible(
-              child: ListView.builder(
-                shrinkWrap: true,
-                itemCount: widget.codes.length,
-                itemBuilder: (context, index) {
-                  final code = widget.codes[index];
-                  return _CodeStatusRow(
-                    code: code,
-                    status: statuses[code] ?? CouponCodeStatus.available,
-                    onChanged: (status) => setState(() => statuses[code] = status),
-                  );
-                },
-              ),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            MerchantPrimaryButton(
-              label: texts.text('common.save'),
-              icon: Icons.check_rounded,
-              onPressed: () => Navigator.of(context).pop(statuses),
-            ),
-          ],
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          texts.text('merchant.coupons.codesTitle'),
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
         ),
-      ),
+        const SizedBox(height: AppSpacing.sm),
+        Text(
+          texts.text('merchant.coupons.codesTip'),
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: MerchantPremiumColors.muted, fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        Flexible(
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: widget.codes.length,
+            itemBuilder: (context, index) {
+              final code = widget.codes[index];
+              return _CodeStatusRow(
+                code: code,
+                status: statuses[code] ?? CouponCodeStatus.available,
+                onChanged: (status) => setState(() => statuses[code] = status),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        MerchantPrimaryButton(
+          label: texts.text('common.save'),
+          icon: Icons.check_rounded,
+          onPressed: () => Navigator.of(context).pop(statuses),
+        ),
+      ],
     );
   }
 }
@@ -717,7 +809,7 @@ class _CodeStatusRow extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(code, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900)),
+          Text(code, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
           const SizedBox(height: AppSpacing.sm),
           Wrap(
             spacing: 8,
@@ -766,82 +858,47 @@ class _StatusChoice extends StatelessWidget {
       backgroundColor: MerchantPremiumColors.surfaceWarm,
       labelStyle: TextStyle(
         color: selected ? MerchantPremiumColors.base : MerchantPremiumColors.ink,
-        fontWeight: FontWeight.w900,
+        fontWeight: FontWeight.w800,
       ),
       onSelected: (_) => onTap(),
     );
   }
 }
 
-class CouponCodeStatus {
-  const CouponCodeStatus._();
-
-  static const available = 'available';
-  static const used = 'used';
-  static const blocked = 'blocked';
-}
-
-Map<String, String> _normalizedStatuses(
-  List<String> codes,
-  Map<String, String> statuses,
-) {
-  final result = <String, String>{};
-  for (final code in codes) {
-    final status = statuses[code];
-    result[code] = switch (status) {
-      CouponCodeStatus.used => CouponCodeStatus.used,
-      CouponCodeStatus.blocked => CouponCodeStatus.blocked,
-      _ => CouponCodeStatus.available,
-    };
-  }
-  return result;
-}
-
 Future<bool?> _showPublishSheet(BuildContext context) {
   final texts = context.read<LanguageService>();
-  return showModalBottomSheet<bool>(
+  return showMerchantBottomSheet<bool>(
     context: context,
-    showDragHandle: true,
-    backgroundColor: MerchantPremiumColors.surface,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-    ),
-    builder: (sheetContext) => SafeArea(
-      top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              texts.text('merchant.coupons.publishTitle'),
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              texts.text('merchant.coupons.publishMessage'),
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: MerchantPremiumColors.muted,
-                fontWeight: FontWeight.w700,
-                height: 1.35,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            MerchantPrimaryButton(
-              label: texts.text('merchant.coupons.publish'),
-              icon: Icons.rocket_launch_rounded,
-              onPressed: () => Navigator.of(sheetContext).pop(true),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(sheetContext).pop(false),
-              child: Text(texts.text('common.cancel')),
-            ),
-          ],
+    builder: (sheetContext) => Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          texts.text('merchant.coupons.publishTitle'),
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
         ),
-      ),
+        const SizedBox(height: AppSpacing.sm),
+        Text(
+          texts.text('merchant.coupons.publishMessage'),
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: MerchantPremiumColors.muted,
+            fontWeight: FontWeight.w700,
+            height: 1.35,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        MerchantPrimaryButton(
+          label: texts.text('merchant.coupons.publish'),
+          icon: Icons.rocket_launch_rounded,
+          onPressed: () => Navigator.of(sheetContext).pop(true),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(sheetContext).pop(false),
+          child: Text(texts.text('common.cancel')),
+        ),
+      ],
     ),
   );
 }

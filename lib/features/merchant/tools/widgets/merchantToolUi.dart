@@ -392,3 +392,69 @@ class MerchantPrimaryButton extends StatelessWidget {
     );
   }
 }
+
+/// Sekundärer Button (Outline-Variante) im MerchantPremium-Stil. Vereinheitlicht
+/// die zuvor rohen `OutlinedButton`-Stellen (konsistentes Token-Styling, runde
+/// Pillen-Form, gleiche Mindesthöhe).
+class MerchantSecondaryButton extends StatelessWidget {
+  const MerchantSecondaryButton({
+    super.key,
+    required this.label,
+    required this.onPressed,
+    this.icon,
+  });
+
+  final String label;
+  final VoidCallback? onPressed;
+  final IconData? icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = OutlinedButton.styleFrom(
+      foregroundColor: MerchantPremiumColors.ink,
+      side: const BorderSide(color: MerchantPremiumColors.line),
+      minimumSize: const Size.fromHeight(54),
+      textStyle: const TextStyle(fontWeight: FontWeight.w800),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+    );
+    if (icon == null) {
+      return OutlinedButton(
+        onPressed: onPressed,
+        style: style,
+        child: Text(label),
+      );
+    }
+    return OutlinedButton.icon(
+      onPressed: onPressed,
+      icon: Icon(icon),
+      label: Text(label),
+      style: style,
+    );
+  }
+}
+
+/// Geteilte BottomSheet-Hülle im MerchantPremium-Stil (dunkler Grund, runde
+/// obere Ecken, Drag-Handle, SafeArea). Vereinheitlicht die zuvor mehrfach
+/// duplizierten Sheet-Implementierungen.
+Future<T?> showMerchantBottomSheet<T>({
+  required BuildContext context,
+  required WidgetBuilder builder,
+  bool isScrollControlled = false,
+}) {
+  return showModalBottomSheet<T>(
+    context: context,
+    showDragHandle: true,
+    isScrollControlled: isScrollControlled,
+    backgroundColor: MerchantPremiumColors.surface,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+    ),
+    builder: (sheetContext) => SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+        child: builder(sheetContext),
+      ),
+    ),
+  );
+}

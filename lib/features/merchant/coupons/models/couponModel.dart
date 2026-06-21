@@ -18,6 +18,31 @@ class CouponType {
   static const custom = 'custom';
 }
 
+class CouponCodeStatus {
+  const CouponCodeStatus._();
+
+  static const available = 'available';
+  static const used = 'used';
+  static const blocked = 'blocked';
+
+  /// Normalisiert eine Status-Map auf genau die übergebenen Codes und mappt
+  /// unbekannte/fehlende Werte auf [available].
+  static Map<String, String> normalize(
+    List<String> codes,
+    Map<String, String> statuses,
+  ) {
+    final result = <String, String>{};
+    for (final code in codes) {
+      result[code] = switch (statuses[code]) {
+        used => used,
+        blocked => blocked,
+        _ => available,
+      };
+    }
+    return result;
+  }
+}
+
 class CouponModel {
   const CouponModel({
     required this.id,
@@ -35,7 +60,6 @@ class CouponModel {
     required this.status,
     required this.isActive,
     required this.isArchived,
-    required this.isPrivate,
     this.createdAt,
     this.updatedAt,
     this.publishedAt,
@@ -59,7 +83,6 @@ class CouponModel {
   final String status;
   final bool isActive;
   final bool isArchived;
-  final bool isPrivate;
   final DateTime? createdAt;
   final DateTime? updatedAt;
   final DateTime? publishedAt;
@@ -89,7 +112,6 @@ class CouponModel {
       status: CouponStatus.draft,
       isActive: false,
       isArchived: false,
-      isPrivate: false,
     );
   }
 
@@ -110,7 +132,6 @@ class CouponModel {
       status: (map['status'] ?? CouponStatus.draft).toString(),
       isActive: map['isActive'] as bool? ?? false,
       isArchived: map['isArchived'] as bool? ?? false,
-      isPrivate: map['isPrivate'] as bool? ?? false,
       createdAt: _readDateTime(map['createdAt']),
       updatedAt: _readDateTime(map['updatedAt']),
       publishedAt: _readDateTime(map['publishedAt']),
@@ -121,6 +142,9 @@ class CouponModel {
   }
 
   Map<String, dynamic> toMap() {
+    // Timestamp-Felder bewusst NICHT pauschal serialisieren: bei merge:true würde
+    // ein null-Wert ein bereits gesetztes Server-Datum überschreiben. Nur bereits
+    // gesetzte (nicht-null) Timestamps durchreichen.
     return {
       'id': id,
       'couponId': id,
@@ -138,13 +162,12 @@ class CouponModel {
       'status': status,
       'isActive': isActive,
       'isArchived': isArchived,
-      'isPrivate': isPrivate,
-      'createdAt': createdAt,
-      'updatedAt': updatedAt,
-      'publishedAt': publishedAt,
-      'activatedAt': activatedAt,
-      'pausedAt': pausedAt,
-      'archivedAt': archivedAt,
+      if (createdAt != null) 'createdAt': createdAt,
+      if (updatedAt != null) 'updatedAt': updatedAt,
+      if (publishedAt != null) 'publishedAt': publishedAt,
+      if (activatedAt != null) 'activatedAt': activatedAt,
+      if (pausedAt != null) 'pausedAt': pausedAt,
+      if (archivedAt != null) 'archivedAt': archivedAt,
     };
   }
 
@@ -164,7 +187,6 @@ class CouponModel {
     String? status,
     bool? isActive,
     bool? isArchived,
-    bool? isPrivate,
     DateTime? createdAt,
     DateTime? updatedAt,
     DateTime? publishedAt,
@@ -188,7 +210,6 @@ class CouponModel {
       status: status ?? this.status,
       isActive: isActive ?? this.isActive,
       isArchived: isArchived ?? this.isArchived,
-      isPrivate: isPrivate ?? this.isPrivate,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       publishedAt: publishedAt ?? this.publishedAt,

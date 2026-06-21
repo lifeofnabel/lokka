@@ -110,8 +110,8 @@ class _MerchantCouponsView extends StatelessWidget {
       messageKey: 'merchant.coupons.publishMessage',
     );
     if (accepted != true) return;
+    // publishCoupon patcht den Coupon lokal – kein voller Reload nötig.
     await provider.publishCoupon(coupon);
-    if (context.mounted) await provider.load();
   }
 }
 
@@ -123,63 +123,52 @@ Future<bool?> _confirm({
   bool danger = false,
 }) {
   final texts = context.read<LanguageService>();
-  return showModalBottomSheet<bool>(
+  return showMerchantBottomSheet<bool>(
     context: context,
-    showDragHandle: true,
-    backgroundColor: MerchantPremiumColors.surface,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-    ),
-    builder: (sheetContext) => SafeArea(
-      top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              texts.text(titleKey),
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: MerchantPremiumColors.ink,
-                fontSize: 24,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              texts.text(messageKey),
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: MerchantPremiumColors.muted,
-                fontWeight: FontWeight.w700,
-                height: 1.35,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            FilledButton(
-              onPressed: () async {
-                if (onAccepted != null) await onAccepted();
-                if (sheetContext.mounted) Navigator.of(sheetContext).pop(true);
-              },
-              style: FilledButton.styleFrom(
-                backgroundColor: danger ? MerchantPremiumColors.danger : MerchantPremiumColors.ink,
-                foregroundColor: Colors.white,
-                minimumSize: const Size.fromHeight(54),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(999),
-                ),
-              ),
-              child: Text(danger ? texts.text('common.delete') : texts.text('common.ok')),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(sheetContext).pop(false),
-              child: Text(texts.text('common.cancel')),
-            ),
-          ],
+    builder: (sheetContext) => Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          texts.text(titleKey),
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: MerchantPremiumColors.ink,
+            fontSize: 24,
+            fontWeight: FontWeight.w800,
+          ),
         ),
-      ),
+        const SizedBox(height: AppSpacing.sm),
+        Text(
+          texts.text(messageKey),
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: MerchantPremiumColors.muted,
+            fontWeight: FontWeight.w700,
+            height: 1.35,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        FilledButton(
+          onPressed: () async {
+            if (onAccepted != null) await onAccepted();
+            if (sheetContext.mounted) Navigator.of(sheetContext).pop(true);
+          },
+          style: FilledButton.styleFrom(
+            backgroundColor: danger ? MerchantPremiumColors.danger : MerchantPremiumColors.ink,
+            foregroundColor: danger ? MerchantPremiumColors.ink : MerchantPremiumColors.base,
+            minimumSize: const Size.fromHeight(54),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(999),
+            ),
+          ),
+          child: Text(danger ? texts.text('common.delete') : texts.text('common.ok')),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(sheetContext).pop(false),
+          child: Text(texts.text('common.cancel')),
+        ),
+      ],
     ),
   );
 }

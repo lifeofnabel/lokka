@@ -60,7 +60,7 @@ class CouponCard extends StatelessWidget {
                       style: const TextStyle(
                         color: MerchantPremiumColors.ink,
                         fontSize: 19,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -137,20 +137,21 @@ class _MiniAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final foreground =
+        isDanger ? MerchantPremiumColors.danger : MerchantPremiumColors.ink;
     return ActionChip(
-      avatar: Icon(
-        icon,
-        size: 17,
-        color: isDanger ? Colors.red.shade700 : MerchantPremiumColors.ink,
-      ),
+      avatar: Icon(icon, size: 17, color: foreground),
       label: Text(label),
       onPressed: onTap,
       labelStyle: TextStyle(
-        color: isDanger ? Colors.red.shade700 : MerchantPremiumColors.ink,
+        color: foreground,
         fontWeight: FontWeight.w800,
       ),
-      backgroundColor: MerchantPremiumColors.surfaceAlt,
-      side: BorderSide(color: isDanger ? Colors.red.shade100 : MerchantPremiumColors.line),
+      backgroundColor:
+          isDanger ? MerchantPremiumColors.dangerSoft : MerchantPremiumColors.surfaceAlt,
+      side: BorderSide(
+        color: isDanger ? MerchantPremiumColors.danger : MerchantPremiumColors.line,
+      ),
     );
   }
 }
@@ -174,7 +175,7 @@ class _StatusPill extends StatelessWidget {
         style: const TextStyle(
           color: MerchantPremiumColors.ink,
           fontSize: 12,
-          fontWeight: FontWeight.w900,
+          fontWeight: FontWeight.w800,
         ),
       ),
     );
