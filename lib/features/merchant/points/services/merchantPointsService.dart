@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../../../../core/constants/appLimits.dart';
 import '../../../../core/constants/firebasePaths.dart';
 import '../../../../core/services/authService.dart';
 import '../../../../core/services/firestoreService.dart';
@@ -22,8 +23,13 @@ class MerchantPointsService {
   }
 
   Future<List<PointsSystemModel>> loadSystems() async {
+    // Server-seitig nach Aktualität sortieren + hart limitieren (#64), damit
+    // sich alte/archivierte Systeme nicht unbegrenzt zu Read-Kosten summieren.
+    // Die feinere Status-Sortierung erfolgt anschließend clientseitig.
     final snapshot = await firestoreService
         .collection(FirebasePaths.merchantPointsSystems(merchantId))
+        .orderBy('updatedAt', descending: true)
+        .limit(AppLimits.pointsSystemsPageSize)
         .get();
     final systems = snapshot.docs
         .map((doc) => PointsSystemModel.fromMap({'id': doc.id, ...doc.data()}))
@@ -41,8 +47,12 @@ class MerchantPointsService {
   }
 
   Future<List<PointsRewardModel>> loadRewards() async {
+    // Server-seitig nach Aktualität sortieren + hart limitieren (#64); die
+    // feinere Status-/Punkte-Sortierung erfolgt anschließend clientseitig.
     final snapshot = await firestoreService
         .collection(FirebasePaths.merchantPointsRewards(merchantId))
+        .orderBy('updatedAt', descending: true)
+        .limit(AppLimits.pointsRewardsPageSize)
         .get();
     final rewards = snapshot.docs
         .map((doc) => PointsRewardModel.fromMap({'id': doc.id, ...doc.data()}))
@@ -64,8 +74,11 @@ class MerchantPointsService {
   }
 
   Future<List<MerchantItemData>> loadItems() async {
+    // Hart limitieren (#64). Der archiviert/privat-Filter bleibt clientseitig,
+    // damit Alt-Dokumente ohne die Flags nicht stillschweigend wegfallen.
     final snapshot = await firestoreService
         .collection(FirebasePaths.merchantItems(merchantId))
+        .limit(AppLimits.pointsItemsPageSize)
         .get();
     final items = snapshot.docs
         .map((doc) => MerchantItemData.fromMap({'id': doc.id, ...doc.data()}))
@@ -205,50 +218,6 @@ class MerchantPointsService {
     return rewardId;
   }
 
-  Future<void> pauseSystem(String systemId) {
-    return firestoreService.setDocument(
-      FirebasePaths.merchantPointsSystem(merchantId, systemId),
-      {
-        'status': PointsStatus.paused,
-        'isActive': false,
-        'existingParticipantsCanContinue': true,
-        'pausedAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      },
-    );
-  }
-
-  Future<void> archiveSystem(String systemId) {
-    return firestoreService.setDocument(
-      FirebasePaths.merchantPointsSystem(merchantId, systemId),
-      {
-        'status': PointsStatus.archived,
-        'isActive': false,
-        'isArchived': true,
-        'archivedAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      },
-    );
-  }
-
-  Future<void> deleteDraftSystem(String systemId) {
-    return firestoreService
-        .document(FirebasePaths.merchantPointsSystem(merchantId, systemId))
-        .delete();
-  }
-
-  Future<void> pauseReward(String rewardId) {
-    return firestoreService.setDocument(
-      FirebasePaths.merchantPointsReward(merchantId, rewardId),
-      {
-        'status': PointsStatus.paused,
-        'isActive': false,
-        'pausedAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      },
-    );
-  }
-
   Future<void> archiveReward(String rewardId) {
     return firestoreService.setDocument(
       FirebasePaths.merchantPointsReward(merchantId, rewardId),
@@ -260,12 +229,6 @@ class MerchantPointsService {
         'updatedAt': FieldValue.serverTimestamp(),
       },
     );
-  }
-
-  Future<void> deleteDraftReward(String rewardId) {
-    return firestoreService
-        .document(FirebasePaths.merchantPointsReward(merchantId, rewardId))
-        .delete();
   }
 
   int _sortStatus(String status) {

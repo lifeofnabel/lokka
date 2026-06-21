@@ -88,21 +88,6 @@ class MerchantPointsProvider extends ChangeNotifier {
     return _saving(() => service.publishSystem(system));
   }
 
-  Future<void> pauseSystem(String systemId) async {
-    await _savingVoid(() => service.pauseSystem(systemId));
-    await load();
-  }
-
-  Future<void> archiveSystem(String systemId) async {
-    await _savingVoid(() => service.archiveSystem(systemId));
-    await load();
-  }
-
-  Future<void> deleteDraftSystem(String systemId) async {
-    await _savingVoid(() => service.deleteDraftSystem(systemId));
-    await load();
-  }
-
   Future<String?> saveReward(PointsRewardModel reward) {
     return _saving(() => service.saveReward(reward));
   }
@@ -111,18 +96,8 @@ class MerchantPointsProvider extends ChangeNotifier {
     return _saving(() => service.publishReward(reward));
   }
 
-  Future<void> pauseReward(String rewardId) async {
-    await _savingVoid(() => service.pauseReward(rewardId));
-    await load();
-  }
-
   Future<void> archiveReward(String rewardId) async {
     await _savingVoid(() => service.archiveReward(rewardId));
-    await load();
-  }
-
-  Future<void> deleteDraftReward(String rewardId) async {
-    await _savingVoid(() => service.deleteDraftReward(rewardId));
     await load();
   }
 

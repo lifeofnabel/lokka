@@ -56,6 +56,11 @@ class PointsSystemModel {
   final String status;
   final bool isActive;
   final bool isArchived;
+
+  /// Reserviert für die geplante Programm-Übergangslogik (Modus-Wechsel): Wenn
+  /// ein Modus wechselt, dürfen bestehende Teilnehmer bis [transitionEndsAt]
+  /// weitermachen. Aktuell durchgängig konstant `true`; UI-Schalter steht noch
+  /// aus. Bewusst behalten, da Edit-Seite & Persistenz darauf aufbauen (#64).
   final bool existingParticipantsCanContinue;
   final DateTime? transitionEndsAt;
   final DateTime? createdAt;

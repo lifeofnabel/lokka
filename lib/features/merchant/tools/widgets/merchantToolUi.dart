@@ -198,12 +198,14 @@ class MerchantEmptyState extends StatelessWidget {
     required this.message,
     required this.actionLabel,
     required this.onAction,
+    this.icon = Icons.add_business_rounded,
   });
 
   final String title;
   final String message;
   final String actionLabel;
   final VoidCallback onAction;
+  final IconData icon;
 
   @override
   Widget build(BuildContext context) {
@@ -212,8 +214,8 @@ class MerchantEmptyState extends StatelessWidget {
       padding: const EdgeInsets.all(AppSpacing.lg),
       child: Column(
         children: [
-          const MerchantPremiumIconBox(
-            icon: Icons.add_business_rounded,
+          MerchantPremiumIconBox(
+            icon: icon,
             size: 52,
             iconSize: 24,
           ),
@@ -440,21 +442,33 @@ Future<T?> showMerchantBottomSheet<T>({
   required BuildContext context,
   required WidgetBuilder builder,
   bool isScrollControlled = false,
+  Color? backgroundColor,
+  // Berücksichtigt die Tastatur-Einblendung (für Sheets mit TextField).
+  bool resizeForKeyboard = false,
 }) {
   return showModalBottomSheet<T>(
     context: context,
     showDragHandle: true,
     isScrollControlled: isScrollControlled,
-    backgroundColor: MerchantPremiumColors.surface,
+    backgroundColor: backgroundColor ?? MerchantPremiumColors.surface,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
     ),
-    builder: (sheetContext) => SafeArea(
-      top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-        child: builder(sheetContext),
-      ),
-    ),
+    builder: (sheetContext) {
+      final content = SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+          child: builder(sheetContext),
+        ),
+      );
+      if (!resizeForKeyboard) return content;
+      return Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
+        ),
+        child: content,
+      );
+    },
   );
 }

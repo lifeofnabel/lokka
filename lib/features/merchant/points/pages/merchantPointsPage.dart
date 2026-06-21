@@ -8,6 +8,7 @@ import '../../../../core/services/firestoreService.dart';
 import '../../../../core/services/languageService.dart';
 import '../../../../core/services/uploadService.dart';
 import '../../../../core/theme/appSpacing.dart';
+import '../../../../core/widgets/appImage.dart';
 import '../../catalog/models/merchantItemData.dart';
 import '../../shared/widgets/merchantPremiumUi.dart';
 import '../../tools/widgets/merchantToolUi.dart';
@@ -34,28 +35,25 @@ class MerchantPointsPage extends StatelessWidget {
   }
 }
 
-class _MerchantPointsView extends StatefulWidget {
+class _MerchantPointsView extends StatelessWidget {
   const _MerchantPointsView();
 
-  @override
-  State<_MerchantPointsView> createState() => _MerchantPointsViewState();
-}
-
-class _MerchantPointsViewState extends State<_MerchantPointsView> {
   @override
   Widget build(BuildContext context) {
     final texts = context.watch<LanguageService>();
     final provider = context.watch<MerchantPointsProvider>();
 
-    final system = provider.systems.isNotEmpty
-        ? (provider.activeSystem ?? provider.systems.first)
-        : null;
+    // Bearbeitungskontext: bevorzugt das aktive System, sonst der erste
+    // NICHT archivierte Datensatz – ein archiviertes System darf nie als
+    // Edit-Kontext dienen (#64).
+    final system =
+        provider.activeSystem ??
+        _firstWhereOrNull(provider.systems, (s) => !s.isArchivedSystem);
     final mode = system?.programMode ?? PointsProgramMode.monthlyRewards;
 
-    final visibleRewards = provider.rewards
-        .where((reward) => !reward.isArchivedReward)
-        .toList()
-      ..sort((a, b) => a.requiredPoints.compareTo(b.requiredPoints));
+    final visibleRewards =
+        provider.rewards.where((reward) => !reward.isArchivedReward).toList()
+          ..sort((a, b) => a.requiredPoints.compareTo(b.requiredPoints));
     // Belohnungen nach Typ trennen (#32): Geschenke (custom/discount) gehören in
     // den Monatsmodus, Shop-Artikel (item) in den Shop-Modus – sonst vermischen
     // sich Geschenke-Leiter und Shop-Grid.
@@ -65,14 +63,16 @@ class _MerchantPointsViewState extends State<_MerchantPointsView> {
     final shopRewards = visibleRewards
         .where((r) => r.rewardType == PointsRewardType.item)
         .toList();
-    final modeRewards =
-        mode == PointsProgramMode.monthlyRewards ? giftRewards : shopRewards;
+    final modeRewards = mode == PointsProgramMode.monthlyRewards
+        ? giftRewards
+        : shopRewards;
 
     return MerchantToolScaffold(
       title: texts.text('merchant.points.title'),
       subtitle: texts.text('merchant.points.subtitle'),
-      trailing:
-          MerchantInfoTooltip(message: texts.text('merchant.points.tooltip')),
+      trailing: MerchantInfoTooltip(
+        message: texts.text('merchant.points.tooltip'),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -93,19 +93,32 @@ class _MerchantPointsViewState extends State<_MerchantPointsView> {
             // ── 2 · Modus-Schalter: Monthly Rewards ↔ Punkte-Shop ───────────
             _ModeSwitch(
               selected: mode,
-              onChoose: (next) => _onChooseMode(context, provider, system, next),
+              // Während gespeichert wird sperren, damit ein Doppel-Tap nicht
+              // einen zweiten Mode-Wechsel auslöst (#64).
+              isSaving: provider.isSaving,
+              onChoose: (next) =>
+                  _onChooseMode(context, provider, system, next),
             ),
             const SizedBox(height: AppSpacing.xl),
 
             // ── 3 · Grundeinstellungen ──────────────────────────────────────
             _SectionLabel(
-              title:
-                  _t(texts, 'merchant.points.basicsTitle', 'Grundeinstellungen'),
+              title: _t(
+                texts,
+                'merchant.points.basicsTitle',
+                'Grundeinstellungen',
+              ),
               hint: mode == PointsProgramMode.monthlyRewards
-                  ? _t(texts, 'merchant.points.basicsHintMonthly',
-                      'Wie viele Punkte deine Kunden sammeln und wann der Monat neu startet.')
-                  : _t(texts, 'merchant.points.basicsHintShop',
-                      'Wie viele Punkte deine Kunden pro Euro sammeln.'),
+                  ? _t(
+                      texts,
+                      'merchant.points.basicsHintMonthly',
+                      'Wie viele Punkte deine Kunden sammeln und wann der Monat neu startet.',
+                    )
+                  : _t(
+                      texts,
+                      'merchant.points.basicsHintShop',
+                      'Wie viele Punkte deine Kunden pro Euro sammeln.',
+                    ),
             ),
             const SizedBox(height: AppSpacing.md),
             _BasicsCard(
@@ -122,8 +135,8 @@ class _MerchantPointsViewState extends State<_MerchantPointsView> {
             if (mode == PointsProgramMode.monthlyRewards)
               _MonthlySection(
                 rewards: giftRewards,
-                onEditReward: (reward) => context
-                    .push('/merchant/points/rewards/edit/${reward.id}'),
+                onEditReward: (reward) =>
+                    context.push('/merchant/points/rewards/edit/${reward.id}'),
                 onAddReward: () =>
                     context.push('/merchant/points/rewards/edit'),
               )
@@ -157,7 +170,8 @@ class _MerchantPointsViewState extends State<_MerchantPointsView> {
       if (ok != true || !context.mounted) return;
     }
 
-    final base = system ?? PointsSystemModel.empty(merchantId: provider.merchantId);
+    final base =
+        system ?? PointsSystemModel.empty(merchantId: provider.merchantId);
     await provider.saveSystem(base.copyWith(programMode: next));
   }
 
@@ -172,14 +186,21 @@ class _MerchantPointsViewState extends State<_MerchantPointsView> {
         system ?? PointsSystemModel.empty(merchantId: provider.merchantId);
     final value = await _numberSheet(
       context,
-      title: _t(texts, 'merchant.points.field.pointsPerEuro',
-          'Punkte pro Euro'),
-      hint: _t(texts, 'merchant.points.basicsHintShop',
-          'Wie viele Punkte deine Kunden pro Euro sammeln.'),
-      initial: base.pointsPerEuro.toString().replaceAll('.0', ''),
+      title: _t(
+        texts,
+        'merchant.points.field.pointsPerEuro',
+        'Punkte pro Euro',
+      ),
+      hint: _t(
+        texts,
+        'merchant.points.basicsHintShop',
+        'Wie viele Punkte deine Kunden pro Euro sammeln.',
+      ),
+      initial: _formatNum(base.pointsPerEuro),
     );
     if (value == null || !context.mounted) return;
-    final parsed = num.tryParse(value.replaceAll(',', '.')) ?? base.pointsPerEuro;
+    final parsed =
+        num.tryParse(value.replaceAll(',', '.')) ?? base.pointsPerEuro;
     await provider.saveSystem(
       base.copyWith(programMode: mode, pointsPerEuro: parsed <= 0 ? 1 : parsed),
     );
@@ -205,30 +226,57 @@ class _MerchantPointsViewState extends State<_MerchantPointsView> {
     MerchantPointsProvider provider,
     PointsSystemModel? system,
   ) async {
-    final item = await _pickArticleSheet(context, provider.items);
+    final texts = context.read<LanguageService>();
+    // Bereits in den Punkteshop importierte (nicht-archivierte) Artikel
+    // herausfiltern, damit keine Duplikate entstehen (#64).
+    final importedItemIds = provider.rewards
+        .where(
+          (r) =>
+              !r.isArchivedReward &&
+              r.rewardType == PointsRewardType.item &&
+              r.rewardItemId.isNotEmpty,
+        )
+        .map((r) => r.rewardItemId)
+        .toSet();
+    final selectable = provider.items
+        .where((item) => !importedItemIds.contains(item.id))
+        .toList();
+    final item = await _pickArticleSheet(context, selectable);
     if (item == null || !context.mounted) return;
     final suggested = _suggestedPoints(system, item);
     final points = await _numberSheet(
       context,
-      title: _t(context.read<LanguageService>(),
-          'merchant.points.shop.priceTitle', 'Preis in Punkten'),
-      hint: _t(context.read<LanguageService>(), 'merchant.points.shop.priceHint',
-          'Wie viele Punkte kostet dieser Artikel im Punkteshop?'),
+      title: _t(texts, 'merchant.points.shop.priceTitle', 'Preis in Punkten'),
+      hint: _t(
+        texts,
+        'merchant.points.shop.priceHint',
+        'Wie viele Punkte kostet dieser Artikel im Punkteshop?',
+      ),
       initial: suggested.toString(),
       integerOnly: true,
     );
     if (points == null || !context.mounted) return;
     final parsed = int.tryParse(points.trim()) ?? suggested;
-    final reward = PointsRewardModel.empty(merchantId: provider.merchantId)
-        .copyWith(
-      title: item.name,
-      description: item.description,
-      rewardType: PointsRewardType.item,
-      requiredPoints: parsed <= 0 ? 1 : parsed,
-      rewardItemId: item.id,
-      rewardItemName: item.name,
-      imageUrl: item.imageUrl,
+    // Falls trotzdem ein nicht-archiviertes Reward mit gleicher Artikel-Id
+    // existiert: dieses aktualisieren statt ein zweites anzulegen (#64).
+    final existing = _firstWhereOrNull(
+      provider.rewards,
+      (r) =>
+          !r.isArchivedReward &&
+          r.rewardType == PointsRewardType.item &&
+          r.rewardItemId == item.id,
     );
+    final reward =
+        (existing ?? PointsRewardModel.empty(merchantId: provider.merchantId))
+            .copyWith(
+              title: item.name,
+              description: item.description,
+              rewardType: PointsRewardType.item,
+              requiredPoints: parsed <= 0 ? 1 : parsed,
+              rewardItemId: item.id,
+              rewardItemName: item.name,
+              imageUrl: item.imageUrl,
+            );
     await provider.publishReward(reward);
   }
 
@@ -246,10 +294,12 @@ class _MerchantPointsViewState extends State<_MerchantPointsView> {
     }
     final points = await _numberSheet(
       context,
-      title:
-          _t(texts, 'merchant.points.shop.priceTitle', 'Preis in Punkten'),
-      hint: _t(texts, 'merchant.points.shop.priceHint',
-          'Wie viele Punkte kostet dieser Artikel im Punkteshop?'),
+      title: _t(texts, 'merchant.points.shop.priceTitle', 'Preis in Punkten'),
+      hint: _t(
+        texts,
+        'merchant.points.shop.priceHint',
+        'Wie viele Punkte kostet dieser Artikel im Punkteshop?',
+      ),
       initial: reward.requiredPoints.toString(),
       integerOnly: true,
     );
@@ -280,11 +330,16 @@ class _StatusHero extends StatelessWidget {
     final statusLabel = !hasSystem
         ? _t(texts, 'merchant.points.heroStateNone', 'Noch nicht eingerichtet')
         : isLive
-            ? texts.text('merchant.points.status.active').toUpperCase()
-            : _statusLabel(texts, system!.status).toUpperCase();
+        ? texts.text('merchant.points.status.active').toUpperCase()
+        : _statusLabel(texts, system!.status).toUpperCase();
 
-    final accent =
-        isLive ? MerchantPremiumColors.gold : MerchantPremiumColors.muted;
+    // Pausiert deutlich von Entwurf trennen: Warn-Akzent statt muted (#64),
+    // damit aktiv/pausiert/entwurf farblich klar unterscheidbar sind.
+    final accent = isLive
+        ? MerchantPremiumColors.gold
+        : (hasSystem && system!.isPaused)
+        ? MerchantPremiumColors.warning
+        : MerchantPremiumColors.muted;
 
     return MerchantPremiumCard(
       padding: const EdgeInsets.all(20),
@@ -302,8 +357,11 @@ class _StatusHero extends StatelessWidget {
                 color: MerchantPremiumColors.gold.withValues(alpha: 0.24),
               ),
             ),
-            child: const Icon(Icons.stars_rounded,
-                color: MerchantPremiumColors.gold, size: 26),
+            child: const Icon(
+              Icons.stars_rounded,
+              color: MerchantPremiumColors.gold,
+              size: 26,
+            ),
           ),
           const SizedBox(width: AppSpacing.md),
           Expanded(
@@ -339,11 +397,14 @@ class _StatusHero extends StatelessWidget {
                 const SizedBox(height: 5),
                 Text(
                   !hasSystem
-                      ? _t(texts, 'merchant.points.heroTitleNone',
-                          'Punkteprogramm starten')
+                      ? _t(
+                          texts,
+                          'merchant.points.heroTitleNone',
+                          'Punkteprogramm starten',
+                        )
                       : (system!.title.trim().isEmpty
-                          ? texts.text('merchant.points.defaultSystem')
-                          : system!.title),
+                            ? texts.text('merchant.points.defaultSystem')
+                            : system!.title),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
@@ -386,10 +447,12 @@ class _ModeSwitch extends StatelessWidget {
   const _ModeSwitch({
     required this.selected,
     required this.onChoose,
+    this.isSaving = false,
   });
 
   final String selected;
   final ValueChanged<String> onChoose;
+  final bool isSaving;
 
   @override
   Widget build(BuildContext context) {
@@ -443,7 +506,9 @@ class _ModeSwitch extends StatelessWidget {
                 ),
               ],
               selected: {selected},
-              onSelectionChanged: (selection) => onChoose(selection.first),
+              onSelectionChanged: isSaving
+                  ? null
+                  : (selection) => onChoose(selection.first),
               showSelectedIcon: false,
             ),
           ),
@@ -473,8 +538,7 @@ class _BasicsCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final texts = context.watch<LanguageService>();
-    final pointsPerEuro =
-        (system?.pointsPerEuro ?? 1).toString().replaceAll('.0', '');
+    final pointsPerEuro = _formatNum(system?.pointsPerEuro ?? 1);
     final resetDay = system?.monthlyResetDay ?? 1;
     return MerchantPremiumCard(
       padding: const EdgeInsets.all(6),
@@ -483,8 +547,11 @@ class _BasicsCard extends StatelessWidget {
         children: [
           _SettingRow(
             icon: Icons.toll_rounded,
-            label: _t(texts, 'merchant.points.field.pointsPerEuro',
-                'Punkte pro Euro'),
+            label: _t(
+              texts,
+              'merchant.points.field.pointsPerEuro',
+              'Punkte pro Euro',
+            ),
             value:
                 '$pointsPerEuro ${_t(texts, 'merchant.points.points', 'Punkte')}',
             onTap: onEditPoints,
@@ -493,11 +560,16 @@ class _BasicsCard extends StatelessWidget {
             const _SettingDivider(),
             _SettingRow(
               icon: Icons.event_repeat_rounded,
-              label: _t(texts, 'merchant.points.monthlyResetDay',
-                  'Monatlicher Neustart'),
-              value: _t(texts, 'merchant.points.resetDayValue',
-                      'Am {day}. des Monats')
-                  .replaceAll('{day}', '$resetDay'),
+              label: _t(
+                texts,
+                'merchant.points.monthlyResetDay',
+                'Monatlicher Neustart',
+              ),
+              value: _t(
+                texts,
+                'merchant.points.resetDayValue',
+                'Am {day}. des Monats',
+              ).replaceAll('{day}', '$resetDay'),
               onTap: onEditResetDay,
             ),
           ],
@@ -542,8 +614,7 @@ class _SettingRow extends StatelessWidget {
                     color: MerchantPremiumColors.gold.withValues(alpha: 0.22),
                   ),
                 ),
-                child: Icon(icon,
-                    size: 22, color: MerchantPremiumColors.gold),
+                child: Icon(icon, size: 22, color: MerchantPremiumColors.gold),
               ),
               const SizedBox(width: AppSpacing.md),
               Expanded(
@@ -574,8 +645,11 @@ class _SettingRow extends StatelessWidget {
                   ],
                 ),
               ),
-              const Icon(Icons.edit_rounded,
-                  size: 19, color: MerchantPremiumColors.muted),
+              const Icon(
+                Icons.edit_rounded,
+                size: 19,
+                color: MerchantPremiumColors.muted,
+              ),
             ],
           ),
         ),
@@ -622,8 +696,11 @@ class _MonthlySection extends StatelessWidget {
       children: [
         _SectionLabel(
           title: _t(texts, 'merchant.points.giftsTitle', 'Deine Geschenke'),
-          hint: _t(texts, 'merchant.points.giftsHint',
-              'Lege fest, welches Geschenk es bei wie vielen Punkten gibt.'),
+          hint: _t(
+            texts,
+            'merchant.points.giftsHint',
+            'Lege fest, welches Geschenk es bei wie vielen Punkten gibt.',
+          ),
         ),
         const SizedBox(height: AppSpacing.md),
         if (rewards.isEmpty)
@@ -660,13 +737,19 @@ class _GiftLadder extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.stairs_rounded,
-                  size: 20, color: MerchantPremiumColors.gold),
+              const Icon(
+                Icons.stairs_rounded,
+                size: 20,
+                color: MerchantPremiumColors.gold,
+              ),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  _t(texts, 'merchant.points.ladderTitle',
-                      'So wachsen die Geschenke'),
+                  _t(
+                    texts,
+                    'merchant.points.ladderTitle',
+                    'So wachsen die Geschenke',
+                  ),
                   style: const TextStyle(
                     color: MerchantPremiumColors.ink,
                     fontWeight: FontWeight.w700,
@@ -702,8 +785,11 @@ class _LadderConnector extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.keyboard_arrow_up_rounded,
-                size: 20, color: MerchantPremiumColors.gold),
+            Icon(
+              Icons.keyboard_arrow_up_rounded,
+              size: 20,
+              color: MerchantPremiumColors.gold,
+            ),
           ],
         ),
       ),
@@ -777,8 +863,10 @@ class _LadderStep extends StatelessWidget {
                   ],
                 ),
               ),
-              const Icon(Icons.chevron_right_rounded,
-                  color: MerchantPremiumColors.muted),
+              const Icon(
+                Icons.chevron_right_rounded,
+                color: MerchantPremiumColors.muted,
+              ),
             ],
           ),
         ),
@@ -821,8 +909,11 @@ class _RewardGrid extends StatelessWidget {
             SizedBox(
               width: width,
               child: _AddCard(
-                label: _t(texts, 'merchant.points.addGift',
-                    'Geschenk hinzufügen'),
+                label: _t(
+                  texts,
+                  'merchant.points.addGift',
+                  'Geschenk hinzufügen',
+                ),
                 onTap: onAdd,
               ),
             ),
@@ -898,19 +989,43 @@ class _GiftCard extends StatelessWidget {
                       ),
                     ),
                   ),
-                  if (!reward.isLive)
-                    Text(
-                      _statusLabel(texts, reward.status),
-                      style: const TextStyle(
-                        color: MerchantPremiumColors.muted,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 11,
-                      ),
-                    ),
+                  if (!reward.isLive) _StatusPill(status: reward.status),
                 ],
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Kompakte, kontraststarke Status-Pille (statt 11px-Mini-Text) für
+/// nicht-aktive Belohnungen – bessere Lesbarkeit (#64).
+class _StatusPill extends StatelessWidget {
+  const _StatusPill({required this.status});
+
+  final String status;
+
+  @override
+  Widget build(BuildContext context) {
+    final texts = context.watch<LanguageService>();
+    final isPaused = status == PointsStatus.paused;
+    final color = isPaused
+        ? MerchantPremiumColors.warning
+        : MerchantPremiumColors.muted;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.16),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        _statusLabel(texts, status),
+        style: TextStyle(
+          color: color,
+          fontWeight: FontWeight.w700,
+          fontSize: 12,
         ),
       ),
     );
@@ -940,8 +1055,11 @@ class _ShopSection extends StatelessWidget {
       children: [
         _SectionLabel(
           title: _t(texts, 'merchant.points.shopTitle', 'Dein Punkteshop'),
-          hint: _t(texts, 'merchant.points.shopHint',
-              'Artikel, die deine Kunden mit Punkten kaufen können.'),
+          hint: _t(
+            texts,
+            'merchant.points.shopHint',
+            'Artikel, die deine Kunden mit Punkten kaufen können.',
+          ),
         ),
         const SizedBox(height: AppSpacing.md),
         if (rewards.isEmpty)
@@ -966,8 +1084,11 @@ class _ShopSection extends StatelessWidget {
                   SizedBox(
                     width: width,
                     child: _AddCard(
-                      label: _t(texts, 'merchant.points.shop.addArticle',
-                          'Artikel hinzufügen'),
+                      label: _t(
+                        texts,
+                        'merchant.points.shop.addArticle',
+                        'Artikel hinzufügen',
+                      ),
                       onTap: onAddArticle,
                     ),
                   ),
@@ -1021,8 +1142,11 @@ class _AddCard extends StatelessWidget {
                     color: MerchantPremiumColors.gold.withValues(alpha: 0.30),
                   ),
                 ),
-                child: const Icon(Icons.add_rounded,
-                    size: 28, color: MerchantPremiumColors.gold),
+                child: const Icon(
+                  Icons.add_rounded,
+                  size: 28,
+                  color: MerchantPremiumColors.gold,
+                ),
               ),
               const SizedBox(height: 10),
               Text(
@@ -1042,6 +1166,8 @@ class _AddCard extends StatelessWidget {
   }
 }
 
+// Empty-States laufen jetzt über die geteilte MerchantEmptyState-Komponente
+// (merchantToolUi) statt über lokal dupliziertes Card-Boilerplate (#64).
 class _EmptyGiftsCard extends StatelessWidget {
   const _EmptyGiftsCard({required this.onAdd});
 
@@ -1050,14 +1176,19 @@ class _EmptyGiftsCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final texts = context.watch<LanguageService>();
-    return _EmptyContentCard(
+    return MerchantEmptyState(
       icon: Icons.card_giftcard_rounded,
-      title: _t(texts, 'merchant.points.giftsEmptyTitle',
-          'Noch keine Geschenke'),
-      message: _t(texts, 'merchant.points.giftsEmptyMessage',
-          'Lege dein erstes Geschenk an, das Kunden mit Punkten bekommen.'),
-      actionLabel:
-          _t(texts, 'merchant.points.addGift', 'Geschenk hinzufügen'),
+      title: _t(
+        texts,
+        'merchant.points.giftsEmptyTitle',
+        'Noch keine Geschenke',
+      ),
+      message: _t(
+        texts,
+        'merchant.points.giftsEmptyMessage',
+        'Lege dein erstes Geschenk an, das Kunden mit Punkten bekommen.',
+      ),
+      actionLabel: _t(texts, 'merchant.points.addGift', 'Geschenk hinzufügen'),
       onAction: onAdd,
     );
   }
@@ -1071,90 +1202,20 @@ class _EmptyShopCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final texts = context.watch<LanguageService>();
-    return _EmptyContentCard(
+    return MerchantEmptyState(
       icon: Icons.shopping_bag_rounded,
-      title:
-          _t(texts, 'merchant.points.shopEmptyTitle', 'Noch keine Artikel'),
-      message: _t(texts, 'merchant.points.shopEmptyMessage',
-          'Füge Artikel aus deiner Speisekarte hinzu, die Kunden mit Punkten kaufen können.'),
-      actionLabel: _t(texts, 'merchant.points.shop.addArticle',
-          'Artikel hinzufügen'),
-      onAction: onAdd,
-    );
-  }
-}
-
-class _EmptyContentCard extends StatelessWidget {
-  const _EmptyContentCard({
-    required this.icon,
-    required this.title,
-    required this.message,
-    required this.actionLabel,
-    required this.onAction,
-  });
-
-  final IconData icon;
-  final String title;
-  final String message;
-  final String actionLabel;
-  final VoidCallback onAction;
-
-  @override
-  Widget build(BuildContext context) {
-    return MerchantPremiumCard(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      child: Column(
-        children: [
-          Container(
-            width: 56,
-            height: 56,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: MerchantPremiumColors.goldSoft,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: MerchantPremiumColors.gold.withValues(alpha: 0.24),
-              ),
-            ),
-            child: Icon(icon, size: 26, color: MerchantPremiumColors.gold),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: MerchantPremiumColors.ink,
-              fontSize: 20,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            message,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: MerchantPremiumColors.muted,
-              fontWeight: FontWeight.w700,
-              height: 1.35,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          FilledButton.icon(
-            onPressed: onAction,
-            icon: const Icon(Icons.add_rounded),
-            label: Text(actionLabel),
-            style: FilledButton.styleFrom(
-              backgroundColor: MerchantPremiumColors.gold,
-              foregroundColor: MerchantPremiumColors.base,
-              minimumSize: const Size.fromHeight(52),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(999),
-              ),
-              textStyle: const TextStyle(fontWeight: FontWeight.w700),
-            ),
-          ),
-        ],
+      title: _t(texts, 'merchant.points.shopEmptyTitle', 'Noch keine Artikel'),
+      message: _t(
+        texts,
+        'merchant.points.shopEmptyMessage',
+        'Füge Artikel aus deiner Speisekarte hinzu, die Kunden mit Punkten kaufen können.',
       ),
+      actionLabel: _t(
+        texts,
+        'merchant.points.shop.addArticle',
+        'Artikel hinzufügen',
+      ),
+      onAction: onAdd,
     );
   }
 }
@@ -1204,177 +1265,195 @@ Future<String?> _numberSheet(
   required String initial,
   bool integerOnly = false,
 }) {
-  final texts = context.read<LanguageService>();
-  final controller = TextEditingController(text: initial);
-  return showModalBottomSheet<String>(
+  return showMerchantBottomSheet<String>(
     context: context,
     isScrollControlled: true,
-    showDragHandle: true,
-    backgroundColor: MerchantPremiumColors.surface,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-    ),
-    builder: (sheetContext) => Padding(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
-      ),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                title,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: MerchantPremiumColors.ink,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              Text(
-                hint,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: MerchantPremiumColors.muted,
-                  fontWeight: FontWeight.w700,
-                  height: 1.35,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              TextField(
-                controller: controller,
-                autofocus: true,
-                textAlign: TextAlign.center,
-                keyboardType: integerOnly
-                    ? TextInputType.number
-                    : const TextInputType.numberWithOptions(decimal: true),
-                inputFormatters: integerOnly
-                    ? [FilteringTextInputFormatter.digitsOnly]
-                    : null,
-                style: const TextStyle(
-                  color: MerchantPremiumColors.ink,
-                  fontSize: 28,
-                  fontWeight: FontWeight.w700,
-                ),
-                decoration: merchantPremiumInputDecoration(label: title),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              FilledButton(
-                onPressed: () =>
-                    Navigator.of(sheetContext).pop(controller.text.trim()),
-                style: FilledButton.styleFrom(
-                  backgroundColor: MerchantPremiumColors.gold,
-                  foregroundColor: MerchantPremiumColors.base,
-                  minimumSize: const Size.fromHeight(54),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(999)),
-                  textStyle: const TextStyle(fontWeight: FontWeight.w700),
-                ),
-                child: Text(texts.text('common.save')),
-              ),
-              TextButton(
-                onPressed: () => Navigator.of(sheetContext).pop(),
-                child: Text(texts.text('common.cancel')),
-              ),
-            ],
-          ),
-        ),
-      ),
+    resizeForKeyboard: true,
+    builder: (sheetContext) => _NumberSheetBody(
+      title: title,
+      hint: hint,
+      initial: initial,
+      integerOnly: integerOnly,
     ),
   );
 }
 
+/// Inhalt des Zahlen-Eingabe-Sheets. Eigenes StatefulWidget, damit der
+/// TextEditingController in dispose() freigegeben wird (kein Leak, #64).
+class _NumberSheetBody extends StatefulWidget {
+  const _NumberSheetBody({
+    required this.title,
+    required this.hint,
+    required this.initial,
+    required this.integerOnly,
+  });
+
+  final String title;
+  final String hint;
+  final String initial;
+  final bool integerOnly;
+
+  @override
+  State<_NumberSheetBody> createState() => _NumberSheetBodyState();
+}
+
+class _NumberSheetBodyState extends State<_NumberSheetBody> {
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.initial,
+  );
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final texts = context.read<LanguageService>();
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          widget.title,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: MerchantPremiumColors.ink,
+            fontSize: 22,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Text(
+          widget.hint,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: MerchantPremiumColors.muted,
+            fontWeight: FontWeight.w700,
+            height: 1.35,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        TextField(
+          controller: _controller,
+          autofocus: true,
+          textAlign: TextAlign.center,
+          keyboardType: widget.integerOnly
+              ? TextInputType.number
+              : const TextInputType.numberWithOptions(decimal: true),
+          inputFormatters: widget.integerOnly
+              ? [FilteringTextInputFormatter.digitsOnly]
+              : null,
+          style: const TextStyle(
+            color: MerchantPremiumColors.ink,
+            fontSize: 28,
+            fontWeight: FontWeight.w700,
+          ),
+          decoration: merchantPremiumInputDecoration(label: widget.title),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(_controller.text.trim()),
+          style: FilledButton.styleFrom(
+            backgroundColor: MerchantPremiumColors.gold,
+            foregroundColor: MerchantPremiumColors.base,
+            minimumSize: const Size.fromHeight(54),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(999),
+            ),
+            textStyle: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+          child: Text(texts.text('common.save')),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(texts.text('common.cancel')),
+        ),
+      ],
+    );
+  }
+}
+
 Future<int?> _resetDaySheet(BuildContext context, int current) {
   final texts = context.read<LanguageService>();
-  return showModalBottomSheet<int>(
+  return showMerchantBottomSheet<int>(
     context: context,
     isScrollControlled: true,
-    showDragHandle: true,
-    backgroundColor: MerchantPremiumColors.surface,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-    ),
-    builder: (sheetContext) => SafeArea(
-      top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              _t(texts, 'merchant.points.monthlyResetDay',
-                  'Monatlicher Neustart'),
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: MerchantPremiumColors.ink,
-                fontSize: 22,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              _t(texts, 'merchant.points.monthlyResetDayTip',
-                  'An diesem Tag im Monat starten die Punkte neu.'),
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: MerchantPremiumColors.muted,
-                fontWeight: FontWeight.w700,
-                height: 1.35,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 280),
-              child: GridView.count(
-                shrinkWrap: true,
-                crossAxisCount: 6,
-                mainAxisSpacing: 8,
-                crossAxisSpacing: 8,
-                children: List.generate(31, (index) {
-                  final day = index + 1;
-                  final selected = day == current;
-                  return Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      onTap: () => Navigator.of(sheetContext).pop(day),
+    builder: (sheetContext) => Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          _t(texts, 'merchant.points.monthlyResetDay', 'Monatlicher Neustart'),
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: MerchantPremiumColors.ink,
+            fontSize: 22,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Text(
+          _t(
+            texts,
+            'merchant.points.monthlyResetDayTip',
+            'An diesem Tag im Monat starten die Punkte neu.',
+          ),
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: MerchantPremiumColors.muted,
+            fontWeight: FontWeight.w700,
+            height: 1.35,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        Flexible(
+          child: GridView.count(
+            shrinkWrap: true,
+            // 5 statt 6 Spalten + feste Zellhöhe, damit jedes Touch-Target
+            // >= 48dp ist (#64).
+            crossAxisCount: 5,
+            mainAxisSpacing: 8,
+            crossAxisSpacing: 8,
+            childAspectRatio: 1,
+            children: List.generate(31, (index) {
+              final day = index + 1;
+              final selected = day == current;
+              return Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () => Navigator.of(sheetContext).pop(day),
+                  borderRadius: BorderRadius.circular(14),
+                  child: Container(
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: selected
+                          ? MerchantPremiumColors.gold
+                          : MerchantPremiumColors.surfaceAlt,
                       borderRadius: BorderRadius.circular(14),
-                      child: Container(
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: selected
-                              ? MerchantPremiumColors.gold
-                              : MerchantPremiumColors.surfaceAlt,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color: selected
-                                ? MerchantPremiumColors.gold
-                                : MerchantPremiumColors.line,
-                          ),
-                        ),
-                        child: Text(
-                          '$day',
-                          style: TextStyle(
-                            color: selected
-                                ? MerchantPremiumColors.base
-                                : MerchantPremiumColors.ink,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
+                      border: Border.all(
+                        color: selected
+                            ? MerchantPremiumColors.gold
+                            : MerchantPremiumColors.line,
                       ),
                     ),
-                  );
-                }),
-              ),
-            ),
-          ],
+                    child: Text(
+                      '$day',
+                      style: TextStyle(
+                        color: selected
+                            ? MerchantPremiumColors.base
+                            : MerchantPremiumColors.ink,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }),
+          ),
         ),
-      ),
+      ],
     ),
   );
 }
@@ -1384,75 +1463,65 @@ Future<MerchantItemData?> _pickArticleSheet(
   List<MerchantItemData> items,
 ) {
   final texts = context.read<LanguageService>();
-  return showModalBottomSheet<MerchantItemData>(
+  return showMerchantBottomSheet<MerchantItemData>(
     context: context,
     isScrollControlled: true,
-    showDragHandle: true,
-    backgroundColor: MerchantPremiumColors.surface,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-    ),
-    builder: (sheetContext) => SafeArea(
-      top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              _t(texts, 'merchant.points.shop.pickTitle',
-                  'Artikel auswählen'),
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: MerchantPremiumColors.ink,
-                fontSize: 22,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              _t(texts, 'merchant.points.shop.pickHint',
-                  'Wähle einen Artikel aus deiner Speisekarte.'),
+    builder: (sheetContext) => Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          _t(texts, 'merchant.points.shop.pickTitle', 'Artikel auswählen'),
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: MerchantPremiumColors.ink,
+            fontSize: 22,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Text(
+          _t(
+            texts,
+            'merchant.points.shop.pickHint',
+            'Wähle einen Artikel aus deiner Speisekarte.',
+          ),
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: MerchantPremiumColors.muted,
+            fontWeight: FontWeight.w700,
+            height: 1.35,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        if (items.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
+            child: Text(
+              texts.text('merchant.points.noItems'),
               textAlign: TextAlign.center,
               style: const TextStyle(
                 color: MerchantPremiumColors.muted,
                 fontWeight: FontWeight.w700,
-                height: 1.35,
               ),
             ),
-            const SizedBox(height: AppSpacing.md),
-            if (items.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
-                child: Text(
-                  texts.text('merchant.points.noItems'),
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: MerchantPremiumColors.muted,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              )
-            else
-              Flexible(
-                child: ListView.separated(
-                  shrinkWrap: true,
-                  itemCount: items.length,
-                  separatorBuilder: (_, index) =>
-                      const SizedBox(height: AppSpacing.sm),
-                  itemBuilder: (context, index) {
-                    final item = items[index];
-                    return _ArticlePickRow(
-                      item: item,
-                      onTap: () => Navigator.of(sheetContext).pop(item),
-                    );
-                  },
-                ),
-              ),
-          ],
-        ),
-      ),
+          )
+        else
+          Flexible(
+            child: ListView.separated(
+              shrinkWrap: true,
+              itemCount: items.length,
+              separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
+              itemBuilder: (context, index) {
+                final item = items[index];
+                return _ArticlePickRow(
+                  item: item,
+                  onTap: () => Navigator.of(sheetContext).pop(item),
+                );
+              },
+            ),
+          ),
+      ],
     ),
   );
 }
@@ -1489,9 +1558,35 @@ class _ArticlePickRow extends StatelessWidget {
                   border: Border.all(color: MerchantPremiumColors.line),
                 ),
                 child: item.imageUrl.isEmpty
-                    ? const Icon(Icons.restaurant_rounded,
-                        color: MerchantPremiumColors.muted)
-                    : Image.network(item.imageUrl, fit: BoxFit.cover),
+                    ? const Icon(
+                        Icons.restaurant_rounded,
+                        color: MerchantPremiumColors.muted,
+                      )
+                    : AppImage(
+                        imageUrl: item.imageUrl,
+                        // Decode-Breite ~ Anzeigegröße (52px) * DevicePixelRatio.
+                        memCacheWidth:
+                            (52 *
+                                    (MediaQuery.maybeOf(
+                                          context,
+                                        )?.devicePixelRatio ??
+                                        2.0))
+                                .round(),
+                        errorWidget: const Icon(
+                          Icons.restaurant_rounded,
+                          color: MerchantPremiumColors.muted,
+                        ),
+                        placeholder: const Center(
+                          child: SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: MerchantPremiumColors.muted,
+                            ),
+                          ),
+                        ),
+                      ),
               ),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
@@ -1506,8 +1601,10 @@ class _ArticlePickRow extends StatelessWidget {
                   ),
                 ),
               ),
-              const Icon(Icons.chevron_right_rounded,
-                  color: MerchantPremiumColors.muted),
+              const Icon(
+                Icons.chevron_right_rounded,
+                color: MerchantPremiumColors.muted,
+              ),
             ],
           ),
         ),
@@ -1523,141 +1620,131 @@ Future<_ShopAction?> _shopArticleActionSheet(
   PointsRewardModel reward,
 ) {
   final texts = context.read<LanguageService>();
-  return showModalBottomSheet<_ShopAction>(
+  return showMerchantBottomSheet<_ShopAction>(
     context: context,
-    showDragHandle: true,
-    backgroundColor: MerchantPremiumColors.surface,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-    ),
-    builder: (sheetContext) => SafeArea(
-      top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              reward.title.trim().isEmpty
-                  ? texts.text('merchant.points.rewardUntitled')
-                  : reward.title,
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: MerchantPremiumColors.ink,
-                fontSize: 22,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            FilledButton.icon(
-              onPressed: () =>
-                  Navigator.of(sheetContext).pop(_ShopAction.editPrice),
-              icon: const Icon(Icons.toll_rounded),
-              label: Text(_t(texts, 'merchant.points.shop.editPrice',
-                  'Punktepreis ändern')),
-              style: FilledButton.styleFrom(
-                backgroundColor: MerchantPremiumColors.gold,
-                foregroundColor: MerchantPremiumColors.base,
-                minimumSize: const Size.fromHeight(54),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(999)),
-                textStyle: const TextStyle(fontWeight: FontWeight.w700),
-              ),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            OutlinedButton.icon(
-              onPressed: () =>
-                  Navigator.of(sheetContext).pop(_ShopAction.remove),
-              icon: const Icon(Icons.delete_outline_rounded,
-                  color: MerchantPremiumColors.danger),
-              label: Text(
-                _t(texts, 'merchant.points.shop.remove',
-                    'Aus Punkteshop entfernen'),
-                style: const TextStyle(color: MerchantPremiumColors.danger),
-              ),
-              style: OutlinedButton.styleFrom(
-                minimumSize: const Size.fromHeight(54),
-                side: BorderSide(
-                    color: MerchantPremiumColors.danger
-                        .withValues(alpha: 0.45)),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(999)),
-              ),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(sheetContext).pop(),
-              child: Text(texts.text('common.cancel')),
-            ),
-          ],
+    builder: (sheetContext) => Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          reward.title.trim().isEmpty
+              ? texts.text('merchant.points.rewardUntitled')
+              : reward.title,
+          textAlign: TextAlign.center,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: MerchantPremiumColors.ink,
+            fontSize: 22,
+            fontWeight: FontWeight.w700,
+          ),
         ),
-      ),
+        const SizedBox(height: AppSpacing.lg),
+        FilledButton.icon(
+          onPressed: () =>
+              Navigator.of(sheetContext).pop(_ShopAction.editPrice),
+          icon: const Icon(Icons.toll_rounded),
+          label: Text(
+            _t(texts, 'merchant.points.shop.editPrice', 'Punktepreis ändern'),
+          ),
+          style: FilledButton.styleFrom(
+            backgroundColor: MerchantPremiumColors.gold,
+            foregroundColor: MerchantPremiumColors.base,
+            minimumSize: const Size.fromHeight(54),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(999),
+            ),
+            textStyle: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        OutlinedButton.icon(
+          onPressed: () => Navigator.of(sheetContext).pop(_ShopAction.remove),
+          icon: const Icon(
+            Icons.delete_outline_rounded,
+            color: MerchantPremiumColors.danger,
+          ),
+          label: Text(
+            _t(
+              texts,
+              'merchant.points.shop.remove',
+              'Aus Punkteshop entfernen',
+            ),
+            style: const TextStyle(color: MerchantPremiumColors.danger),
+          ),
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size.fromHeight(54),
+            side: BorderSide(
+              color: MerchantPremiumColors.danger.withValues(alpha: 0.45),
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(999),
+            ),
+          ),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(sheetContext).pop(),
+          child: Text(texts.text('common.cancel')),
+        ),
+      ],
     ),
   );
 }
 
 Future<bool?> _confirmModeSwitch(BuildContext context) {
   final texts = context.read<LanguageService>();
-  return showModalBottomSheet<bool>(
+  return showMerchantBottomSheet<bool>(
     context: context,
-    showDragHandle: true,
     backgroundColor: MerchantPremiumColors.warningSoft,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-    ),
-    builder: (sheetContext) => SafeArea(
-      top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Icon(Icons.warning_amber_rounded,
-                size: 38, color: MerchantPremiumColors.warning),
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              texts.text('merchant.points.modeSwitchConfirmTitle'),
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: MerchantPremiumColors.ink,
-                fontSize: 24,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              texts.text('merchant.points.modeSwitchConfirmMessage'),
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: MerchantPremiumColors.muted,
-                fontWeight: FontWeight.w700,
-                height: 1.35,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            FilledButton.icon(
-              onPressed: () => Navigator.of(sheetContext).pop(true),
-              icon: const Icon(Icons.check_rounded),
-              label: Text(texts.text('merchant.points.modeSwitchConfirm')),
-              style: FilledButton.styleFrom(
-                backgroundColor: MerchantPremiumColors.gold,
-                foregroundColor: MerchantPremiumColors.base,
-                minimumSize: const Size.fromHeight(54),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(999)),
-                textStyle: const TextStyle(fontWeight: FontWeight.w700),
-              ),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(sheetContext).pop(false),
-              child: Text(texts.text('common.cancel')),
-            ),
-          ],
+    builder: (sheetContext) => Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Icon(
+          Icons.warning_amber_rounded,
+          size: 38,
+          color: MerchantPremiumColors.warning,
         ),
-      ),
+        const SizedBox(height: AppSpacing.sm),
+        Text(
+          texts.text('merchant.points.modeSwitchConfirmTitle'),
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: MerchantPremiumColors.ink,
+            fontSize: 24,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Text(
+          texts.text('merchant.points.modeSwitchConfirmMessage'),
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: MerchantPremiumColors.muted,
+            fontWeight: FontWeight.w700,
+            height: 1.35,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        FilledButton.icon(
+          onPressed: () => Navigator.of(sheetContext).pop(true),
+          icon: const Icon(Icons.check_rounded),
+          label: Text(texts.text('merchant.points.modeSwitchConfirm')),
+          style: FilledButton.styleFrom(
+            backgroundColor: MerchantPremiumColors.gold,
+            foregroundColor: MerchantPremiumColors.base,
+            minimumSize: const Size.fromHeight(54),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(999),
+            ),
+            textStyle: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(sheetContext).pop(false),
+          child: Text(texts.text('common.cancel')),
+        ),
+      ],
     ),
   );
 }
@@ -1686,4 +1773,19 @@ String _statusLabel(LanguageService texts, String status) {
     PointsStatus.archived => texts.text('merchant.points.status.archived'),
     _ => texts.text('merchant.points.status.draft'),
   };
+}
+
+/// Formatiert eine Zahl ohne überflüssige Nachkommastellen: ganze Zahlen ohne
+/// Komma, sonst der echte Wert (statt fragilem replaceAll('.0', ''), #64).
+String _formatNum(num value) {
+  return value % 1 == 0 ? value.toInt().toString() : value.toString();
+}
+
+/// Erstes Element, das [test] erfüllt – oder null. Ersetzt firstWhere mit
+/// orElse-Boilerplate für nullable Rückgaben.
+T? _firstWhereOrNull<T>(Iterable<T> items, bool Function(T) test) {
+  for (final item in items) {
+    if (test(item)) return item;
+  }
+  return null;
 }

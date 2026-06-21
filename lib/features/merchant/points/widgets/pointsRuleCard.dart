@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/widgets/appImage.dart';
 import '../../shared/widgets/merchantPremiumUi.dart';
 import '../models/pointsSystemModel.dart';
 
@@ -18,6 +19,10 @@ class PointsRewardPreview extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isExpanding = size.isInfinite;
+    // Decode-Breite an die Anzeigegröße koppeln (DevicePixelRatio einkalkuliert),
+    // damit große Originalbilder nicht voll in den Speicher geladen werden.
+    final dpr = MediaQuery.maybeOf(context)?.devicePixelRatio ?? 2.0;
+    final memCacheWidth = isExpanding ? null : (size * dpr).round();
     return Container(
       width: size,
       height: isExpanding ? null : size,
@@ -32,7 +37,24 @@ class PointsRewardPreview extends StatelessWidget {
               child: Icon(Icons.card_giftcard_rounded,
                   color: MerchantPremiumColors.ink),
             )
-          : Image.network(reward.imageUrl, fit: BoxFit.cover),
+          : AppImage(
+              imageUrl: reward.imageUrl,
+              memCacheWidth: memCacheWidth,
+              errorWidget: const Center(
+                child: Icon(Icons.card_giftcard_rounded,
+                    color: MerchantPremiumColors.ink),
+              ),
+              placeholder: const Center(
+                child: SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: MerchantPremiumColors.muted,
+                  ),
+                ),
+              ),
+            ),
     );
   }
 }
