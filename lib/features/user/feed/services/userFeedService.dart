@@ -15,7 +15,7 @@ class UserFeedService {
   final FirestoreService firestoreService;
   final AuthService authService;
 
-  Stream<List<FeedPostModel>> feedStream({String? area, String? shopType}) {
+  Stream<List<FeedPostModel>> feedStream({String? shopType}) {
     // Single orderBy on auto-indexed field — no composite index needed.
     // isActive / isArchived / isPrivate are filtered client-side.
     return firestoreService
@@ -39,9 +39,6 @@ class UserFeedService {
           .where((post) => _visibleForAudience(post, subscribedMerchantIds))
           .toList();
 
-      if (area != null && area.isNotEmpty) {
-        posts = posts.where((p) => p.merchantArea == area).toList();
-      }
       if (shopType != null && shopType.isNotEmpty) {
         posts = posts.where((p) => p.merchantShopType == shopType).toList();
       }

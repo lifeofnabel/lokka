@@ -239,11 +239,11 @@ class _MerchantHeader extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  if (post.merchantArea.isNotEmpty ||
+                  if (post.merchantCity.isNotEmpty ||
                       post.merchantShopType.isNotEmpty)
                     Text(
                       [
-                        post.merchantArea,
+                        post.merchantCity,
                         _typeLabel(post.merchantShopType),
                       ].where((s) => s.isNotEmpty).join(' · '),
                       style: tt.bodySmall?.copyWith(

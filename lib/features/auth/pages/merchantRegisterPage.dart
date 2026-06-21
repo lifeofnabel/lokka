@@ -27,12 +27,10 @@ class _MerchantRegisterPageState extends State<MerchantRegisterPage> {
   final _postalCode = TextEditingController();
   final _city = TextEditingController();
   final _customShopType = TextEditingController();
-  final _areaFallback = TextEditingController();
   bool _terms = false;
   bool _privacy = false;
   bool _marketing = false;
   String? _shopType;
-  String? _area;
   String? _localError;
   late Future<_ChooserData> _chooserFuture;
 
@@ -65,15 +63,13 @@ class _MerchantRegisterPageState extends State<MerchantRegisterPage> {
     _postalCode.dispose();
     _city.dispose();
     _customShopType.dispose();
-    _areaFallback.dispose();
     super.dispose();
   }
 
   Future<_ChooserData> _loadChooser() async {
     final provider = context.read<AuthProvider>();
-    final areas = await provider.loadAreas();
     final shopTypes = await provider.loadShopTypes();
-    return _ChooserData(areas: areas, shopTypes: shopTypes);
+    return _ChooserData(shopTypes: shopTypes);
   }
 
   Future<void> _register() async {
@@ -81,7 +77,6 @@ class _MerchantRegisterPageState extends State<MerchantRegisterPage> {
     final shopType = (_customShopType.text.trim().isNotEmpty)
         ? _customShopType.text.trim()
         : (_shopType ?? '');
-    final area = _area ?? _areaFallback.text;
     final values = [
       _shopName.text,
       _firstName.text,
@@ -94,7 +89,6 @@ class _MerchantRegisterPageState extends State<MerchantRegisterPage> {
       _postalCode.text,
       _city.text,
       shopType,
-      area,
     ];
     final error = validateRequiredAuth(
       texts: texts,
@@ -121,7 +115,6 @@ class _MerchantRegisterPageState extends State<MerchantRegisterPage> {
             postalCode: _postalCode.text,
             city: _city.text,
             shopType: shopType,
-            area: area,
             customShopType: _customShopType.text,
           )
         : await provider.registerMerchant(
@@ -136,7 +129,6 @@ class _MerchantRegisterPageState extends State<MerchantRegisterPage> {
             postalCode: _postalCode.text,
             city: _city.text,
             shopType: shopType,
-            area: area,
             customShopType: _customShopType.text,
           );
 
@@ -205,22 +197,6 @@ class _MerchantRegisterPageState extends State<MerchantRegisterPage> {
                           labelKey: 'auth.customShopType',
                         ),
                       ],
-                      if (data.areas.isNotEmpty)
-                        DropdownButtonFormField<String>(
-                          initialValue: _area,
-                          decoration: _authDropdownDecoration(
-                            context.watch<LanguageService>().text('auth.area'),
-                          ),
-                          items: data.areas
-                              .map((area) => DropdownMenuItem(value: area, child: Text(area)))
-                              .toList(),
-                          onChanged: (value) => setState(() => _area = value),
-                        )
-                      else
-                        AuthTextField(
-                          controller: _areaFallback,
-                          labelKey: 'auth.area',
-                        ),
                     ],
                   );
                 },
@@ -252,11 +228,9 @@ class _MerchantRegisterPageState extends State<MerchantRegisterPage> {
 
 class _ChooserData {
   const _ChooserData({
-    this.areas = const [],
     this.shopTypes = const [],
   });
 
-  final List<String> areas;
   final List<String> shopTypes;
 }
 

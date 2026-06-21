@@ -20,13 +20,11 @@ class OnboardingSurveyPage extends StatefulWidget {
     super.key,
     this.isEditMode = false,
     this.initialCategories = const [],
-    this.initialAreas = const [],
     this.onCompleted,
   });
 
   final bool isEditMode;
   final List<String> initialCategories;
-  final List<String> initialAreas;
 
   /// Wird nach erfolgreichem Speichern im Onboarding-Modus aufgerufen.
   /// Im Edit-Modus wird stattdessen die Seite gepoppt.
@@ -53,10 +51,8 @@ class _OnboardingSurveyPageState extends State<OnboardingSurveyPage> {
   final _geo = GeoapifyService();
 
   List<String> _categoryOptions = [];
-  List<String> _areaOptions = [];
   List<String> _originOptions = [];
   final Set<String> _selectedCategories = {};
-  final Set<String> _selectedAreas = {};
   final Set<String> _selectedOrigins = {};
   final Set<String> _selectedPostTypes = {};
 
@@ -80,7 +76,6 @@ class _OnboardingSurveyPageState extends State<OnboardingSurveyPage> {
       cacheService: context.read<LocalCacheService>(),
     );
     _selectedCategories.addAll(widget.initialCategories);
-    _selectedAreas.addAll(widget.initialAreas);
     _load();
   }
 
@@ -95,11 +90,10 @@ class _OnboardingSurveyPageState extends State<OnboardingSurveyPage> {
     try {
       final results = await Future.wait([
         _firestoreService.loadChooserShopTypes(),
-        _firestoreService.loadChooserAreas(),
         _firestoreService.loadChooserOrigins(),
       ]);
-      // Im Edit-Modus die neuen Felder aus dem Profil vorbelegen (Kategorien/
-      // Areas kommen weiterhin vom Aufrufer über die initial*-Parameter).
+      // Im Edit-Modus die neuen Felder aus dem Profil vorbelegen (Kategorien
+      // kommen weiterhin vom Aufrufer über initialCategories).
       AppUserModel? user;
       if (widget.isEditMode) {
         try {
@@ -111,8 +105,7 @@ class _OnboardingSurveyPageState extends State<OnboardingSurveyPage> {
       if (mounted) {
         setState(() {
           _categoryOptions = results[0];
-          _areaOptions = results[1];
-          _originOptions = results[2];
+          _originOptions = results[1];
           if (user != null) {
             _selectedOrigins.addAll(user.interestOrigins);
             _selectedPostTypes.addAll(user.interestPostTypes);
@@ -190,7 +183,6 @@ class _OnboardingSurveyPageState extends State<OnboardingSurveyPage> {
     try {
       await _profileService.saveInterests(
         categories: _selectedCategories.toList(),
-        areas: _selectedAreas.toList(),
         origins: _selectedOrigins.toList(),
         postTypes: _selectedPostTypes.toList(),
         places: List<Map<String, dynamic>>.from(_places),
@@ -267,15 +259,6 @@ class _OnboardingSurveyPageState extends State<OnboardingSurveyPage> {
                           onToggle: (v) => _toggle(_selectedPostTypes, v),
                         ),
                         const SizedBox(height: AppSpacing.xl),
-                        if (_areaOptions.isNotEmpty) ...[
-                          _Section(
-                            title: 'Wo bist du unterwegs?',
-                            options: _areaOptions,
-                            selected: _selectedAreas,
-                            onToggle: (v) => _toggle(_selectedAreas, v),
-                          ),
-                          const SizedBox(height: AppSpacing.xl),
-                        ],
                         _PlacesSection(
                           controller: _placeCtrl,
                           places: _places,

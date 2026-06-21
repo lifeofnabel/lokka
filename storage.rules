@@ -1,0 +1,62 @@
+rules_version = '2';
+
+// Firebase Storage Security Rules – Qoucher / lokka-069
+//
+// Grundsatz:
+//  - Bilder sind in einer öffentlichen Deals-/Loyalty-App allgemein LESBAR.
+//  - SCHREIBEN (create/update/delete) darf nur der Eigentümer in seinen eigenen
+//    Ordner. Kein öffentlicher Schreibzugriff.
+//  - Uploads müssen Bilder sein und eine Größenobergrenze einhalten.
+//
+// Hinweis: In Storage-Rules deckt `write` create, update UND delete ab. Beim
+// Löschen ist `request.resource == null` – deshalb werden Format-/Größenchecks
+// nur angewandt, wenn `request.resource` existiert (also beim Upload).
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isImage() {
+      return request.resource.contentType.matches('image/.*');
+    }
+
+    function withinSizeLimit() {
+      return request.resource.size < 8 * 1024 * 1024; // 8 MB
+    }
+
+    // Beim Upload Bild + Größe erzwingen, beim Löschen (resource == null) erlauben.
+    function validWriteOrDelete() {
+      return request.resource == null || (isImage() && withinSizeLimit());
+    }
+
+    // Merchant-Assets: profile/cover/offers/catalog/wallet/displayStudio.
+    match /merchants/{merchantId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if signedIn()
+                   && request.auth.uid == merchantId
+                   && validWriteOrDelete();
+    }
+
+    // User-Assets: profile/uploads (z. B. Profilbild, Review-Fotos).
+    match /users/{userId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if signedIn()
+                   && request.auth.uid == userId
+                   && validWriteOrDelete();
+    }
+
+    // System-/Admin-Banner: öffentlich lesbar, nur über Console/Backend beschreibbar.
+    match /system/{allPaths=**} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Default-Deny für alles Übrige.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

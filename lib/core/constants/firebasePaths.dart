@@ -3,7 +3,6 @@ class FirebasePaths {
 
   static const system = 'system';
   static const chooser = 'chooser';
-  static const areas = 'areas';
   static const shopTypes = 'shopTypes';
   static const origins = 'origins';
   static const users = 'users';

@@ -967,10 +967,10 @@ class _MerchantCard extends StatelessWidget {
                           color: AppColors.onSurfaceDark,
                         ),
                       ),
-                      if (post.merchantArea.isNotEmpty) ...[
+                      if (post.merchantCity.isNotEmpty) ...[
                         const SizedBox(height: 2),
                         Text(
-                          post.merchantArea,
+                          post.merchantCity,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: tt.bodySmall?.copyWith(

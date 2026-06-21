@@ -113,9 +113,8 @@ class _UserPartnersPageState extends State<UserPartnersPage> {
       ),
       builder: (ctx) => _FilterSheet(
         provider: provider,
-        onApply: (area, category, radius, walletOnly) {
+        onApply: (category, radius, walletOnly) {
           provider.setFilter(
-            area: area,
             category: category,
             radiusKm: radius,
             walletOnly: walletOnly,
@@ -445,7 +444,6 @@ class _ActiveFilters extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final chips = <String>[];
-    if (provider.selectedArea != null) chips.add(provider.selectedArea!);
     if (provider.selectedCategory != null) chips.add(provider.selectedCategory!);
     if (provider.radiusKm != null) chips.add('${provider.radiusKm!.toInt()} km');
     if (provider.walletOnly) chips.add('Meine Wallet');
@@ -528,7 +526,6 @@ class _FilterSheet extends StatefulWidget {
 
   final UserPartnersProvider provider;
   final void Function(
-      String? area,
       String? category,
       double? radiusKm,
       bool walletOnly) onApply;
@@ -538,7 +535,6 @@ class _FilterSheet extends StatefulWidget {
 }
 
 class _FilterSheetState extends State<_FilterSheet> {
-  late String? _area;
   late String? _category;
   late double? _radiusKm;
   late bool _walletOnly;
@@ -546,7 +542,6 @@ class _FilterSheetState extends State<_FilterSheet> {
   @override
   void initState() {
     super.initState();
-    _area = widget.provider.selectedArea;
     _category = widget.provider.selectedCategory;
     _radiusKm = widget.provider.radiusKm;
     _walletOnly = widget.provider.walletOnly;
@@ -597,7 +592,6 @@ class _FilterSheetState extends State<_FilterSheet> {
                         ),
                         TextButton(
                           onPressed: () => setState(() {
-                            _area = null;
                             _category = null;
                             _radiusKm = null;
                             _walletOnly = false;
@@ -685,29 +679,6 @@ class _FilterSheetState extends State<_FilterSheet> {
                       ),
                       const SizedBox(height: AppSpacing.lg),
                     ],
-                    // Area
-                    if (widget.provider.availableAreas.isNotEmpty) ...[
-                      _FilterSection(
-                        title: 'Gebiet',
-                        child: Wrap(
-                          spacing: AppSpacing.xs,
-                          runSpacing: AppSpacing.xs,
-                          children: [
-                            _FilterChip(
-                              label: 'Alle',
-                              selected: _area == null,
-                              onTap: () => setState(() => _area = null),
-                            ),
-                            ...widget.provider.availableAreas
-                                .map((a) => _FilterChip(
-                                      label: a,
-                                      selected: _area == a,
-                                      onTap: () => setState(() => _area = a),
-                                    )),
-                          ],
-                        ),
-                      ),
-                    ],
                     const SizedBox(height: AppSpacing.xl),
                   ],
                 ),
@@ -726,7 +697,7 @@ class _FilterSheetState extends State<_FilterSheet> {
                   height: 52,
                   child: FilledButton(
                     onPressed: () =>
-                        widget.onApply(_area, _category, _radiusKm, _walletOnly),
+                        widget.onApply(_category, _radiusKm, _walletOnly),
                     child: const Text('Filter anwenden'),
                   ),
                 ),

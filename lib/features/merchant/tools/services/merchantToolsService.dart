@@ -73,10 +73,6 @@ class MerchantToolsService {
     return firestoreService.loadChooserShopTypes();
   }
 
-  Future<List<String>> loadChooserAreas() {
-    return firestoreService.loadChooserAreas();
-  }
-
   Future<List<ItemCategoryData>> loadCategories() async {
     final snapshot = await firestoreService
         .collection(FirebasePaths.merchantItemCategories(merchantId))
@@ -322,8 +318,6 @@ class MerchantToolsService {
       'country': country,
       'formattedAddress': fullAddress,
     };
-    final location =
-        (lat != null && lng != null) ? {'lat': lat, 'lng': lng} : null;
     final merchantData = {
       ...values,
       'address': fullAddress,
@@ -331,7 +325,6 @@ class MerchantToolsService {
       'lat': lat,
       'lng': lng,
       'addressData': addressData,
-      'location': location,
       'country': country,
       'updatedAt': FieldValue.serverTimestamp(),
     };
@@ -363,8 +356,6 @@ class MerchantToolsService {
       'lat': lat,
       'lng': lng,
       'addressData': addressData,
-      'location': location,
-      'area': values['area'],
       'country': country,
       'shopType': values['shopType'],
       'shopTypePrimary': values['shopTypePrimary'],

@@ -511,7 +511,7 @@ class _MerchantFeedCreateViewState extends State<_MerchantFeedCreateView> {
                       type: type,
                       merchantName: provider.merchantName,
                       merchantLogoUrl: provider.merchantLogoUrl,
-                      merchantArea: provider.merchantArea,
+                      merchantCity: provider.merchantCity,
                       merchantShopType: provider.merchantShopType,
                       ratingText: provider.merchantRatingText,
                       title: title.text,

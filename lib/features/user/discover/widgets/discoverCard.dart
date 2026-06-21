@@ -81,9 +81,9 @@ class DiscoverCard extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 4),
-                  if (merchant.area.isNotEmpty)
+                  if (merchant.displayCity.isNotEmpty)
                     Text(
-                      merchant.area,
+                      merchant.displayCity,
                       style: const TextStyle(
                         fontSize: 11,
                         color: AppColors.gray500,

@@ -5,7 +5,6 @@ class PublicMerchantModel {
     required this.merchantId,
     required this.shopName,
     required this.description,
-    required this.area,
     required this.shopType,
     this.shopTypePrimary,
     this.shopTypes = const [],
@@ -32,7 +31,6 @@ class PublicMerchantModel {
   final String merchantId;
   final String shopName;
   final String description;
-  final String area;
   final String shopType;
   final String? shopTypePrimary;
   final List<String> shopTypes;
@@ -60,7 +58,6 @@ class PublicMerchantModel {
       merchantId: map['merchantId'] as String? ?? '',
       shopName: map['shopName'] as String? ?? '',
       description: map['description'] as String? ?? '',
-      area: map['area'] as String? ?? '',
       shopType: map['shopType'] as String? ?? '',
       shopTypePrimary: map['shopTypePrimary'] as String?,
       shopTypes:
@@ -93,7 +90,6 @@ class PublicMerchantModel {
       'merchantId': merchantId,
       'shopName': shopName,
       'description': description,
-      'area': area,
       'shopType': shopType,
       'shopTypePrimary': shopTypePrimary,
       'shopTypes': shopTypes,

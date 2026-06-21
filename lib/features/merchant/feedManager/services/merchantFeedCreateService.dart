@@ -143,7 +143,7 @@ class MerchantFeedCreateService {
       'merchantId': merchantId,
       'merchantName': merchant['shopName'] ?? merchant['businessName'] ?? '',
       'merchantLogoUrl': merchant['logoUrl'] ?? '',
-      'merchantArea': merchant['area'] ?? '',
+      'merchantCity': merchant['city'] ?? '',
       'merchantShopType': merchant['shopType'] ?? merchant['shopTypePrimary'] ?? '',
       'type': type,
       'title': title.trim(),

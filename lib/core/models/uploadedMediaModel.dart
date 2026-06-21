@@ -1,5 +1,17 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+/// Ergebnis eines Bild-Uploads, persistierbar in Firestore.
+///
+/// Seit der Migration auf Firebase Storage gilt:
+/// - [url] / [secureUrl]   = Firebase-Storage-Download-URL des Hauptbilds.
+/// - [publicId]            = Storage-Objektpfad (für Delete/Replace).
+/// - [thumbUrl] / [thumbSecureUrl] / [thumbPublicId] = optionale Thumbnail-
+///   Variante (für Listen/Feed).
+///
+/// Die Feldnamen bleiben aus Kompatibilitätsgründen erhalten; [fromMap] liest
+/// zusätzlich die historischen `secure_url` / `public_id` sowie `imageUrl` /
+/// `downloadUrl`, damit alte Dokumente (inkl. evtl. verbliebener Cloudinary-
+/// URLs) weiterhin korrekt geladen werden.
 class UploadedMediaModel {
   const UploadedMediaModel({
     required this.url,
@@ -33,8 +45,15 @@ class UploadedMediaModel {
 
   factory UploadedMediaModel.fromMap(Map<String, dynamic> map) {
     return UploadedMediaModel(
-      url: map['url'] as String? ?? '',
-      secureUrl: map['secureUrl'] as String? ?? map['secure_url'] as String? ?? '',
+      url: map['url'] as String? ??
+          map['imageUrl'] as String? ??
+          map['downloadUrl'] as String? ??
+          '',
+      secureUrl: map['secureUrl'] as String? ??
+          map['secure_url'] as String? ??
+          map['imageUrl'] as String? ??
+          map['downloadUrl'] as String? ??
+          '',
       publicId: map['publicId'] as String? ?? map['public_id'] as String? ?? '',
       format: map['format'] as String? ?? '',
       width: (map['width'] as num?)?.toInt() ?? 0,
@@ -100,6 +119,27 @@ class UploadedMediaModel {
       createdAt: createdAt ?? this.createdAt,
     );
   }
+
+  /// Beste anzeigbare Volldarstellungs-URL.
+  String get displayUrl => secureUrl.isNotEmpty ? secureUrl : url;
+
+  /// Kleinere Vorschau-URL (Thumbnail) für Listen/Feed; fällt auf
+  /// [displayUrl] zurück, wenn keine Variante existiert.
+  String get previewUrl {
+    final thumb = (thumbSecureUrl?.isNotEmpty ?? false)
+        ? thumbSecureUrl!
+        : (thumbUrl?.isNotEmpty ?? false)
+            ? thumbUrl!
+            : '';
+    return thumb.isNotEmpty ? thumb : displayUrl;
+  }
+
+  /// Storage-Objektpfad des Hauptbilds (für Delete/Replace). Leer bei
+  /// Altbeständen, die nur als URL gespeichert wurden.
+  String get storagePath => publicId;
+
+  /// Storage-Objektpfad des Thumbnails, falls vorhanden.
+  String? get thumbStoragePath => thumbPublicId;
 }
 
 DateTime? _date(dynamic value) {

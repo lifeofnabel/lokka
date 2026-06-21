@@ -27,7 +27,6 @@ class UserDiscoverProvider extends ChangeNotifier {
   bool _isLoading = true;
   bool _isLoadingMore = false;
   String? _error;
-  String? _area;
   String? _shopType;
   String _city = 'Frankfurt';
   String _radius = 'Egal';
@@ -57,7 +56,6 @@ class UserDiscoverProvider extends ChangeNotifier {
   bool get hasSharedLocation => _location.isShared;
   String get locationLabel =>
       _location.label.isEmpty ? 'Standort wählen' : _location.label;
-  String? get area => _area;
   String? get shopType => _shopType;
   String get city => _city;
   String get radius => _radius;
@@ -68,12 +66,6 @@ class UserDiscoverProvider extends ChangeNotifier {
   /// Folgt der Nutzer überhaupt jemandem (= Partner in der Wallet)?
   bool get hasFollowing => _followingMerchantIds.isNotEmpty;
   bool get canLoadMore => _visibleItems.length < _orderedAll.length;
-
-  List<String> get areas {
-    final values = _merchants.map((m) => m.area).where((v) => v.isNotEmpty).toSet().toList();
-    values.sort();
-    return values;
-  }
 
   List<String> get shopTypes {
     final values = _merchants.map((m) => m.shopType).where((v) => v.isNotEmpty).toSet().toList();
@@ -165,14 +157,12 @@ class UserDiscoverProvider extends ChangeNotifier {
   void applyFilters({
     String? city,
     String? radius,
-    String? area,
     String? shopType,
     bool? openNow,
     DiscoverSort? sort,
   }) {
     _city = city?.trim().isEmpty ?? true ? 'Frankfurt' : city!.trim();
     _radius = radius ?? _radius;
-    _area = area?.isEmpty ?? true ? null : area;
     _shopType = shopType?.isEmpty ?? true ? null : shopType;
     _openNow = openNow ?? _openNow;
     _sort = sort ?? _sort;
@@ -182,7 +172,6 @@ class UserDiscoverProvider extends ChangeNotifier {
   void resetFilters() {
     _city = 'Frankfurt';
     _radius = 'Egal';
-    _area = null;
     _shopType = null;
     _openNow = false;
     _sort = DiscoverSort.forYou;
@@ -263,13 +252,9 @@ class UserDiscoverProvider extends ChangeNotifier {
           item.post.subtitle,
           item.merchant.shopName,
           item.merchant.shopType,
-          item.merchant.area,
         ].join(' ').toLowerCase();
         return haystack.contains(_search);
       }).toList();
-    }
-    if (_area != null) {
-      items = items.where((item) => item.merchant.area == _area).toList();
     }
     if (_shopType != null) {
       items = items.where((item) => item.merchant.shopType == _shopType).toList();

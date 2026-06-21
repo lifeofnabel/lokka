@@ -149,7 +149,7 @@ class _MetaRow extends StatelessWidget {
       return ReviewStars(rating: rating!.avg, count: rating!.count, size: 13);
     }
 
-    final meta = [merchant.area, merchant.shopType]
+    final meta = [merchant.displayCity, merchant.shopType]
         .where((s) => s.isNotEmpty)
         .join(' · ');
     if (meta.isEmpty) return const SizedBox.shrink();
@@ -281,10 +281,10 @@ class PartnerCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                     if (merchant.shopType.isNotEmpty ||
-                        merchant.area.isNotEmpty) ...[
+                        merchant.displayCity.isNotEmpty) ...[
                       const SizedBox(height: 6),
                       Text(
-                        [merchant.area, merchant.shopType]
+                        [merchant.displayCity, merchant.shopType]
                             .where((s) => s.isNotEmpty)
                             .join(' · '),
                         style: tt.bodyMedium?.copyWith(

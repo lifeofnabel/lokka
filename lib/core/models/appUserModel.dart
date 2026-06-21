@@ -26,7 +26,6 @@ class AppUserModel {
     this.profileImageUrl,
     this.profileCoverGradient = 0,
     this.interestCategories = const [],
-    this.interestAreas = const [],
     this.interestOrigins = const [],
     this.interestPostTypes = const [],
     this.interestPlaces = const [],
@@ -57,7 +56,6 @@ class AppUserModel {
   final String? profileImageUrl;
   final int profileCoverGradient;
   final List<String> interestCategories;
-  final List<String> interestAreas;
 
   /// Herkunft/Küchen-Interessen (z. B. „Italienisch", „Türkisch").
   final List<String> interestOrigins;
@@ -96,10 +94,6 @@ class AppUserModel {
       profileImageUrl: map['profileImageUrl'] as String?,
       profileCoverGradient: map['profileCoverGradient'] as int? ?? 0,
       interestCategories: (map['interestCategories'] as List?)
-              ?.map((e) => e.toString())
-              .toList() ??
-          const [],
-      interestAreas: (map['interestAreas'] as List?)
               ?.map((e) => e.toString())
               .toList() ??
           const [],
@@ -146,7 +140,6 @@ class AppUserModel {
       'profileImageUrl': profileImageUrl,
       'profileCoverGradient': profileCoverGradient,
       'interestCategories': interestCategories,
-      'interestAreas': interestAreas,
       'interestOrigins': interestOrigins,
       'interestPostTypes': interestPostTypes,
       'interestPlaces': interestPlaces,
@@ -179,7 +172,6 @@ class AppUserModel {
     String? profileImageUrl,
     int? profileCoverGradient,
     List<String>? interestCategories,
-    List<String>? interestAreas,
     List<String>? interestOrigins,
     List<String>? interestPostTypes,
     List<Map<String, dynamic>>? interestPlaces,
@@ -210,7 +202,6 @@ class AppUserModel {
       profileImageUrl: profileImageUrl ?? this.profileImageUrl,
       profileCoverGradient: profileCoverGradient ?? this.profileCoverGradient,
       interestCategories: interestCategories ?? this.interestCategories,
-      interestAreas: interestAreas ?? this.interestAreas,
       interestOrigins: interestOrigins ?? this.interestOrigins,
       interestPostTypes: interestPostTypes ?? this.interestPostTypes,
       interestPlaces: interestPlaces ?? this.interestPlaces,

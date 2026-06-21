@@ -100,14 +100,6 @@ function resolveAddress(d) {
   const postalCode =
     String(d.postalCode || loc.postalCode || loc.zip || '').trim();
 
-  // area (neighbourhood / Stadtteil)
-  const area =
-    d.area ||
-    loc.area ||
-    loc.district ||
-    city ||
-    '';
-
   // coordinates
   let lat = null;
   let lng = null;
@@ -125,7 +117,7 @@ function resolveAddress(d) {
     if (lngSrc != null) lng = Number(lngSrc);
   }
 
-  return { fullAddress, address, city, postalCode, area, lat, lng };
+  return { fullAddress, address, city, postalCode, lat, lng };
 }
 
 /**
@@ -208,7 +200,6 @@ function mapToPublic(data, docId) {
     fullAddress: addr.fullAddress,
     city: addr.city,
     postalCode: addr.postalCode,
-    area: addr.area,
     lat: addr.lat,
     lng: addr.lng,
 
@@ -275,7 +266,6 @@ async function migrate() {
 
     console.log(
       `  [${totalWritten}/${docs.length}] ${mapped.shopName || doc.id}` +
-      (mapped.area ? ` · ${mapped.area}` : '') +
       (mapped.shopType ? ` · ${mapped.shopType}` : '') +
       (mapped.featuresPublic.length ? ` [${mapped.featuresPublic.join(', ')}]` : ''),
     );
@@ -299,7 +289,7 @@ async function migrate() {
   console.log(`\n✅ Migration complete — ${totalWritten} document(s) written to publicMerchants.`);
   console.log('\nNext steps:');
   console.log('  1. Check the Firebase Console → Firestore → publicMerchants');
-  console.log('  2. Verify shopName, shopType, area, and featuresPublic look correct');
+  console.log('  2. Verify shopName, shopType, and featuresPublic look correct');
   console.log('  3. Open the Lokka app and confirm the Partner page loads merchants');
 }
 

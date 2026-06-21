@@ -38,7 +38,6 @@ service cloud.firestore {
 
     // ---- Öffentliche Referenzdaten ----------------------------------------
     match /system/{doc=**}    { allow read: if true; allow write: if false; }
-    match /areas/{doc=**}     { allow read: if true; allow write: if false; }
     match /shopTypes/{doc=**} { allow read: if true; allow write: if false; }
     // chooser/*: öffentlich lesbar; eingeloggte Nutzer/Merchants dürfen eigene
     // Werte anhängen (FirestoreService.addChooserValue → arrayUnion auf 'name',

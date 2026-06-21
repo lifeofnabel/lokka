@@ -57,7 +57,6 @@ class FeedAiSuggestionService {
         },
         'merchant': {
           'shopName': merchant['shopName'] ?? merchant['businessName'] ?? '',
-          'area': merchant['area'] ?? '',
           'shopType': merchant['shopType'] ?? merchant['shopTypePrimary'] ?? '',
           'description': merchant['description'] ?? '',
         },
@@ -110,7 +109,6 @@ class FeedAiSuggestionService {
         'input': input,
         'merchant': {
           'shopName': merchant['shopName'] ?? merchant['businessName'] ?? '',
-          'area': merchant['area'] ?? '',
           'shopType': merchant['shopType'] ?? merchant['shopTypePrimary'] ?? '',
           'description': merchant['description'] ?? '',
         },

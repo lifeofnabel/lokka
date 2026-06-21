@@ -4,7 +4,7 @@ class FeedPostModel {
     required this.merchantId,
     required this.merchantName,
     required this.merchantLogoUrl,
-    required this.merchantArea,
+    required this.merchantCity,
     required this.merchantShopType,
     required this.type,
     required this.title,
@@ -44,7 +44,7 @@ class FeedPostModel {
   final String merchantId;
   final String merchantName;
   final String merchantLogoUrl;
-  final String merchantArea;
+  final String merchantCity;
   final String merchantShopType;
   final String type;
   final String title;
@@ -85,7 +85,8 @@ class FeedPostModel {
       merchantId: map['merchantId'] as String? ?? '',
       merchantName: map['merchantName'] as String? ?? '',
       merchantLogoUrl: map['merchantLogoUrl'] as String? ?? '',
-      merchantArea: map['merchantArea'] as String? ?? '',
+      merchantCity:
+          map['merchantCity'] as String? ?? map['merchantArea'] as String? ?? '',
       merchantShopType: map['merchantShopType'] as String? ?? '',
       type: map['type'] as String? ?? '',
       title: map['title'] as String? ?? '',
@@ -128,7 +129,7 @@ class FeedPostModel {
       'merchantId': merchantId,
       'merchantName': merchantName,
       'merchantLogoUrl': merchantLogoUrl,
-      'merchantArea': merchantArea,
+      'merchantCity': merchantCity,
       'merchantShopType': merchantShopType,
       'type': type,
       'title': title,

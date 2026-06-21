@@ -31,7 +31,7 @@ class MerchantFeedCreateProvider extends ChangeNotifier {
   int aiCorrectionsToday = 0;
   String merchantName = '';
   String merchantLogoUrl = '';
-  String merchantArea = '';
+  String merchantCity = '';
   String merchantShopType = '';
   String merchantRatingText = '';
   List<FeedCatalogItem> catalogItems = const [];
@@ -90,7 +90,7 @@ class MerchantFeedCreateProvider extends ChangeNotifier {
       final merchant = await service.loadMerchant();
       merchantName = (merchant['shopName'] ?? merchant['businessName'] ?? '').toString();
       merchantLogoUrl = (merchant['logoUrl'] ?? '').toString();
-      merchantArea = (merchant['area'] ?? '').toString();
+      merchantCity = (merchant['city'] ?? '').toString();
       merchantShopType = (merchant['shopTypePrimary'] ?? merchant['shopType'] ?? '').toString();
       final rating = merchant['ratingAverage'] ?? merchant['avgRating'] ?? merchant['averageRating'];
       merchantRatingText = rating is num ? rating.toStringAsFixed(1).replaceAll('.', ',') : '';
@@ -98,7 +98,7 @@ class MerchantFeedCreateProvider extends ChangeNotifier {
     } catch (_) {
       merchantName = '';
       merchantLogoUrl = '';
-      merchantArea = '';
+      merchantCity = '';
       merchantShopType = '';
       merchantRatingText = '';
     }

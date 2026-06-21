@@ -115,14 +115,12 @@ class _HeroState extends State<_Hero> {
     if (picked == null || !mounted) return;
     setState(() => _uploading = true);
     try {
-      final result = await uploadService.cloudinaryService.uploadBytes(
+      final media = await uploadService.uploadOptimizedImageBytes(
         bytes: picked.bytes,
         fileName: picked.fileName,
-        folder: 'profile_images',
+        type: UploadImageType.userProfile,
       );
-      final imageUrl =
-          result.secureUrl.isNotEmpty ? result.secureUrl : result.url;
-      await profileService.updateProfileImage(imageUrl);
+      await profileService.updateProfileImage(media.displayUrl);
     } catch (_) {
     } finally {
       if (mounted) setState(() => _uploading = false);
@@ -402,7 +400,6 @@ class _QuickActions extends StatelessWidget {
                   OnboardingSurveyPage(
                     isEditMode: true,
                     initialCategories: user?.interestCategories ?? const [],
-                    initialAreas: user?.interestAreas ?? const [],
                   ),
                 ),
               ),

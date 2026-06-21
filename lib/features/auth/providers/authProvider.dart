@@ -121,7 +121,6 @@ class AuthProvider extends ChangeNotifier {
     required String postalCode,
     required String city,
     required String shopType,
-    required String area,
     String? customShopType,
   }) async {
     return _run(() async {
@@ -143,7 +142,6 @@ class AuthProvider extends ChangeNotifier {
         postalCode: postalCode,
         city: city,
         shopType: shopType,
-        area: area,
         customShopType: customShopType,
       );
       if ((customShopType ?? '').trim().isNotEmpty) {
@@ -212,7 +210,6 @@ class AuthProvider extends ChangeNotifier {
     required String postalCode,
     required String city,
     required String shopType,
-    required String area,
     String? customShopType,
   }) async {
     return _run(() async {
@@ -232,7 +229,6 @@ class AuthProvider extends ChangeNotifier {
         postalCode: postalCode,
         city: city,
         shopType: shopType,
-        area: area,
         customShopType: customShopType,
         emailVerified: user.emailVerified,
         authProvider: 'google',
@@ -282,21 +278,6 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> signOut() => _authService.signOut();
-
-  Future<List<String>> loadAreas() async {
-    try {
-      final values = await _firestoreService.loadChooserAreas();
-      if (values.isNotEmpty) return values;
-    } catch (_) {}
-    return const [
-      'Westend',
-      'Ostend',
-      'Innenstadt',
-      'Bahnhofsviertel',
-      'Sachsenhausen',
-      'Bornheim',
-    ];
-  }
 
   Future<List<String>> loadShopTypes() async {
     try {
@@ -354,7 +335,6 @@ class AuthProvider extends ChangeNotifier {
     required String postalCode,
     required String city,
     required String shopType,
-    required String area,
     String? customShopType,
     bool emailVerified = false,
     String authProvider = 'password',
@@ -418,7 +398,6 @@ class AuthProvider extends ChangeNotifier {
         'city': city.trim(),
         'address': formattedAddress,
         'fullAddress': formattedAddress,
-        'area': area.trim(),
         'country': 'Deutschland',
         'shopType': cleanedShopType,
         'customShopType': customShopType?.trim() ?? '',
@@ -437,7 +416,6 @@ class AuthProvider extends ChangeNotifier {
         'merchantId': uid,
         'shopName': shopName.trim(),
         'description': '',
-        'area': area.trim(),
         'shopType': cleanedShopType,
         'street': street.trim(),
         'houseNumber': houseNumber.trim(),

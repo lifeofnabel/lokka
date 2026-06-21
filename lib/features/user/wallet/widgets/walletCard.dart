@@ -106,7 +106,7 @@ class _StatusLine extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
 
-    final place = [card.merchantShopType, card.merchantArea]
+    final place = [card.merchantShopType, card.merchantCity]
         .where((s) => s.isNotEmpty)
         .join(' · ');
 

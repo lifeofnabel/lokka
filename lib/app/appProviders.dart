@@ -2,7 +2,6 @@ import 'package:flutter/widgets.dart';
 import 'package:provider/provider.dart';
 
 import '../core/services/authService.dart';
-import '../core/services/cloudinaryService.dart';
 import '../core/services/firebaseService.dart';
 import '../core/services/firestoreService.dart';
 import '../core/services/languageService.dart';
@@ -10,6 +9,7 @@ import '../core/services/localCacheService.dart';
 import '../core/services/qrService.dart';
 import '../core/services/scannerService.dart';
 import '../core/services/sessionService.dart';
+import '../core/services/storageService.dart';
 import '../core/services/uploadService.dart';
 import '../features/auth/providers/authProvider.dart';
 
@@ -55,12 +55,12 @@ class AppProviders extends StatelessWidget {
                 languageService: languageService,
               ),
         ),
-        Provider<CloudinaryService>(create: (_) => CloudinaryService()),
+        Provider<StorageService>(create: (_) => StorageService()),
         Provider<QrService>(create: (_) => const QrService()),
         Provider<ScannerService>(create: (_) => const ScannerService()),
-        ProxyProvider<CloudinaryService, UploadService>(
-          update: (_, cloudinaryService, __) =>
-              UploadService(cloudinaryService: cloudinaryService),
+        ProxyProvider<StorageService, UploadService>(
+          update: (_, storageService, __) =>
+              UploadService(storageService: storageService),
         ),
       ],
       child: child,

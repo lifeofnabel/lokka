@@ -129,10 +129,6 @@ class FirestoreService {
     return setDocument(FirebasePaths.user(uid), data);
   }
 
-  Future<List<String>> loadChooserAreas() {
-    return _loadChooserList(FirebasePaths.areas);
-  }
-
   Future<List<String>> loadChooserShopTypes() {
     return _loadChooserList(FirebasePaths.shopTypes);
   }

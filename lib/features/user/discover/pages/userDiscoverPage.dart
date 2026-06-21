@@ -883,7 +883,6 @@ class _SearchPanel extends StatelessWidget {
 void _showFilters(BuildContext context, UserDiscoverProvider provider) {
   final city = TextEditingController(text: provider.city);
   var radius = provider.radius;
-  var area = provider.area;
   var shopType = provider.shopType;
   var openNow = provider.openNow;
   var sort = provider.sort;
@@ -956,7 +955,6 @@ void _showFilters(BuildContext context, UserDiscoverProvider provider) {
                         provider.applyFilters(
                           city: city.text,
                           radius: radius,
-                          area: area,
                           shopType: shopType,
                           openNow: openNow,
                           sort: sort,

@@ -3,7 +3,7 @@ class WalletCardModel {
     required this.merchantId,
     required this.merchantName,
     required this.merchantLogoUrl,
-    required this.merchantArea,
+    required this.merchantCity,
     required this.merchantShopType,
     required this.walletCode,
     required this.walletNumber,
@@ -19,7 +19,7 @@ class WalletCardModel {
   final String merchantId;
   final String merchantName;
   final String merchantLogoUrl;
-  final String merchantArea;
+  final String merchantCity;
   final String merchantShopType;
   final String walletCode;
   final String walletNumber;
@@ -36,7 +36,8 @@ class WalletCardModel {
       merchantId: map['merchantId'] as String? ?? '',
       merchantName: map['merchantName'] as String? ?? '',
       merchantLogoUrl: map['merchantLogoUrl'] as String? ?? '',
-      merchantArea: map['merchantArea'] as String? ?? '',
+      merchantCity:
+          map['merchantCity'] as String? ?? map['merchantArea'] as String? ?? '',
       merchantShopType: map['merchantShopType'] as String? ?? '',
       walletCode: map['walletCode'] as String? ?? '',
       walletNumber: map['walletNumber'] as String? ?? '',
@@ -55,7 +56,7 @@ class WalletCardModel {
       'merchantId': merchantId,
       'merchantName': merchantName,
       'merchantLogoUrl': merchantLogoUrl,
-      'merchantArea': merchantArea,
+      'merchantCity': merchantCity,
       'merchantShopType': merchantShopType,
       'walletCode': walletCode,
       'walletNumber': walletNumber,

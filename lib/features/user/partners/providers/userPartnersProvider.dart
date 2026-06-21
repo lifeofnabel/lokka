@@ -23,7 +23,6 @@ class UserPartnersProvider extends ChangeNotifier {
 
   // Filter state
   String _searchQuery = '';
-  String? _selectedArea;
   String? _selectedCategory;
   double? _radiusKm;
   bool _walletOnly = false;
@@ -39,7 +38,6 @@ class UserPartnersProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get error => _error;
   String get searchQuery => _searchQuery;
-  String? get selectedArea => _selectedArea;
   String? get selectedCategory => _selectedCategory;
   double? get radiusKm => _radiusKm;
   bool get walletOnly => _walletOnly;
@@ -51,17 +49,9 @@ class UserPartnersProvider extends ChangeNotifier {
 
   bool get hasActiveFilters =>
       _searchQuery.isNotEmpty ||
-      _selectedArea != null ||
       _selectedCategory != null ||
       _radiusKm != null ||
       _walletOnly;
-
-  List<String> get availableAreas {
-    final areas =
-        _allPartners.map((m) => m.area).where((a) => a.isNotEmpty).toSet().toList();
-    areas.sort();
-    return areas;
-  }
 
   List<String> get availableCategories {
     final cats = _allPartners
@@ -82,12 +72,8 @@ class UserPartnersProvider extends ChangeNotifier {
       list = list
           .where((m) =>
               m.shopName.toLowerCase().contains(q) ||
-              m.area.toLowerCase().contains(q) ||
               m.shopType.toLowerCase().contains(q))
           .toList();
-    }
-    if (_selectedArea != null) {
-      list = list.where((m) => m.area == _selectedArea).toList();
     }
     if (_selectedCategory != null) {
       list = list.where((m) => m.shopType == _selectedCategory).toList();
@@ -145,12 +131,10 @@ class UserPartnersProvider extends ChangeNotifier {
   }
 
   void setFilter({
-    String? area,
     String? category,
     double? radiusKm,
     bool? walletOnly,
   }) {
-    _selectedArea = area;
     _selectedCategory = category;
     _radiusKm = radiusKm;
     _walletOnly = walletOnly ?? false;
@@ -161,7 +145,6 @@ class UserPartnersProvider extends ChangeNotifier {
 
   void clearFilters() {
     _searchQuery = '';
-    _selectedArea = null;
     _selectedCategory = null;
     _radiusKm = null;
     _walletOnly = false;

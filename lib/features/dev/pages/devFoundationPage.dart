@@ -1,12 +1,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/constants/firebasePaths.dart';
 import '../../../core/models/uploadedMediaModel.dart';
 import '../../../core/services/authService.dart';
-import '../../../core/services/cloudinaryService.dart';
 import '../../../core/services/firebaseService.dart';
 import '../../../core/services/firestoreService.dart';
 import '../../../core/services/languageService.dart';
@@ -92,7 +92,6 @@ class _DevFoundationPageState extends State<DevFoundationPage> {
     final texts = context.watch<LanguageService>();
     final firebaseService = context.watch<FirebaseService>();
     final authService = context.watch<AuthService>();
-    final cloudinaryService = context.watch<CloudinaryService>();
 
     return Scaffold(
       appBar: AppBar(title: Text(texts.text('dev.foundation.title'))),
@@ -125,19 +124,16 @@ class _DevFoundationPageState extends State<DevFoundationPage> {
               onPressed: _testFirestore,
             ),
             _StatusCard(
-              label: texts.text('dev.cloudinaryConfigLoaded'),
-              value: cloudinaryService.isConfigured
-                  ? texts.text('common.yes')
-                  : texts.text('common.no'),
+              label: texts.text('dev.storageBucket'),
+              value: FirebaseStorage.instance.bucket,
             ),
             _ActionCard(
-              title: 'Cloudinary upload test',
+              title: 'Storage upload test',
               status: _uploadedMedia?.secureUrl ?? 'Bereit',
               error: _uploadError,
-              buttonLabel: texts.text('dev.cloudinaryUpload'),
+              buttonLabel: texts.text('dev.storageUpload'),
               busy: _uploading,
-              onPressed:
-                  cloudinaryService.isConfigured ? _uploadImage : null,
+              onPressed: _uploading ? null : _uploadImage,
             ),
             if (_uploadedMedia?.secureUrl.isNotEmpty ?? false)
               Padding(

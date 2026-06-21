@@ -5,7 +5,6 @@ class PublicMerchantUserModel {
     required this.merchantId,
     required this.shopName,
     required this.description,
-    required this.area,
     required this.shopType,
     required this.address,
     required this.fullAddress,
@@ -32,7 +31,6 @@ class PublicMerchantUserModel {
   final String merchantId;
   final String shopName;
   final String description;
-  final String area;
   final String shopType;
   final String address;
   final String fullAddress;
@@ -77,7 +75,6 @@ class PublicMerchantUserModel {
       merchantId: map['merchantId'] as String? ?? '',
       shopName: map['shopName'] as String? ?? '',
       description: map['description'] as String? ?? '',
-      area: map['area'] as String? ?? '',
       shopType: map['shopType'] as String? ?? '',
       address: map['address'] as String? ?? '',
       fullAddress: map['fullAddress'] as String? ?? map['address'] as String? ?? '',
@@ -117,7 +114,6 @@ class PublicMerchantUserModel {
       'merchantId': merchantId,
       'shopName': shopName,
       'description': description,
-      'area': area,
       'shopType': shopType,
       'address': address,
       'fullAddress': fullAddress,
@@ -142,8 +138,8 @@ class PublicMerchantUserModel {
     };
   }
 
-  /// Anzeige-Ort: Stadt bevorzugt, Legacy-Area als Fallback.
-  String get displayCity => city.isNotEmpty ? city : area;
+  /// Anzeige-Ort: Stadt aus der Adresse.
+  String get displayCity => city;
 
   bool get hasCoordinates => lat != null && lng != null;
 

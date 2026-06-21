@@ -197,10 +197,6 @@ async function seed() {
   });
 
   // CHOOSER
-  batch.set(doc('chooser/areas'), {
-    name: ['Westend', 'Ostend', 'Innenstadt', 'Bahnhofsviertel', 'Sachsenhausen', 'Bornheim'],
-  });
-
   batch.set(doc('chooser/shopTypes'), {
     name: ['Food', 'Kiosk', 'Cafe', 'Restaurant', 'Beauty', 'Barber', 'Fitness', 'Retail', 'Service'],
   });
@@ -257,7 +253,6 @@ async function seed() {
     phone: '+491771816751',
     address: 'Rüster Str. 2, 60325 Frankfurt',
     city: 'Frankfurt',
-    area: 'Westend',
     country: 'Deutschland',
     shopType: 'Food',
     logoUrl: 'https://placehold.co/400x400?text=Babel',
@@ -274,7 +269,6 @@ async function seed() {
     merchantId: demoMerchantId,
     shopName: merchantBase.shopName,
     description: merchantBase.description,
-    area: merchantBase.area,
     shopType: merchantBase.shopType,
     address: merchantBase.address,
     phone: merchantBase.phone,
@@ -331,7 +325,6 @@ async function seed() {
     merchantId: demoMerchantId,
     merchantName: 'Babel Imbiss',
     merchantLogoUrl: merchantBase.logoUrl,
-    merchantArea: merchantBase.area,
     merchantShopType: merchantBase.shopType,
     walletCode,
     walletNumber,
@@ -365,7 +358,6 @@ async function seed() {
     merchantId: demoMerchantId,
     merchantName: 'Babel Imbiss',
     merchantLogoUrl: merchantBase.logoUrl,
-    merchantArea: merchantBase.area,
     merchantShopType: merchantBase.shopType,
     type: 'offer',
     title: 'Shawarma Deal heute',

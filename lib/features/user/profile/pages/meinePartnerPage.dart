@@ -173,9 +173,9 @@ class _PartnerTile extends StatelessWidget {
                       style: tt.titleMedium
                           ?.copyWith(fontWeight: FontWeight.w600),
                     ),
-                    if (card.merchantArea.isNotEmpty)
+                    if (card.merchantCity.isNotEmpty)
                       Text(
-                        card.merchantArea,
+                        card.merchantCity,
                         style: tt.bodySmall
                             ?.copyWith(color: cs.onSurfaceVariant),
                       ),

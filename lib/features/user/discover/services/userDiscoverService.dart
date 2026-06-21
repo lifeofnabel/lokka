@@ -173,20 +173,16 @@ class UserDiscoverService {
 
   Future<void> clearManualLocation() => cacheService.remove(_manualLocKey);
 
-  Future<({List<String> categories, List<String> areas})> loadInterests() async {
+  Future<({List<String> categories})> loadInterests() async {
     final uid = authService.currentUser?.uid;
-    if (uid == null) return (categories: <String>[], areas: <String>[]);
+    if (uid == null) return (categories: <String>[]);
     final data = await firestoreService.readDocument(FirebasePaths.user(uid));
-    if (data == null) return (categories: <String>[], areas: <String>[]);
+    if (data == null) return (categories: <String>[]);
     final categories = (data['interestCategories'] as List?)
             ?.map((e) => e.toString())
             .toList() ??
         <String>[];
-    final areas = (data['interestAreas'] as List?)
-            ?.map((e) => e.toString())
-            .toList() ??
-        <String>[];
-    return (categories: categories, areas: areas);
+    return (categories: categories);
   }
 
   Future<List<PublicMerchantUserModel>> loadPublicMerchants() async {
@@ -442,7 +438,6 @@ class UserDiscoverService {
       merchantId: post.merchantId,
       shopName: post.merchantName.trim().isEmpty ? 'Partner' : post.merchantName,
       description: '',
-      area: post.merchantArea,
       shopType: post.merchantShopType,
       address: '',
       fullAddress: '',

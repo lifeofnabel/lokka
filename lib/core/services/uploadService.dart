@@ -1,13 +1,18 @@
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:image/image.dart' as img;
+import 'package:uuid/uuid.dart';
 
 import '../models/uploadedMediaModel.dart';
-import 'cloudinaryService.dart';
+import 'storageService.dart';
 
+/// Logische Bildarten der App. Jede Art bestimmt Zuschnitt, Zielgröße,
+/// Kompression, Thumbnail-Variante sowie den Ziel-Ordner im Storage.
 enum UploadImageType {
+  userProfile,
   logo,
   cover,
   item,
@@ -34,12 +39,31 @@ class PickedUploadFile {
   final String fileName;
 }
 
-class UploadService {
-  const UploadService({
-    required this.cloudinaryService,
-  });
+/// Owner-Scope eines Uploads – steuert den Wurzel-Ordner (`merchants/` vs.
+/// `users/`) und damit auch die Security-Rule, die den Schreibzugriff prüft.
+enum _OwnerScope { merchant, user }
 
-  final CloudinaryService cloudinaryService;
+/// Wählt, bereitet (Crop/Resize/EXIF/Kompression) und lädt Bilder über die
+/// zentrale [StorageService]-Schicht hoch. Erzeugt zusätzlich automatisch eine
+/// kleine Thumbnail-Variante für Listen-/Feed-Darstellungen.
+///
+/// Die öffentlichen Methoden sind bewusst stabil gehalten, damit bestehende
+/// Aufrufer unverändert weiterlaufen.
+class UploadService {
+  UploadService({
+    required this.storageService,
+    FirebaseAuth? auth,
+    Uuid? uuid,
+  })  : _auth = auth ?? FirebaseAuth.instance,
+        _uuid = uuid ?? const Uuid();
+
+  final StorageService storageService;
+  final FirebaseAuth _auth;
+  final Uuid _uuid;
+
+  /// Sicherheitsgrenze, um sehr große Eingaben gar nicht erst zu dekodieren
+  /// (RAM-Schutz, besonders im Web).
+  static const int _maxInputBytes = 25 * 1024 * 1024;
 
   Future<PickedUploadFile?> pickImageWithFilePicker() async {
     final result = await FilePicker.platform.pickFiles(
@@ -70,48 +94,107 @@ class UploadService {
 
   Future<UploadedMediaModel?> pickAndUploadOptimizedImage({
     required UploadImageType type,
+    String? ownerId,
   }) async {
     final file = await pickImageWithFilePicker();
     if (file == null) return null;
-    final prepared = _prepareImage(
+    return uploadOptimizedImageBytes(
       bytes: file.bytes,
       fileName: file.fileName,
       type: type,
-    );
-    return cloudinaryService.uploadBytes(
-      bytes: prepared.bytes,
-      fileName: prepared.fileName,
+      ownerId: ownerId,
     );
   }
 
+  /// Bereitet [bytes] auf und lädt Haupt- (+ ggf. Thumbnail-)Bild hoch.
+  ///
+  /// [ownerId] überschreibt den abgeleiteten Eigentümer (Standard: aktuell
+  /// angemeldete UID). Wirft [StorageException] mit nutzerfreundlicher Meldung
+  /// bei ungültigem Format, fehlender Anmeldung oder Upload-Fehlern.
   Future<UploadedMediaModel> uploadOptimizedImageBytes({
     required Uint8List bytes,
     required String fileName,
     required UploadImageType type,
-  }) {
-    final prepared = _prepareImage(
-      bytes: bytes,
-      fileName: fileName,
-      type: type,
-    );
-    return cloudinaryService.uploadBytes(
+    String? ownerId,
+  }) async {
+    final uid = (ownerId?.isNotEmpty ?? false)
+        ? ownerId!
+        : _auth.currentUser?.uid ?? '';
+    if (uid.isEmpty) {
+      throw const StorageException(
+        'Bitte zuerst anmelden, um Bilder hochzuladen.',
+      );
+    }
+
+    final prepared = _prepareImage(bytes: bytes, type: type);
+    final folder = _folderFor(type, uid);
+    final id = _uuid.v4();
+
+    final main = await storageService.uploadBytes(
+      path: '$folder/$id.jpg',
       bytes: prepared.bytes,
-      fileName: prepared.fileName,
+      contentType: 'image/jpeg',
+      customMetadata: {
+        'type': type.name,
+        'width': '${prepared.width}',
+        'height': '${prepared.height}',
+      },
+    );
+
+    String? thumbUrl;
+    String? thumbPath;
+    int? thumbBytes;
+    if (prepared.thumbBytes != null) {
+      final thumb = await storageService.uploadBytes(
+        path: '$folder/${id}_thumb.jpg',
+        bytes: prepared.thumbBytes!,
+        contentType: 'image/jpeg',
+        customMetadata: {'type': '${type.name}_thumb'},
+      );
+      thumbUrl = thumb.downloadUrl;
+      thumbPath = thumb.path;
+      thumbBytes = thumb.bytes;
+    }
+
+    return UploadedMediaModel(
+      url: main.downloadUrl,
+      secureUrl: main.downloadUrl,
+      publicId: main.path,
+      format: 'jpg',
+      width: prepared.width,
+      height: prepared.height,
+      bytes: main.bytes,
+      thumbUrl: thumbUrl,
+      thumbSecureUrl: thumbUrl,
+      thumbPublicId: thumbPath,
+      thumbBytes: thumbBytes,
+      mediaType: 'image',
+      createdAt: DateTime.now(),
     );
   }
 
-  PickedUploadFile _prepareImage({
+  _PreparedImage _prepareImage({
     required Uint8List bytes,
-    required String fileName,
     required UploadImageType type,
   }) {
-    final decoded = img.decodeImage(bytes);
-    if (decoded == null) {
-      return PickedUploadFile(bytes: bytes, fileName: fileName);
+    if (bytes.lengthInBytes > _maxInputBytes) {
+      throw const StorageException(
+        'Das Bild ist zu groß (max. 25 MB). Bitte ein kleineres Bild wählen.',
+      );
     }
 
+    final decoded = img.decodeImage(bytes);
+    if (decoded == null) {
+      throw const StorageException(
+        'Dieses Bildformat wird nicht unterstützt. Bitte JPG, PNG oder WebP verwenden.',
+      );
+    }
+
+    // EXIF-Orientierung anwenden, damit Hochformat-Fotos nicht gedreht landen.
+    final oriented = img.bakeOrientation(decoded);
+
     final spec = _specFor(type);
-    final cropped = _centerCrop(decoded, spec.aspectWidth, spec.aspectHeight);
+    final cropped = _centerCrop(oriented, spec.aspectWidth, spec.aspectHeight);
     final resized = img.copyResize(
       cropped,
       width: spec.width,
@@ -119,9 +202,26 @@ class UploadService {
       interpolation: img.Interpolation.average,
     );
     final encoded = _encodeWithinLimit(resized, spec);
-    return PickedUploadFile(
+
+    Uint8List? thumb;
+    final thumbEdge = spec.thumbnailEdge;
+    if (thumbEdge != null && thumbEdge < spec.width) {
+      final thumbHeight =
+          (thumbEdge * spec.aspectHeight / spec.aspectWidth).round();
+      final thumbImage = img.copyResize(
+        resized,
+        width: thumbEdge,
+        height: thumbHeight,
+        interpolation: img.Interpolation.average,
+      );
+      thumb = Uint8List.fromList(img.encodeJpg(thumbImage, quality: 78));
+    }
+
+    return _PreparedImage(
       bytes: encoded,
-      fileName: _jpgFileName(fileName),
+      width: resized.width,
+      height: resized.height,
+      thumbBytes: thumb,
     );
   }
 
@@ -138,9 +238,7 @@ class UploadService {
       }
 
       if (quality > spec.minQuality) {
-        quality = (quality - 8)
-            .clamp(spec.minQuality, spec.quality)
-            .toInt();
+        quality = (quality - 8).clamp(spec.minQuality, spec.quality).toInt();
       } else {
         current = img.copyResize(
           current,
@@ -171,8 +269,54 @@ class UploadService {
     return img.copyCrop(source, x: x, y: y, width: width, height: height);
   }
 
+  /// Vollständiger Ziel-Ordner (ohne Dateiname) für [type] und Eigentümer [uid].
+  String _folderFor(UploadImageType type, String uid) {
+    final category = _categoryFor(type);
+    return switch (_scopeFor(type)) {
+      _OwnerScope.merchant => '${StoragePaths.merchantsRoot}/$uid/$category',
+      _OwnerScope.user => '${StoragePaths.usersRoot}/$uid/$category',
+    };
+  }
+
+  _OwnerScope _scopeFor(UploadImageType type) {
+    return switch (type) {
+      UploadImageType.userProfile ||
+      UploadImageType.general =>
+        _OwnerScope.user,
+      _ => _OwnerScope.merchant,
+    };
+  }
+
+  String _categoryFor(UploadImageType type) {
+    return switch (type) {
+      UploadImageType.userProfile => 'profile',
+      UploadImageType.general => 'uploads',
+      UploadImageType.logo => 'profile',
+      UploadImageType.cover => 'cover',
+      UploadImageType.feedPost => 'offers',
+      UploadImageType.coupon => 'offers',
+      UploadImageType.item => 'catalog',
+      UploadImageType.itemWide => 'catalog',
+      UploadImageType.categoryIcon => 'catalog',
+      UploadImageType.stampCard => 'wallet',
+      UploadImageType.stampCardSide => 'wallet',
+      UploadImageType.stampCardTop => 'wallet',
+      UploadImageType.stampCardBackground => 'wallet',
+      UploadImageType.pointsReward => 'wallet',
+      UploadImageType.displayLayout => 'displayStudio',
+    };
+  }
+
   _ImageSpec _specFor(UploadImageType type) {
     return switch (type) {
+      UploadImageType.userProfile => const _ImageSpec(
+          width: 600,
+          height: 600,
+          aspectWidth: 1,
+          aspectHeight: 1,
+          quality: 86,
+          maxBytes: 500 * 1024,
+        ),
       UploadImageType.logo => const _ImageSpec(
           width: 512,
           height: 512,
@@ -188,6 +332,7 @@ class UploadService {
           aspectHeight: 9,
           quality: 84,
           maxBytes: 3 * 1024 * 1024,
+          thumbnailEdge: 600,
         ),
       UploadImageType.item => const _ImageSpec(
           width: 1024,
@@ -196,6 +341,7 @@ class UploadService {
           aspectHeight: 1,
           quality: 84,
           maxBytes: 1400 * 1024,
+          thumbnailEdge: 500,
         ),
       UploadImageType.itemWide => const _ImageSpec(
           width: 1280,
@@ -204,6 +350,7 @@ class UploadService {
           aspectHeight: 9,
           quality: 84,
           maxBytes: 1400 * 1024,
+          thumbnailEdge: 500,
         ),
       UploadImageType.categoryIcon => const _ImageSpec(
           width: 256,
@@ -220,6 +367,7 @@ class UploadService {
           aspectHeight: 1,
           quality: 84,
           maxBytes: 1600 * 1024,
+          thumbnailEdge: 500,
         ),
       UploadImageType.stampCard => const _ImageSpec(
           width: 1200,
@@ -228,6 +376,7 @@ class UploadService {
           aspectHeight: 2,
           quality: 84,
           maxBytes: 1300 * 1024,
+          thumbnailEdge: 500,
         ),
       UploadImageType.stampCardSide => const _ImageSpec(
           width: 800,
@@ -244,6 +393,7 @@ class UploadService {
           aspectHeight: 9,
           quality: 84,
           maxBytes: 1200 * 1024,
+          thumbnailEdge: 500,
         ),
       UploadImageType.stampCardBackground => const _ImageSpec(
           width: 1280,
@@ -252,6 +402,7 @@ class UploadService {
           aspectHeight: 9,
           quality: 82,
           maxBytes: 1100 * 1024,
+          thumbnailEdge: 500,
         ),
       UploadImageType.pointsReward => const _ImageSpec(
           width: 1024,
@@ -260,6 +411,7 @@ class UploadService {
           aspectHeight: 1,
           quality: 84,
           maxBytes: 1200 * 1024,
+          thumbnailEdge: 500,
         ),
       UploadImageType.coupon => const _ImageSpec(
           width: 1200,
@@ -268,6 +420,7 @@ class UploadService {
           aspectHeight: 2,
           quality: 84,
           maxBytes: 1300 * 1024,
+          thumbnailEdge: 500,
         ),
       UploadImageType.general => const _ImageSpec(
           width: 1200,
@@ -276,6 +429,7 @@ class UploadService {
           aspectHeight: 1,
           quality: 84,
           maxBytes: 2 * 1024 * 1024,
+          thumbnailEdge: 500,
         ),
       UploadImageType.displayLayout => const _ImageSpec(
           width: 1920,
@@ -284,15 +438,9 @@ class UploadService {
           aspectHeight: 9,
           quality: 86,
           maxBytes: 4 * 1024 * 1024,
+          thumbnailEdge: 640,
         ),
     };
-  }
-
-  String _jpgFileName(String fileName) {
-    final clean = fileName.trim().isEmpty ? 'lokka-upload' : fileName.trim();
-    final dot = clean.lastIndexOf('.');
-    final base = dot > 0 ? clean.substring(0, dot) : clean;
-    return '$base.jpg';
   }
 }
 
@@ -304,6 +452,7 @@ class _ImageSpec {
     required this.aspectHeight,
     required this.quality,
     required this.maxBytes,
+    this.thumbnailEdge,
     // ignore: unused_element_parameter — Tuning-Untergrenze, bewusst fix bei 62
     this.minQuality = 62,
   });
@@ -314,5 +463,23 @@ class _ImageSpec {
   final int aspectHeight;
   final int quality;
   final int maxBytes;
+
+  /// Breite der optionalen Thumbnail-Variante. `null` = kein Thumbnail
+  /// (z. B. ohnehin kleine Icons/Logos).
+  final int? thumbnailEdge;
   final int minQuality;
+}
+
+class _PreparedImage {
+  const _PreparedImage({
+    required this.bytes,
+    required this.width,
+    required this.height,
+    this.thumbBytes,
+  });
+
+  final Uint8List bytes;
+  final int width;
+  final int height;
+  final Uint8List? thumbBytes;
 }

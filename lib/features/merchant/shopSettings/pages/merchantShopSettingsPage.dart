@@ -204,9 +204,6 @@ class _ShopFormState extends State<_ShopForm> {
   final List<String> selectedOrigins = [];
   List<String> originOptions = [];
 
-  /// Legacy-Area: kein UI mehr (Stadt + PLZ stecken in der Adresse).
-  /// Der gespeicherte Wert wird beim Speichern unverändert durchgereicht.
-  String? selectedArea;
   bool phoneVerified = false;
   // Bewusste Sichtbarkeits-Wahl des Merchants (#44): nicht mehr aus
   // Vollständigkeit abgeleitet. Default: sichtbar.
@@ -382,8 +379,7 @@ class _ShopFormState extends State<_ShopForm> {
         const SizedBox(height: AppSpacing.md),
         _ShopHero(
           shopName: shopName.text,
-          // Anzeige-Ort: Stadt aus der Adresse (Legacy-Area nur als Fallback).
-          area: city.text.trim().isNotEmpty ? city.text.trim() : (selectedArea ?? ''),
+          city: city.text.trim(),
           shopTypes: selectedShopTypes,
           logoUrl: logoUrl.text,
           coverUrl: coverUrl.text,
@@ -707,7 +703,6 @@ class _ShopFormState extends State<_ShopForm> {
       coverUrl.text = galleryImages.first;
     }
 
-    selectedArea = data['area']?.toString().isNotEmpty == true ? data['area'].toString() : null;
     phoneVerified = data['phoneVerified'] as bool? ?? false;
     // Opt-out respektieren (#44); ältere Profile ohne das Feld bleiben sichtbar.
     _publicVisible = !(data['visibilityOptOut'] as bool? ?? false);
@@ -890,7 +885,7 @@ class _ShopFormState extends State<_ShopForm> {
   /// Wählt ein Bild, schneidet es im Square-Crop-Sheet auf 1:1 und lädt es
   /// über den bestehenden UploadService hoch. Gibt die finale URL zurück
   /// (oder null bei Abbruch/Fehler). Bleibt mit dem alten Mechanismus
-  /// kompatibel (gleicher Cloudinary-Upload, nur mit Vorab-Zuschnitt).
+  /// kompatibel (gleicher Storage-Upload, nur mit Vorab-Zuschnitt).
   Future<String?> _pickCropUploadSquare(
     MerchantShopProvider provider,
     UploadImageType type,
@@ -1229,8 +1224,6 @@ class _ShopFormState extends State<_ShopForm> {
       'houseNumber': houseNumber.text.trim(),
       'postalCode': postalCode.text.trim(),
       'city': city.text.trim(),
-      // Legacy-Area: ohne UI unverändert durchreichen (Rückwärtskompatibilität).
-      'area': selectedArea ?? '',
       'country': _country,
       'shopTypes': selectedShopTypes,
       'shopTypePrimary': primary,
@@ -1312,7 +1305,7 @@ class _ShopFormState extends State<_ShopForm> {
 class _ShopHero extends StatelessWidget {
   const _ShopHero({
     required this.shopName,
-    required this.area,
+    required this.city,
     required this.shopTypes,
     required this.logoUrl,
     required this.coverUrl,
@@ -1321,7 +1314,7 @@ class _ShopHero extends StatelessWidget {
   });
 
   final String shopName;
-  final String area;
+  final String city;
   final List<String> shopTypes;
   final String logoUrl;
   final String coverUrl;
@@ -1427,7 +1420,7 @@ class _ShopHero extends StatelessWidget {
                           ),
                           const SizedBox(height: 5),
                           Text(
-                            [area, shopTypes.join(', ')].where((item) => item.trim().isNotEmpty).join(' | '),
+                            [city, shopTypes.join(', ')].where((item) => item.trim().isNotEmpty).join(' | '),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(

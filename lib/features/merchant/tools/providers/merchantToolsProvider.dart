@@ -323,7 +323,6 @@ class MerchantShopProvider extends ChangeNotifier {
   String? error;
   Map<String, dynamic>? merchant;
   List<String> shopTypes = [];
-  List<String> areas = [];
 
   Future<void> load() async {
     try {
@@ -333,13 +332,10 @@ class MerchantShopProvider extends ChangeNotifier {
       final result = await Future.wait<Object?>([
         service.loadMerchant(),
         service.loadChooserShopTypes(),
-        service.loadChooserAreas(),
       ]);
       merchant = result[0] as Map<String, dynamic>?;
       final loadedShopTypes = result[1] as List<String>;
-      final loadedAreas = result[2] as List<String>;
       shopTypes = loadedShopTypes.isEmpty ? _fallbackShopTypes : loadedShopTypes;
-      areas = loadedAreas.isEmpty ? _fallbackAreas : loadedAreas;
     } catch (e) {
       error = e.toString();
     } finally {
@@ -561,7 +557,6 @@ class MerchantTablesProvider extends ChangeNotifier {
 }
 
 const _fallbackShopTypes = ['Food', 'Cafe', 'Kiosk', 'Beauty', 'Barber', 'Fitness', 'Retail', 'Service'];
-const _fallbackAreas = ['Westend', 'Ostend', 'Innenstadt', 'Bahnhofsviertel', 'Sachsenhausen', 'Bornheim'];
 
 /// Verwaltung der Runner (Name + PIN) für den Runner-Modus.
 class MerchantRunnersProvider extends ChangeNotifier {

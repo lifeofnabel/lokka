@@ -30,7 +30,7 @@ class PublicShopHero extends StatelessWidget {
     final shopName = (merchant['shopName'] ?? merchant['businessName'] ?? texts.text('public.shop.shop')).toString();
     final description = (merchant['description'] ?? '').toString();
     final meta = [
-      (merchant['area'] ?? '').toString(),
+      (merchant['city'] ?? '').toString(),
       (merchant['shopTypePrimary'] ?? merchant['shopType'] ?? '').toString(),
     ].where((value) => value.trim().isNotEmpty).join(' | ');
 

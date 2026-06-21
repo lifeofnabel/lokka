@@ -46,7 +46,7 @@ class PartnerHeroCard extends StatelessWidget {
                   color: cs.onSurface,
                 ),
               ),
-              if (merchant.shopType.isNotEmpty || merchant.area.isNotEmpty) ...[
+              if (merchant.shopType.isNotEmpty || merchant.displayCity.isNotEmpty) ...[
                 const SizedBox(height: 10),
                 Wrap(
                   spacing: 8,
@@ -54,8 +54,8 @@ class PartnerHeroCard extends StatelessWidget {
                   children: [
                     if (merchant.shopType.isNotEmpty)
                       _Tag(merchant.shopType, primary: true),
-                    if (merchant.area.isNotEmpty)
-                      _Tag(merchant.area, icon: Icons.place_outlined),
+                    if (merchant.displayCity.isNotEmpty)
+                      _Tag(merchant.displayCity, icon: Icons.place_outlined),
                   ],
                 ),
               ],

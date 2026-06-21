@@ -24,7 +24,6 @@ class MerchantModel {
     required this.address,
     this.fullAddress,
     required this.city,
-    required this.area,
     required this.country,
     required this.shopType,
     this.shopTypePrimary,
@@ -58,7 +57,6 @@ class MerchantModel {
   final String address;
   final String? fullAddress;
   final String city;
-  final String area;
   final String country;
   final String shopType;
   final String? shopTypePrimary;
@@ -95,7 +93,6 @@ class MerchantModel {
       address: map['address'] as String? ?? '',
       fullAddress: map['fullAddress'] as String?,
       city: map['city'] as String? ?? '',
-      area: map['area'] as String? ?? '',
       country: map['country'] as String? ?? '',
       shopType: map['shopType'] as String? ?? '',
       shopTypePrimary: map['shopTypePrimary'] as String?,
@@ -134,7 +131,6 @@ class MerchantModel {
       'address': address,
       'fullAddress': fullAddress,
       'city': city,
-      'area': area,
       'country': country,
       'shopType': shopType,
       'shopTypePrimary': shopTypePrimary,
@@ -170,7 +166,6 @@ class MerchantModel {
     String? address,
     String? fullAddress,
     String? city,
-    String? area,
     String? country,
     String? shopType,
     String? shopTypePrimary,
@@ -204,7 +199,6 @@ class MerchantModel {
       address: address ?? this.address,
       fullAddress: fullAddress ?? this.fullAddress,
       city: city ?? this.city,
-      area: area ?? this.area,
       country: country ?? this.country,
       shopType: shopType ?? this.shopType,
       shopTypePrimary: shopTypePrimary ?? this.shopTypePrimary,

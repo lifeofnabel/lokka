@@ -57,10 +57,10 @@ class WalletDetailHeader extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
-                        if (card.merchantArea.isNotEmpty ||
+                        if (card.merchantCity.isNotEmpty ||
                             card.merchantShopType.isNotEmpty)
                           Text(
-                            [card.merchantShopType, card.merchantArea]
+                            [card.merchantShopType, card.merchantCity]
                                 .where((s) => s.isNotEmpty)
                                 .join(' · '),
                             style: tt.bodyMedium?.copyWith(

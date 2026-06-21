@@ -16,7 +16,7 @@ class MerchantFeedPostPreview extends StatelessWidget {
     required this.type,
     required this.merchantName,
     required this.merchantLogoUrl,
-    required this.merchantArea,
+    required this.merchantCity,
     required this.merchantShopType,
     required this.ratingText,
     required this.title,
@@ -29,7 +29,7 @@ class MerchantFeedPostPreview extends StatelessWidget {
   final String type;
   final String merchantName;
   final String merchantLogoUrl;
-  final String merchantArea;
+  final String merchantCity;
   final String merchantShopType;
   final String ratingText;
   final String title;
@@ -44,7 +44,7 @@ class MerchantFeedPostPreview extends StatelessWidget {
     final visibleTitle = title.trim().isEmpty ? texts.text('merchant.feedCreate.previewTitle') : title.trim();
     final visibleSubtitle = subtitle.trim().isEmpty ? texts.text('merchant.feedCreate.previewSubtitle') : subtitle.trim();
     final shopName = merchantName.trim().isEmpty ? texts.text('merchant.feedCreate.previewShopName') : merchantName.trim();
-    final meta = [merchantArea, merchantShopType].where((value) => value.trim().isNotEmpty).join(' · ');
+    final meta = [merchantCity, merchantShopType].where((value) => value.trim().isNotEmpty).join(' · ');
     final discount = feedDiscountLabel(oldPrice, newPrice, texts);
     // Die Vorschau zeigt, was USER sehen → bewusst helle Karte (1:1 wie
     // _FeedCard in userDiscoverPage.dart), auch im dunklen Merchant-Theme.

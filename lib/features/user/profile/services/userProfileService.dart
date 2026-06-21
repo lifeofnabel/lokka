@@ -114,7 +114,6 @@ class UserProfileService {
   /// bleibt das jeweilige Feld in Firestore unangetastet.
   Future<void> saveInterests({
     required List<String> categories,
-    required List<String> areas,
     List<String>? origins,
     List<String>? postTypes,
     List<Map<String, dynamic>>? places,
@@ -123,7 +122,6 @@ class UserProfileService {
     if (uid == null) return;
     await firestoreService.updateDocument(FirebasePaths.user(uid), {
       'interestCategories': categories,
-      'interestAreas': areas,
       'interestOrigins': ?origins,
       'interestPostTypes': ?postTypes,
       'interestPlaces': ?places,

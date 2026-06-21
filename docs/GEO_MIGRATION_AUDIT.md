@@ -30,7 +30,7 @@ Recommended placement (mark TEMPORARY, do **not** commit the real key):
 | Step | Location | Note |
 |---|---|---|
 | Add var | `.env` → `GEOAPIFY_API_KEY=…` | gitignored; `.env.example` gets a placeholder |
-| Expose | `lib/core/config/environmentConfig.dart` → `static String get geoapifyApiKey => dotenv.env['GEOAPIFY_API_KEY'] ?? ''` | alongside existing Cloudinary getters |
+| Expose | `lib/core/config/environmentConfig.dart` → `static String get geoapifyApiKey => dotenv.env['GEOAPIFY_API_KEY'] ?? ''` | alongside the other env getters |
 | Build | production: `--dart-define GEOAPIFY_API_KEY=…` | keeps key out of the bundle where possible |
 | **Final target** | **Backend proxy** (Cloudflare Worker, same pattern as the existing push sender) that calls Geoapify server-side | the client never holds the key in production |
 

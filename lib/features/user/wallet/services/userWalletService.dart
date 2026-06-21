@@ -71,7 +71,7 @@ class UserWalletService {
         'merchantId': merchant.merchantId,
         'merchantName': merchant.shopName,
         'merchantLogoUrl': merchant.logoUrl,
-        'merchantArea': merchant.area,
+        'merchantCity': merchant.displayCity,
         'merchantShopType': merchant.shopType,
         'walletCode': walletCode,
         'walletNumber': number,
