@@ -30,7 +30,9 @@ class MerchantCustomersService {
         .limit(customersPageLimit)
         .get();
     final customers = snapshot.docs
-        .map((doc) => MerchantCustomerModel.fromMap({'id': doc.id, ...doc.data()}))
+        // doc.data() zuerst spreaden, dann doc.id setzen: so gewinnt immer die
+        // echte Firestore-Doc-ID, auch wenn im Dokument ein 'id'-Feld gespeichert ist.
+        .map((doc) => MerchantCustomerModel.fromMap({...doc.data(), 'id': doc.id}))
         .toList();
     customers.sort((a, b) {
       final aDate = a.lastVisitAt ?? DateTime(0);

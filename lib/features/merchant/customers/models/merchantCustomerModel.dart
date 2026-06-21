@@ -8,6 +8,7 @@ class MerchantCustomerModel {
     this.lastVisitAt,
   });
 
+  /// Echte Firestore-Doc-ID. Wird u. a. als stabiler ListView-Key genutzt.
   final String id;
   final String name;
   final List<String> usedSystems;
@@ -18,12 +19,16 @@ class MerchantCustomerModel {
     final lastName = map['lastName']?.toString() ?? '';
     final fallbackName = [firstName, lastName].where((part) => part.trim().isNotEmpty).join(' ');
     final rawSystems = map['usedSystems'] ?? map['systems'] ?? map['activeSystems'];
+    // usedSystems (Array) ist autoritativ. Ist es leer ODER fehlt es ganz, aus den
+    // Flag-Feldern ableiten – vorher griff der Fallback nur bei fehlendem Key, nicht
+    // bei einem vorhandenen, aber leeren Array (inkonsistente Datenquelle).
+    final fromArray = rawSystems is Iterable
+        ? rawSystems.map((item) => item.toString()).where((item) => item.trim().isNotEmpty).toList()
+        : const <String>[];
     return MerchantCustomerModel(
       id: (map['id'] ?? map['uid'] ?? map['customerId'] ?? '').toString(),
       name: (map['name'] ?? map['displayName'] ?? map['customerName'] ?? fallbackName).toString(),
-      usedSystems: rawSystems is Iterable
-          ? rawSystems.map((item) => item.toString()).where((item) => item.trim().isNotEmpty).toList()
-          : _systemsFromFlags(map),
+      usedSystems: fromArray.isNotEmpty ? fromArray : _systemsFromFlags(map),
       lastVisitAt: _date(map['lastVisitAt'] ?? map['lastSeenAt'] ?? map['updatedAt']),
     );
   }

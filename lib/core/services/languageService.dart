@@ -5,9 +5,13 @@ import 'package:flutter/services.dart';
 import '../constants/appStrings.dart';
 
 class LanguageService {
-  const LanguageService._(this._texts);
+  const LanguageService._(this._texts, {this.localeCode = AppStrings.fallbackLocale});
 
   final Map<String, String> _texts;
+
+  /// Aktiver Sprachcode (z. B. 'de', 'en', 'ar'). Quelle für locale-abhängige
+  /// Formatierungen (z. B. Datum), solange kein intl-Paket eingebunden ist.
+  final String localeCode;
 
   static Future<LanguageService> loadDefault() {
     return load(locale: AppStrings.defaultLocale);
@@ -19,6 +23,7 @@ class LanguageService {
       final json = jsonDecode(content) as Map<String, dynamic>;
       return LanguageService._(
         json.map((key, value) => MapEntry(key, value.toString())),
+        localeCode: locale,
       );
     } catch (_) {
       if (locale != AppStrings.fallbackLocale) {
@@ -158,6 +163,10 @@ class LanguageService {
       'common.all': 'Alle',
       'common.ready': 'Bereit',
       'common.error': 'Fehler',
+      'common.error.network': 'Verbindungsproblem. Bitte später erneut versuchen.',
+      'common.error.permission': 'Keine Berechtigung für diesen Bereich.',
+      'common.error.generic': 'Etwas ist schiefgelaufen. Bitte erneut versuchen.',
+      'common.none': 'Keine',
       'common.errorTitle': 'Das hat nicht geklappt.',
       'common.retry': 'Erneut versuchen',
       'common.loading': 'Lädt',
@@ -286,7 +295,7 @@ class LanguageService {
       'merchant.customers.system.stamps': 'Stempel',
       'merchant.customers.system.points': 'Punkte',
       'merchant.customers.system.coupons': 'Coupons',
-      'merchant.customers.system.orders': 'Bestellung',
+      'merchant.customers.system.orders': 'Bestellungen',
       'merchant.stamps.title': 'Stempelkarten',
       'merchant.stamps.subtitle':
           'Erstelle digitale Karten, die Kunden gern vollmachen.',

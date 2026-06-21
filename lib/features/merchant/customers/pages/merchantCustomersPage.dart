@@ -40,31 +40,48 @@ class _MerchantCustomersView extends StatelessWidget {
       title: texts.text('merchant.customers.title'),
       subtitle: texts.text('merchant.customers.subtitle'),
       trailing: MerchantInfoTooltip(message: texts.text('merchant.customers.tooltip')),
-      child: provider.isLoading
-          ? const MerchantLoadingCards(count: 5)
+      // Slivers statt Column-Spread: Kundenkarten werden via SliverList.builder
+      // lazy gebaut (Virtualisierung), nicht alle gleichzeitig in den Widgetbaum.
+      slivers: provider.isLoading
+          ? const [SliverToBoxAdapter(child: MerchantLoadingCards(count: 5))]
           : provider.error != null
-              ? MerchantErrorState(message: provider.error!, onRetry: provider.load)
-              : Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _FilterChips(provider: provider),
-                    const SizedBox(height: AppSpacing.md),
-                    if (provider.visibleCustomers.isEmpty)
-                      MerchantEmptyState(
+              ? [
+                  SliverToBoxAdapter(
+                    child: MerchantErrorState(
+                      message: texts.text(provider.error!),
+                      onRetry: provider.load,
+                    ),
+                  ),
+                ]
+              : [
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                      child: _FilterChips(provider: provider),
+                    ),
+                  ),
+                  if (provider.visibleCustomers.isEmpty)
+                    SliverToBoxAdapter(
+                      child: MerchantEmptyState(
                         title: texts.text('merchant.customers.emptyTitle'),
                         message: texts.text('merchant.customers.emptyMessage'),
                         actionLabel: texts.text('common.refresh'),
                         onAction: provider.load,
-                      )
-                    else
-                      ...provider.visibleCustomers.map(
-                        (customer) => Padding(
+                      ),
+                    )
+                  else
+                    SliverList.builder(
+                      itemCount: provider.visibleCustomers.length,
+                      itemBuilder: (context, index) {
+                        final customer = provider.visibleCustomers[index];
+                        return Padding(
+                          key: ValueKey(customer.id),
                           padding: const EdgeInsets.only(bottom: 10),
                           child: _CustomerCard(customer: customer),
-                        ),
-                      ),
-                  ],
-                ),
+                        );
+                      },
+                    ),
+                ],
     );
   }
 }
@@ -79,6 +96,9 @@ class _FilterChips extends StatelessWidget {
     final texts = context.watch<LanguageService>();
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
+      // Symmetrisches Rand-Padding: erste/letzte Chip-Kante liegt nicht bündig und
+      // beide Seiten zeigen eine kleine Scroll-Affordanz.
+      padding: const EdgeInsets.symmetric(horizontal: 2),
       child: Row(
         children: [
           _FilterChip(
@@ -136,12 +156,16 @@ class _FilterChip extends StatelessWidget {
         label: Text(label),
         selected: selected,
         onSelected: (_) => onTap(),
+        // Touch-Target >= 48dp sicherstellen.
+        materialTapTargetSize: MaterialTapTargetSize.padded,
         selectedColor: MerchantPremiumColors.ink,
         backgroundColor: MerchantPremiumColors.surface,
         side: const BorderSide(color: MerchantPremiumColors.line),
         labelStyle: TextStyle(
-          color: selected ? Colors.white : MerchantPremiumColors.ink,
-          fontWeight: FontWeight.w800,
+          // Selektiert liegt das Label auf hellem ink-Grund -> dunkles Token statt
+          // hartem Colors.white (das war auf hellem Grund praktisch unsichtbar).
+          color: selected ? MerchantPremiumColors.surface : MerchantPremiumColors.ink,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );
@@ -173,7 +197,7 @@ class _CustomerCard extends StatelessWidget {
                 _initials(name),
                 style: const TextStyle(
                   color: MerchantPremiumColors.ink,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ),
@@ -190,17 +214,21 @@ class _CustomerCard extends StatelessWidget {
                   style: const TextStyle(
                     color: MerchantPremiumColors.ink,
                     fontSize: 17,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 5),
-                Text(
-                  '${texts.text('merchant.customers.lastVisit')}: ${_dateLabel(context, customer.lastVisitAt)}',
-                  style: const TextStyle(
-                    color: MerchantPremiumColors.muted,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
+                // 'Letzter Besuch' nur zeigen, wenn ein Datum existiert – sonst
+                // klebte ein 'Keine'/'none' an der Zeile.
+                if (customer.lastVisitAt != null) ...[
+                  const SizedBox(height: 5),
+                  Text(
+                    '${texts.text('merchant.customers.lastVisit')}: ${_formatDate(texts, customer.lastVisitAt!)}',
+                    style: const TextStyle(
+                      color: MerchantPremiumColors.muted,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 6,
@@ -236,8 +264,8 @@ class _SystemPill extends StatelessWidget {
         label,
         style: const TextStyle(
           color: MerchantPremiumColors.ink,
-          fontSize: 11,
-          fontWeight: FontWeight.w900,
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );
@@ -254,11 +282,15 @@ String _systemLabel(LanguageService texts, String system) {
   };
 }
 
-String _dateLabel(BuildContext context, DateTime? value) {
-  if (value == null) return context.read<LanguageService>().text('common.none');
+// Locale-bewusste, kompakte Datumsausgabe ohne intl-Paket.
+String _formatDate(LanguageService texts, DateTime value) {
   final day = value.day.toString().padLeft(2, '0');
   final month = value.month.toString().padLeft(2, '0');
-  return '$day.$month.${value.year}';
+  final year = value.year.toString();
+  return switch (texts.localeCode) {
+    'en' => '$month/$day/$year',
+    _ => '$day.$month.$year', // de/ar: Tag.Monat.Jahr
+  };
 }
 
 String _initials(String value) {

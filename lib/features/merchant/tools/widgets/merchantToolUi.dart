@@ -12,15 +12,24 @@ class MerchantToolScaffold extends StatelessWidget {
     super.key,
     required this.title,
     required this.subtitle,
-    required this.child,
+    this.child,
+    this.slivers,
     this.trailing,
     this.backPath,
     this.showHeader = false,
-  });
+  }) : assert(child != null || slivers != null,
+            'MerchantToolScaffold braucht entweder child oder slivers');
 
   final String title;
   final String subtitle;
-  final Widget child;
+
+  /// Einfacher Body in einem ListView (Standard). Für lange Listen stattdessen
+  /// [slivers] nutzen – dort werden Einträge dank CustomScrollView wirklich lazy
+  /// gebaut. Genau eines von [child] / [slivers] angeben.
+  final Widget? child;
+
+  /// Optionaler Sliver-Body für echte Virtualisierung (z. B. SliverList.builder).
+  final List<Widget>? slivers;
   final Widget? trailing;
   final String? backPath;
 
@@ -79,46 +88,72 @@ class MerchantToolScaffold extends StatelessWidget {
           child: Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 980),
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 30),
-                children: [
-                  if (showHeader) ...[
-                    Container(
-                      padding: const EdgeInsets.fromLTRB(6, 4, 6, 2),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            title,
-                            style: const TextStyle(
-                              color: MerchantPremiumColors.surface,
-                              fontSize: 30,
-                              fontWeight: FontWeight.w900,
-                              height: 1.02,
-                            ),
+              child: slivers != null
+                  ? CustomScrollView(
+                      slivers: [
+                        SliverPadding(
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                          sliver: SliverToBoxAdapter(
+                            child: showHeader
+                                ? Padding(
+                                    padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+                                    child: _header(),
+                                  )
+                                : const SizedBox.shrink(),
                           ),
-                          const SizedBox(height: 8),
-                          Text(
-                            subtitle,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: MerchantPremiumColors.mutedLight,
-                              height: 1.35,
-                              fontWeight: FontWeight.w700,
-                            ),
+                        ),
+                        for (final sliver in slivers!)
+                          SliverPadding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            sliver: sliver,
                           ),
+                        const SliverToBoxAdapter(child: SizedBox(height: 30)),
+                      ],
+                    )
+                  : ListView(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 30),
+                      children: [
+                        if (showHeader) ...[
+                          _header(),
+                          const SizedBox(height: AppSpacing.lg),
                         ],
-                      ),
+                        child!,
+                      ],
                     ),
-                    const SizedBox(height: AppSpacing.lg),
-                  ],
-                  child,
-                ],
-              ),
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _header() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(6, 4, 6, 2),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              color: MerchantPremiumColors.surface,
+              fontSize: 30,
+              fontWeight: FontWeight.w900,
+              height: 1.02,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            subtitle,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: MerchantPremiumColors.mutedLight,
+              height: 1.35,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
       ),
     );
   }
