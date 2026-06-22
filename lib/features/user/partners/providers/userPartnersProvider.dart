@@ -45,6 +45,7 @@ class UserPartnersProvider extends ChangeNotifier {
   double? get userLng => _userLng;
   Set<String> get walletIds => _walletIds;
   MerchantRating? ratingFor(String merchantId) => _ratings[merchantId];
+  int beliebtScoreFor(String merchantId) => _beliebtScores[merchantId] ?? 0;
   int get totalCount => _allPartners.length;
 
   bool get hasActiveFilters =>

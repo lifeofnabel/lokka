@@ -267,16 +267,12 @@ class AppRouter {
         builder: (context, state) => const UserShellPage(initialIndex: 1),
       ),
       GoRoute(
-        path: '/user/partners',
-        builder: (context, state) => const UserShellPage(initialIndex: 3),
-      ),
-      GoRoute(
         path: '/user/wallet',
         builder: (context, state) => const UserShellPage(initialIndex: 2),
       ),
       GoRoute(
         path: '/user/profile',
-        builder: (context, state) => const UserShellPage(initialIndex: 4),
+        builder: (context, state) => const UserShellPage(initialIndex: 3),
       ),
       GoRoute(
         path: '/user/partners/:merchantId',

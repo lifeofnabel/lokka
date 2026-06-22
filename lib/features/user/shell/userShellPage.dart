@@ -12,7 +12,6 @@ import 'package:lokka/features/user/discover/providers/userDiscoverProvider.dart
 import 'package:lokka/features/user/discover/services/userDiscoverService.dart';
 import 'package:lokka/features/user/explore/pages/userExplorePage.dart';
 import 'package:lokka/features/user/onboarding/pages/onboardingSurveyPage.dart';
-import 'package:lokka/features/user/partners/pages/userPartnersPage.dart';
 import 'package:lokka/features/user/partners/providers/userPartnersProvider.dart';
 import 'package:lokka/features/user/partners/services/userPartnersService.dart';
 import 'package:lokka/features/user/profile/pages/userProfilePage.dart';
@@ -75,7 +74,6 @@ class _UserShellPageState extends State<UserShellPage> {
     (label: 'Feed', icon: Icons.auto_awesome_outlined, activeIcon: Icons.auto_awesome_rounded),
     (label: 'Suche', icon: Icons.search_rounded, activeIcon: Icons.search_rounded),
     (label: 'Wallet', icon: Icons.account_balance_wallet_outlined, activeIcon: Icons.account_balance_wallet_rounded),
-    (label: 'Partner', icon: Icons.storefront_outlined, activeIcon: Icons.storefront_rounded),
     (label: 'Profil', icon: Icons.person_outline_rounded, activeIcon: Icons.person_rounded),
   ];
 
@@ -83,7 +81,6 @@ class _UserShellPageState extends State<UserShellPage> {
     '/user/discover',
     '/user/explore',
     '/user/wallet',
-    '/user/partners',
     '/user/profile',
   ];
 
@@ -177,7 +174,6 @@ class _UserShellPageState extends State<UserShellPage> {
                     UserDiscoverPage(),
                     UserExplorePage(),
                     UserWalletPage(),
-                    UserPartnersPage(),
                     UserProfilePage(),
                   ],
                 ),

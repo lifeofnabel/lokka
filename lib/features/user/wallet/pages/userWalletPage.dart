@@ -19,30 +19,61 @@ class UserWalletPage extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     return Consumer<UserWalletProvider>(
-      builder: (context, provider, _) => CustomScrollView(
-        slivers: [
-          SliverAppBar(
-            floating: true,
-            snap: true,
-            backgroundColor: AppColors.surfaceBg,
-            surfaceTintColor: AppColors.surfaceBg,
-            elevation: 0,
-            expandedHeight: 60,
-            flexibleSpace: FlexibleSpaceBar(
-              titlePadding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.md,
-                vertical: AppSpacing.sm,
-              ),
-              title: Text(
-                'Wallet',
-                style: tt.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -0.5,
-                  color: cs.onSurface,
+      builder: (context, provider, _) {
+        final count = provider.cards.length;
+        final subtitle = provider.isLoading
+            ? 'Deine Karten an einem Ort'
+            : count == 0
+                ? 'Deine Partner-Karten an einem Ort'
+                : '$count ${count == 1 ? 'Karte' : 'Karten'} gespeichert';
+        return CustomScrollView(
+          slivers: [
+            SliverToBoxAdapter(
+              child: SafeArea(
+                bottom: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(AppSpacing.md,
+                      AppSpacing.md, AppSpacing.md, AppSpacing.sm),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          gradient: AppColors.mintGradient,
+                          borderRadius: BorderRadius.circular(15),
+                        ),
+                        child: const Icon(
+                            Icons.account_balance_wallet_rounded,
+                            color: Colors.white,
+                            size: 24),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Wallet',
+                              style: tt.headlineMedium?.copyWith(
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: -0.5,
+                                color: cs.onSurface,
+                              ),
+                            ),
+                            Text(
+                              subtitle,
+                              style: tt.bodyMedium
+                                  ?.copyWith(color: cs.onSurfaceVariant),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
           if (provider.isLoading)
             const SliverFillRemaining(child: AppLoadingState())
           else if (provider.error != null)
@@ -76,9 +107,10 @@ class UserWalletPage extends StatelessWidget {
                 },
               ),
             ),
-          const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.xxl)),
-        ],
-      ),
+            const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.xxl)),
+          ],
+        );
+      },
     );
   }
 

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:lokka/core/utils/locationUtils.dart';
 import 'package:lokka/features/user/discover/models/publicMerchantUserModel.dart';
 import 'package:lokka/features/user/reviews/models/merchantRating.dart';
 import 'package:lokka/features/user/reviews/widgets/reviewWidgets.dart';
@@ -203,10 +204,14 @@ class PartnerCard extends StatelessWidget {
     super.key,
     required this.merchant,
     this.onTap,
+    this.distanceKm,
   });
 
   final PublicMerchantUserModel merchant;
   final VoidCallback? onTap;
+
+  /// Optionale Entfernung (km) → Distanz-Pille auf dem Cover (für „Näheste").
+  final double? distanceKm;
 
   @override
   Widget build(BuildContext context) {
@@ -264,6 +269,34 @@ class PartnerCard extends StatelessWidget {
                       ),
                     ),
                   ),
+                  if (distanceKm != null)
+                    Positioned(
+                      top: 12,
+                      right: 12,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: cs.primary,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.near_me_rounded,
+                                size: 14, color: Colors.white),
+                            const SizedBox(width: 4),
+                            Text(
+                              LocationUtils.distanceLabel(distanceKm!),
+                              style: tt.labelMedium?.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                 ],
               ),
               Padding(

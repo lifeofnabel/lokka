@@ -232,6 +232,11 @@ class MerchantItemsProvider extends ChangeNotifier {
     await load();
   }
 
+  Future<void> seedCatalog() async {
+    await _saving(() => service.seedCatalog());
+    await load();
+  }
+
   Future<void> _saving(Future<void> Function() action) async {
     try {
       isSaving = true;

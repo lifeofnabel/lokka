@@ -5,6 +5,7 @@ import '../../../../core/constants/firebasePaths.dart';
 import '../../../../core/services/authService.dart';
 import '../../../../core/services/firestoreService.dart';
 import '../../../../core/services/geoapifyService.dart';
+import '../../catalog/data/voilaSeedData.dart';
 import '../../catalog/models/itemCategoryData.dart';
 import '../../catalog/models/itemOptionGroup.dart';
 import '../../catalog/models/itemTagData.dart';
@@ -275,6 +276,98 @@ class MerchantToolsService {
         'updatedAt': FieldValue.serverTimestamp(),
       },
     );
+  }
+
+  /// Löscht ALLE vorhandenen Artikel + Kategorien (hard delete) und legt die
+  /// 193 Voilà-Standardartikel in 17 Kategorien neu an.
+  Future<void> seedCatalog() async {
+    // 1. Alle vorhandenen Docs laden (inkl. archivierte).
+    final existingItemsSnap = await firestoreService
+        .collection(FirebasePaths.merchantItems(merchantId))
+        .limit(500)
+        .get();
+    final existingCatsSnap = await firestoreService
+        .collection(FirebasePaths.merchantItemCategories(merchantId))
+        .limit(200)
+        .get();
+
+    // 2. Hard-Delete in Batches à 490 (Firestore-Limit = 500).
+    final allDocs = [...existingItemsSnap.docs, ...existingCatsSnap.docs];
+    for (var i = 0; i < allDocs.length; i += 490) {
+      final end = (i + 490 < allDocs.length) ? i + 490 : allDocs.length;
+      final batch = firestoreService.batch();
+      for (final doc in allDocs.sublist(i, end)) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
+    }
+
+    // 3. 17 Kategorien anlegen (ein Batch reicht).
+    {
+      final batch = firestoreService.batch();
+      for (final cat in kVoilaCategories) {
+        final catId = cat['id'] as String;
+        final ref = firestoreService.document(
+          FirebasePaths.merchantItemCategory(merchantId, catId),
+        );
+        batch.set(ref, {
+          'id': catId,
+          'merchantId': merchantId,
+          'name': cat['name'] as String,
+          'normalizedName': (cat['name'] as String).trim().toLowerCase(),
+          'emoji': cat['emoji'] as String,
+          'iconUrl': '',
+          'sortOrder': cat['sortOrder'] as int,
+          'isActive': true,
+          'isPrivate': false,
+          'isArchived': false,
+          'createdAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      }
+      await batch.commit();
+    }
+
+    // 4. 193 Artikel in Batches à 490 anlegen.
+    final items = kVoilaItems();
+    final catNameById = Map.fromEntries(
+      kVoilaCategories.map((c) => MapEntry(c['id'] as String, c['name'] as String)),
+    );
+    for (var i = 0; i < items.length; i += 490) {
+      final end = (i + 490 < items.length) ? i + 490 : items.length;
+      final batch = firestoreService.batch();
+      for (final item in items.sublist(i, end)) {
+        final ref = firestoreService.document(
+          FirebasePaths.merchantItem(merchantId, item.id),
+        );
+        batch.set(ref, {
+          'id': item.id,
+          'merchantId': merchantId,
+          'categoryId': item.categoryId,
+          'categoryName': catNameById[item.categoryId] ?? '',
+          'name': item.name,
+          'title': item.name,
+          'description': '',
+          'price': item.price,
+          'originalPrice': null,
+          'imageUrl': '',
+          'articleNumber': item.nr.toString(),
+          'allergenIds': <String>[],
+          'additiveIds': <String>[],
+          'isActive': true,
+          'isAvailable': true,
+          'isPrivate': false,
+          'isArchived': false,
+          'imageRatio': 'square',
+          'optionGroups': <Map<String, dynamic>>[],
+          'type': 'merchant_item',
+          'searchName': item.name.trim().toLowerCase(),
+          'createdAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      }
+      await batch.commit();
+    }
   }
 
   Future<void> saveShopData(Map<String, dynamic> values) async {
