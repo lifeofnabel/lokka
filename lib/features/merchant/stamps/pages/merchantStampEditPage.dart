@@ -336,7 +336,7 @@ class _MerchantStampEditViewState extends State<_MerchantStampEditView> {
                         style: const TextStyle(
                           color: MerchantPremiumColors.ink,
                           fontSize: 22,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ),
@@ -938,7 +938,7 @@ class _PublishStep extends StatelessWidget {
                 const SizedBox(width: AppSpacing.sm),
                 Expanded(
                   child: Text(
-                    kStampPublishInfo,
+                    texts.text('merchant.stamps.publishInfo'),
                     style: const TextStyle(
                       color: MerchantPremiumColors.mutedLight,
                       fontWeight: FontWeight.w700,
@@ -975,11 +975,14 @@ class _StepDots extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Schritt ${step + 1}/$total',
+            texts
+                .text('merchant.stamps.stepIndicator')
+                .replaceAll('{current}', '${step + 1}')
+                .replaceAll('{total}', '$total'),
             style: const TextStyle(
               color: MerchantPremiumColors.muted,
               fontSize: 12,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w700,
               letterSpacing: 0.4,
             ),
           ),
@@ -989,7 +992,7 @@ class _StepDots extends StatelessWidget {
             style: const TextStyle(
               color: MerchantPremiumColors.ink,
               fontSize: 22,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w700,
             ),
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -1021,6 +1024,7 @@ class _PreviewLauncher extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final texts = context.watch<LanguageService>();
     return MerchantPremiumCard(
       padding: const EdgeInsets.all(AppSpacing.md),
       radius: 24,
@@ -1033,22 +1037,22 @@ class _PreviewLauncher extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Vorschau ansehen',
-                  style: TextStyle(
+                Text(
+                  texts.text('merchant.stamps.previewLauncher'),
+                  style: const TextStyle(
                     color: MerchantPremiumColors.ink,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w700,
                     fontSize: 16,
                   ),
                 ),
                 const SizedBox(height: 3),
-                const Text(
-                  'Live-Vorschau deiner Stempelkarte öffnen',
+                Text(
+                  texts.text('merchant.stamps.previewLauncherHint'),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
+                  style: const TextStyle(
                     color: MerchantPremiumColors.muted,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ],
@@ -1100,7 +1104,7 @@ class _NavigationRow extends StatelessWidget {
         Expanded(
           flex: onBack == null ? 1 : 2,
           child: MerchantPrimaryButton(
-            label: isLast ? texts.text('merchant.stamps.publish') : 'Weiter',
+            label: isLast ? texts.text('merchant.stamps.publish') : texts.text('common.next'),
             icon: isLast ? Icons.rocket_launch_rounded : Icons.arrow_forward_rounded,
             isLoading: isSaving,
             onPressed: onNext,
@@ -1450,7 +1454,7 @@ Future<int?> _askCustomStampCount(BuildContext context, int current) async {
             style: const TextStyle(
               color: MerchantPremiumColors.ink,
               fontSize: 24,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w700,
             ),
           ),
           const SizedBox(height: AppSpacing.md),
@@ -1459,12 +1463,33 @@ Future<int?> _askCustomStampCount(BuildContext context, int current) async {
             label: texts.text('merchant.stamps.field.requiredStamps'),
             keyboardType: TextInputType.number,
           ),
+          const SizedBox(height: AppSpacing.sm),
+          // Min/Max sichtbar kommunizieren statt still zu clampen (#69).
+          Text(
+            texts.text('merchant.stamps.customCountHint'),
+            style: const TextStyle(
+              color: MerchantPremiumColors.muted,
+              fontWeight: FontWeight.w600,
+              fontSize: 13,
+            ),
+          ),
           const SizedBox(height: AppSpacing.md),
           MerchantPrimaryButton(
             label: texts.text('common.save'),
             onPressed: () {
               final value = int.tryParse(controller.text.trim());
-              Navigator.of(sheetContext).pop(value?.clamp(2, 30).toInt());
+              if (value == null) {
+                Navigator.of(sheetContext).pop();
+                return;
+              }
+              final clamped = value.clamp(2, 30).toInt();
+              // Bei Bereichsüberschreitung Feedback geben, nicht still anpassen.
+              if (clamped != value) {
+                ScaffoldMessenger.of(sheetContext).showSnackBar(
+                  SnackBar(content: Text(texts.text('merchant.stamps.customCountClamped'))),
+                );
+              }
+              Navigator.of(sheetContext).pop(clamped);
             },
           ),
         ],
@@ -1498,12 +1523,12 @@ Future<bool?> _showPublishSheet(BuildContext context) {
               style: const TextStyle(
                 color: MerchantPremiumColors.ink,
                 fontSize: 24,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w700,
               ),
             ),
             const SizedBox(height: AppSpacing.sm),
             Text(
-              kStampPublishConfirmMessage,
+              texts.text('merchant.stamps.publishMessage'),
               textAlign: TextAlign.center,
               style: const TextStyle(
                 color: MerchantPremiumColors.muted,

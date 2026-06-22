@@ -23,13 +23,21 @@ class MerchantStampsService {
     return uid;
   }
 
+  /// Obergrenze für Listen-Reads – schützt vor unbeschränkten Collection-Reads,
+  /// falls ein Merchant sehr viele Karten/Artikel anlegt.
+  static const int _maxCards = 100;
+  static const int _maxItems = 200;
+
   Future<List<StampCardModel>> loadStampCards() async {
     final snapshot = await firestoreService
         .collection(FirebasePaths.merchantStampCards(merchantId))
+        .orderBy('updatedAt', descending: true)
+        .limit(_maxCards)
         .get();
     final cards = snapshot.docs
         .map((doc) => StampCardModel.fromMap({'id': doc.id, ...doc.data()}))
         .toList();
+    // Statusgruppierung clientseitig (orderBy bestimmt nur die Vorsortierung).
     cards.sort(_sortCards);
     return cards;
   }
@@ -45,6 +53,7 @@ class MerchantStampsService {
   Future<List<MerchantItemData>> loadItems() async {
     final snapshot = await firestoreService
         .collection(FirebasePaths.merchantItems(merchantId))
+        .limit(_maxItems)
         .get();
     final items = snapshot.docs
         .map((doc) => MerchantItemData.fromMap({'id': doc.id, ...doc.data()}))
@@ -54,41 +63,40 @@ class MerchantStampsService {
     return items;
   }
 
+  /// Löst die Dokument-ID auf (vorhandene ID oder frisch generierte) und meldet,
+  /// ob es sich um einen Neuanlage-Pfad handelt. Gemeinsam von saveCard/publishCard.
+  ({String id, bool isNew}) _resolveId(StampCardModel card) {
+    if (card.id.isNotEmpty) return (id: card.id, isNew: false);
+    final id = firestoreService
+        .collection(FirebasePaths.merchantStampCards(merchantId))
+        .doc()
+        .id;
+    return (id: id, isNew: true);
+  }
+
   Future<String> saveCard(StampCardModel card) async {
-    final stampCardId = card.id.isNotEmpty
-        ? card.id
-        : firestoreService
-            .collection(FirebasePaths.merchantStampCards(merchantId))
-            .doc()
-            .id;
-    final isNew = card.id.isEmpty;
+    final resolved = _resolveId(card);
     final prepared = card.copyWith(
-      id: stampCardId,
+      id: resolved.id,
       merchantId: merchantId,
       isActive: card.status == StampCardStatus.active,
       isArchived: card.status == StampCardStatus.archived,
     );
     final data = prepared.toMap()
       ..['updatedAt'] = FieldValue.serverTimestamp();
-    if (isNew) data['createdAt'] = FieldValue.serverTimestamp();
+    if (resolved.isNew) data['createdAt'] = FieldValue.serverTimestamp();
 
     await firestoreService.setDocument(
-      FirebasePaths.merchantStampCard(merchantId, stampCardId),
+      FirebasePaths.merchantStampCard(merchantId, resolved.id),
       data,
     );
-    return stampCardId;
+    return resolved.id;
   }
 
   Future<String> publishCard(StampCardModel card) async {
-    final stampCardId = card.id.isNotEmpty
-        ? card.id
-        : firestoreService
-            .collection(FirebasePaths.merchantStampCards(merchantId))
-            .doc()
-            .id;
-    final isNew = card.id.isEmpty;
+    final resolved = _resolveId(card);
     final prepared = card.copyWith(
-      id: stampCardId,
+      id: resolved.id,
       merchantId: merchantId,
       status: StampCardStatus.active,
       isActive: true,
@@ -96,16 +104,21 @@ class MerchantStampsService {
     );
     final cardData = prepared.toMap()
       ..['updatedAt'] = FieldValue.serverTimestamp()
-      ..['publishedAt'] = FieldValue.serverTimestamp()
       ..['activatedAt'] = FieldValue.serverTimestamp();
-    if (isNew) cardData['createdAt'] = FieldValue.serverTimestamp();
+    // Ursprünglichen Veröffentlichungszeitpunkt erhalten: publishedAt nur bei der
+    // ersten Veröffentlichung setzen (Neuanlage oder noch nie veröffentlicht).
+    if (resolved.isNew || card.publishedAt == null) {
+      cardData['publishedAt'] = FieldValue.serverTimestamp();
+    }
+    if (resolved.isNew) cardData['createdAt'] = FieldValue.serverTimestamp();
 
+    // Full-Replace (kein merge) – konsistent mit saveCard; toMap() schreibt das
+    // vollständige Dokument, dadurch keine veralteten Geister-Felder.
     await firestoreService.setDocument(
-      FirebasePaths.merchantStampCard(merchantId, stampCardId),
+      FirebasePaths.merchantStampCard(merchantId, resolved.id),
       cardData,
-      merge: true,
     );
-    return stampCardId;
+    return resolved.id;
   }
 
   Future<void> pauseCard(String stampCardId) {

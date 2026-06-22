@@ -105,7 +105,11 @@ class MerchantStampsProvider extends ChangeNotifier {
       error = null;
       notifyListeners();
       final id = await action();
-      await load(editId: id);
+      // Performance (#69): kein kompletter load() mehr nach jedem Save/Publish.
+      // Nur die geänderte Karte gezielt nachladen (ein get()) und die bereits
+      // gecachte Liste/Items in-memory aktualisieren – spart die doppelten
+      // Collection- und Items-Reads.
+      await _refreshCard(id);
       return id;
     } catch (e) {
       error = e.toString();
@@ -113,6 +117,20 @@ class MerchantStampsProvider extends ChangeNotifier {
     } finally {
       isSaving = false;
       notifyListeners();
+    }
+  }
+
+  /// Lädt eine einzelne Karte neu und führt sie in den vorhandenen Cache zusammen
+  /// (Liste + editingCard), ohne Items oder die gesamte Collection erneut zu lesen.
+  Future<void> _refreshCard(String id) async {
+    final updated = await service.loadStampCard(id);
+    if (updated == null) return;
+    editingCard = updated;
+    final index = cards.indexWhere((card) => card.id == id);
+    if (index >= 0) {
+      cards[index] = updated;
+    } else {
+      cards = [updated, ...cards];
     }
   }
 
