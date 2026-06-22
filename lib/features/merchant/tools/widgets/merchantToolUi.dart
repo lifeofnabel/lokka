@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
@@ -246,6 +247,11 @@ class MerchantEmptyState extends StatelessWidget {
   }
 }
 
+/// Dunkler MerchantPremium-Adapter des Core-`AppErrorState`
+/// (`lib/core/widgets/appErrorState.dart`): gleiche Rolle (Fehler + Retry),
+/// aber im invertierten Merchant-Theme. Bewusst lokal gehalten, weil das
+/// Core-Widget für den hellen User-Bereich gestaltet ist; hier zentralisiert,
+/// damit alle Merchant-Seiten denselben dunklen Fehlerzustand teilen.
 class MerchantErrorState extends StatelessWidget {
   const MerchantErrorState({
     super.key,
@@ -301,6 +307,9 @@ String _visibleError(LanguageService texts, String message) {
   return texts.text(cleaned);
 }
 
+/// Dunkler MerchantPremium-Adapter des Core-`AppLoadingState`
+/// (`lib/core/widgets/appLoadingState.dart`): Platzhalter-Karten im
+/// invertierten Merchant-Theme. Bewusst lokal, analog zu [MerchantErrorState].
 class MerchantLoadingCards extends StatelessWidget {
   const MerchantLoadingCards({super.key, this.count = 4});
 
@@ -333,6 +342,8 @@ class MerchantTextField extends StatelessWidget {
     this.hint,
     this.keyboardType,
     this.maxLines = 1,
+    this.maxLength,
+    this.inputFormatters,
   });
 
   final TextEditingController controller;
@@ -341,12 +352,24 @@ class MerchantTextField extends StatelessWidget {
   final TextInputType? keyboardType;
   final int maxLines;
 
+  /// Optionale Zeichenobergrenze (zeigt keinen Zähler, kappt nur hart).
+  final int? maxLength;
+
+  /// Optionale Eingabe-Filter (z. B. Ziffern/Dezimalzahlen begrenzen).
+  final List<TextInputFormatter>? inputFormatters;
+
   @override
   Widget build(BuildContext context) {
     return TextField(
       controller: controller,
       keyboardType: keyboardType,
       maxLines: maxLines,
+      maxLength: maxLength,
+      // Zähler ausblenden – die Begrenzung wirkt still, kein UI-Lärm.
+      buildCounter: maxLength == null
+          ? null
+          : (context, {required currentLength, required isFocused, maxLength}) => null,
+      inputFormatters: inputFormatters,
       style: const TextStyle(
         color: MerchantPremiumColors.ink,
         fontWeight: FontWeight.w800,
@@ -470,5 +493,66 @@ Future<T?> showMerchantBottomSheet<T>({
         child: content,
       );
     },
+  );
+}
+
+/// Geteiltes Bestätigungs-Sheet (Titel, Text, CTA + Abbrechen) im
+/// MerchantPremium-Stil. Vereinheitlicht die zuvor pro Seite duplizierten
+/// `showModalBottomSheet`-Blöcke. [warn] schaltet auf den Warn-Look (gelber
+/// Grund + Warn-Icon) für riskante Aktionen wie einen Modus-Wechsel.
+/// Gibt `true` zurück, wenn der Nutzer bestätigt, sonst `false`/`null`.
+Future<bool?> showMerchantConfirmSheet({
+  required BuildContext context,
+  required String title,
+  required String message,
+  required String confirmLabel,
+  required String cancelLabel,
+  IconData confirmIcon = Icons.check_rounded,
+  bool warn = false,
+}) {
+  return showMerchantBottomSheet<bool>(
+    context: context,
+    backgroundColor:
+        warn ? MerchantPremiumColors.warningSoft : MerchantPremiumColors.surface,
+    builder: (sheetContext) => Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (warn) ...[
+          const Icon(Icons.warning_amber_rounded,
+              size: 38, color: MerchantPremiumColors.warning),
+          const SizedBox(height: AppSpacing.sm),
+        ],
+        Text(
+          title,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: MerchantPremiumColors.ink,
+            fontSize: 24,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Text(
+          message,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: MerchantPremiumColors.muted,
+            fontWeight: FontWeight.w600,
+            height: 1.35,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        MerchantPrimaryButton(
+          label: confirmLabel,
+          icon: confirmIcon,
+          onPressed: () => Navigator.of(sheetContext).pop(true),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(sheetContext).pop(false),
+          child: Text(cancelLabel),
+        ),
+      ],
+    ),
   );
 }

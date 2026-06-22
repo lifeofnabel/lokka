@@ -349,6 +349,19 @@
 
 ### Punkte – Bearbeiten — 28 Findings
 
+> **Status (Issue #63, Branch `claude/merchant-audit-cleanup`):** Die Hoch-Findings 200/201
+> wurden bereits im Zuge von #64 gelöst (`_findItem` gibt null zurück, `_ItemDropdown` ohne
+> stille Vorauswahl). Die Mittel/Niedrig/Nit-Findings 202–227 sind im Rahmen von #63 umgesetzt:
+> Status-Erhalt beim Speichern (existing.status), `MerchantSecondaryButton` für Aktivieren/Upload,
+> FontWeight w900→w600/w700, i18n-Key statt Hardcode-String, Live-Preview via `AnimatedBuilder`
+> (statt setState pro Tastendruck), Hydration per `addPostFrameCallback` + `_setIfChanged`,
+> Dezimal-/Ziffern-Formatter + Obergrenzen (`AppLimits`) + maxLength, DS-Dropdown für den Reset-Tag
+> (Label „Tag X"), Tooltip selektionsunabhängig + `Semantics(selected/button)`, geteiltes
+> `showMerchantConfirmSheet`, lokale Locale-Formatierung der Vorschau, `defaultRequiredPoints`-Konstante
+> + pristine-Flag, dokumentierte Dark-Adapter-States, `_busy`-Doppel-Submit-Schutz, `adoptSystem/adoptReward`
+> statt `pushReplacement`, `transitionEndsAt`-Reset bei A→B→A, imageUrl-Aufräumen beim Typ-/Item-Wechsel,
+> Entfernen des redundanten `_rewardItemName`-States, Token-Spacing. `pointsRuleCard` nutzte bereits `AppImage`.
+
 | # | Sev | Kategorie | Datei:Zeile | Problem | Empfehlung | Verdict |
 |---|---|---|---|---|---|---|
 | 200 | Hoch | Bug/Logik | `points/pages/merchantPointRewardEditPage.dart:609-615` | **_findItem-Fallback hebelt Item-Validierung & korrekte Auswahl aus** — _findItem() gibt bei nicht gefundener id NICHT null zurück, sondern items.first (Z.614). Folgen: (1) Validierung Z.288 `_rewardType==item && _findItem(...)==null` kann ab >=1 Item nie null werden -> faktisch tot, ein item-Reward ohne bewusste Auswahl gilt als valide. (2) In _rewardFromForm Z.235/236 wird bei leerem _rewardItemId stillschweigend items.first als Belohnungs-Item gespeichert. | _findItem soll bei fehlender id null zurückgeben (kein items.first-Fallback). Auto-Select nur explizit im _ItemDropdown und per onChanged in _rewardItemId zurückschreiben, damit State und UI konsistent sind. | bestätigt |

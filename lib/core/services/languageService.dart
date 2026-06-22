@@ -496,6 +496,17 @@ class LanguageService {
       'merchant.points.error.rewardItem': 'Bitte wähle einen Artikel aus.',
       'merchant.points.error.discountText':
           'Bitte beschreibe den Rabatt kurz.',
+      'merchant.points.error.pointsPerEuroMax':
+          'Bitte gib eine kleinere Punktezahl pro Euro ein.',
+      'merchant.points.error.requiredPointsMax':
+          'Diese Punktezahl ist zu hoch.',
+      'merchant.points.error.titleTooLong': 'Der Name ist zu lang.',
+      'merchant.points.error.descriptionTooLong':
+          'Die Beschreibung ist zu lang.',
+      'merchant.points.error.discountTooLong':
+          'Der Rabatt-Text ist zu lang.',
+      'merchant.points.noItemsCreate': 'Artikel anlegen',
+      'merchant.points.resetDayOption': 'Tag {day}',
       'merchant.points.noItems':
           'Noch keine Artikel vorhanden. Nutze Freitext oder lege später Artikel im Sortiment an.',
       'merchant.points.mode.monthlyRewards': 'Monatliche Rewards',

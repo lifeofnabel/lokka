@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../../../../core/constants/appLimits.dart';
 import '../../../../core/services/authService.dart';
 import '../../../../core/services/firestoreService.dart';
 import '../../../../core/services/languageService.dart';
@@ -50,22 +52,31 @@ class _PointRewardEditViewState extends State<_PointRewardEditView> {
   final _requiredPoints = TextEditingController();
   final _discountText = TextEditingController();
   String? _hydratedId;
-  bool _isHydrating = false;
   String _rewardType = PointsRewardType.custom;
   String _rewardItemId = '';
-  String _rewardItemName = '';
   String _imageUrl = '';
+  // true, solange die Pflichtpunkte nur den geladenen/Default-Wert tragen und
+  // nicht vom Nutzer bewusst geändert wurden. Steuert das Auto-Befüllen bei
+  // Item-Auswahl ohne Magic-String-Vergleich.
+  bool _requiredPointsPristine = true;
+  // Quelle des aktuellen Bildes: true = aus einem Item übernommen (wird beim
+  // Typ-/Item-Wechsel aufgeräumt), false = manuell hochgeladen (bleibt).
+  bool _imageFromItem = false;
+  // Beim Speichern eines gelöschten Katalog-Items als Fallback verwendeter,
+  // zuvor persistierter Item-Name (kein eigenes UI-State-Feld nötig).
+  String _persistedItemName = '';
+  bool _busy = false;
 
   @override
   void initState() {
     super.initState();
-    for (final controller in [_title, _description, _requiredPoints, _discountText]) {
-      controller.addListener(_refresh);
-    }
+    // Tippen in den Pflichtpunkten gilt als bewusste Eingabe.
+    _requiredPoints.addListener(_onRequiredPointsChanged);
   }
 
   @override
   void dispose() {
+    _requiredPoints.removeListener(_onRequiredPointsChanged);
     _title.dispose();
     _description.dispose();
     _requiredPoints.dispose();
@@ -73,9 +84,7 @@ class _PointRewardEditViewState extends State<_PointRewardEditView> {
     super.dispose();
   }
 
-  void _refresh() {
-    if (!_isHydrating && mounted) setState(() {});
-  }
+  void _onRequiredPointsChanged() => _requiredPointsPristine = false;
 
   @override
   Widget build(BuildContext context) {
@@ -94,7 +103,7 @@ class _PointRewardEditViewState extends State<_PointRewardEditView> {
     final reward = provider.editingReward ??
         PointsRewardModel.empty(merchantId: provider.merchantId);
     _hydrate(reward);
-    final preview = _rewardFromForm(provider, reward);
+    final saving = provider.isSaving || _busy;
 
     return MerchantToolScaffold(
       title: texts.text('merchant.points.rewardEditTitle'),
@@ -108,9 +117,22 @@ class _PointRewardEditViewState extends State<_PointRewardEditView> {
             MerchantErrorState(message: provider.error!, onRetry: provider.clearError),
             const SizedBox(height: AppSpacing.md),
           ],
-          _PreviewShell(reward: preview),
-          const SizedBox(height: AppSpacing.md),
-          _RewardScaleMini(rewards: _scaleRewards(provider, reward, preview)),
+          // Live-Preview + Skala nur an die relevanten Controller (Titel,
+          // Pflichtpunkte) gekoppelt – nicht die ganze Seite pro Tastendruck.
+          AnimatedBuilder(
+            animation: Listenable.merge([_title, _requiredPoints]),
+            builder: (context, _) {
+              final preview = _rewardFromForm(provider, reward);
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _PreviewShell(reward: preview),
+                  const SizedBox(height: AppSpacing.md),
+                  _RewardScaleMini(rewards: _scaleRewards(provider, reward, preview)),
+                ],
+              );
+            },
+          ),
           const SizedBox(height: AppSpacing.md),
           _ChipWrap(
             options: [
@@ -119,18 +141,31 @@ class _PointRewardEditViewState extends State<_PointRewardEditView> {
               _ChipOption(PointsRewardType.discount, texts.text('merchant.points.reward.discount')),
             ],
             selected: _rewardType,
-            onSelected: (value) => setState(() => _rewardType = value),
+            onSelected: (value) => setState(() {
+              _rewardType = value;
+              // Vom Item übernommenes Bild beim Wegwechseln aufräumen; manuell
+              // hochgeladene Bilder bleiben erhalten.
+              if (value != PointsRewardType.item && _imageFromItem) {
+                _imageUrl = '';
+                _imageFromItem = false;
+              }
+            }),
           ),
           const SizedBox(height: AppSpacing.md),
           MerchantTextField(
             controller: _title,
             label: texts.text('merchant.points.field.rewardTitle'),
+            maxLength: AppLimits.pointsTitleMaxLength,
           ),
           const SizedBox(height: AppSpacing.md),
           MerchantTextField(
             controller: _requiredPoints,
             label: texts.text('merchant.points.field.requiredPoints'),
             keyboardType: TextInputType.number,
+            inputFormatters: [
+              FilteringTextInputFormatter.digitsOnly,
+              LengthLimitingTextInputFormatter(7),
+            ],
           ),
           if (_rewardType == PointsRewardType.item) ...[
             const SizedBox(height: AppSpacing.md),
@@ -138,17 +173,20 @@ class _PointRewardEditViewState extends State<_PointRewardEditView> {
               label: texts.text('merchant.points.field.rewardItem'),
               items: provider.items,
               value: _rewardItemId,
+              onCreateItem: () => context.go('/merchant/tools/items'),
               onChanged: (item) => setState(() {
                 _rewardItemId = item?.id ?? '';
-                _rewardItemName = item?.name ?? '';
+                _persistedItemName = item?.name ?? _persistedItemName;
                 if (item != null && _title.text.trim().isEmpty) {
                   _title.text = item.name;
                 }
-                if (item != null && (_requiredPoints.text.trim().isEmpty || _requiredPoints.text.trim() == '100')) {
+                if (item != null && _requiredPointsPristine) {
                   _requiredPoints.text = _suggestedPoints(provider, item).toString();
+                  _requiredPointsPristine = true; // Auto-Wert bleibt änderbar.
                 }
-                if (item != null && _imageUrl.trim().isEmpty) {
+                if (item != null && (_imageUrl.trim().isEmpty || _imageFromItem)) {
                   _imageUrl = item.imageUrl;
+                  _imageFromItem = item.imageUrl.isNotEmpty;
                 }
               }),
             ),
@@ -158,6 +196,7 @@ class _PointRewardEditViewState extends State<_PointRewardEditView> {
             MerchantTextField(
               controller: _discountText,
               label: texts.text('merchant.points.field.discountText'),
+              maxLength: AppLimits.pointsDiscountMaxLength,
             ),
           ],
           const SizedBox(height: AppSpacing.md),
@@ -165,36 +204,38 @@ class _PointRewardEditViewState extends State<_PointRewardEditView> {
             controller: _description,
             label: texts.text('common.description'),
             maxLines: 3,
+            maxLength: AppLimits.pointsDescriptionMaxLength,
           ),
           const SizedBox(height: AppSpacing.md),
-          OutlinedButton.icon(
-            onPressed: provider.isSaving
+          MerchantSecondaryButton(
+            label: _imageUrl.isEmpty
+                ? texts.text('common.uploadImage')
+                : texts.text('common.replaceImage'),
+            icon: Icons.image_rounded,
+            onPressed: saving
                 ? null
                 : () async {
                     final uploaded = await provider.uploadRewardImage();
                     if (uploaded != null && uploaded.isNotEmpty) {
-                      setState(() => _imageUrl = uploaded);
+                      setState(() {
+                        _imageUrl = uploaded;
+                        _imageFromItem = false; // bewusst manuell hochgeladen.
+                      });
                     }
                   },
-            icon: const Icon(Icons.image_rounded),
-            label: Text(_imageUrl.isEmpty ? texts.text('common.uploadImage') : texts.text('common.replaceImage')),
           ),
           const SizedBox(height: AppSpacing.lg),
           MerchantPrimaryButton(
             label: reward.isLive ? texts.text('common.save') : texts.text('merchant.points.saveDraft'),
             icon: Icons.save_rounded,
-            isLoading: provider.isSaving,
+            isLoading: saving,
             onPressed: () => _save(context, provider, reward),
           ),
           const SizedBox(height: AppSpacing.sm),
-          OutlinedButton.icon(
-            onPressed: provider.isSaving ? null : () => _publish(context, provider, reward),
-            icon: const Icon(Icons.rocket_launch_rounded),
-            label: Text(texts.text('merchant.points.activate')),
-            style: OutlinedButton.styleFrom(
-              minimumSize: const Size.fromHeight(54),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
-            ),
+          MerchantSecondaryButton(
+            label: texts.text('merchant.points.activate'),
+            icon: Icons.rocket_launch_rounded,
+            onPressed: saving ? null : () => _publish(context, provider, reward),
           ),
         ],
       ),
@@ -204,17 +245,28 @@ class _PointRewardEditViewState extends State<_PointRewardEditView> {
   void _hydrate(PointsRewardModel reward) {
     final key = reward.id.isEmpty ? 'new' : reward.id;
     if (_hydratedId == key) return;
-    _isHydrating = true;
     _hydratedId = key;
-    _title.text = reward.title;
-    _description.text = reward.description;
-    _requiredPoints.text = reward.requiredPoints.toString();
-    _discountText.text = reward.discountText;
+    // Reine State-Felder dürfen sofort.
     _rewardType = reward.rewardType;
     _rewardItemId = reward.rewardItemId;
-    _rewardItemName = reward.rewardItemName;
+    _persistedItemName = reward.rewardItemName;
     _imageUrl = reward.imageUrl;
-    _isHydrating = false;
+    // Bestehendes Item-Reward mit Bild: als „aus Item" werten, damit ein
+    // Typwechsel es aufräumt; ohne Item gilt das Bild als manuell.
+    _imageFromItem = reward.rewardType == PointsRewardType.item &&
+        reward.imageUrl.isNotEmpty &&
+        reward.rewardItemId.isNotEmpty;
+    // Controller-Inhalte erst nach dem Frame setzen (kein Schreiben in build).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _setIfChanged(_title, reward.title);
+      _setIfChanged(_description, reward.description);
+      _setIfChanged(_requiredPoints, reward.requiredPoints.toString());
+      _setIfChanged(_discountText, reward.discountText);
+      // Geladene/Default-Punkte gelten als unberührt, bis der Nutzer tippt –
+      // nach dem (listener-auslösenden) Schreiben zurücksetzen.
+      _requiredPointsPristine = true;
+    });
   }
 
   PointsRewardModel _rewardFromForm(
@@ -222,20 +274,27 @@ class _PointRewardEditViewState extends State<_PointRewardEditView> {
     PointsRewardModel existing, {
     String? forcedStatus,
   }) {
-    final status = forcedStatus ??
-        (existing.status == PointsStatus.active ? PointsStatus.active : PointsStatus.draft);
+    // Bestehenden Status erhalten (paused/archived bleiben), nur beim bewussten
+    // Aktivieren wird forcedStatus=active gesetzt.
+    final status = forcedStatus ?? existing.status;
+    final isItem = _rewardType == PointsRewardType.item;
     final item = _findItem(provider.items, _rewardItemId);
+    // Name aus dem aufgelösten Item; Fallback ist der zuvor persistierte Name
+    // (deckt ein zwischenzeitlich gelöschtes Katalog-Item ab).
+    final itemName = isItem ? (item?.name ?? _persistedItemName) : '';
     return PointsRewardModel(
       id: existing.id,
       merchantId: provider.merchantId,
       title: _title.text,
       description: _description.text,
       rewardType: _rewardType,
-      requiredPoints: int.tryParse(_requiredPoints.text.trim()) ?? 100,
-      rewardItemId: _rewardType == PointsRewardType.item ? item?.id ?? '' : '',
-      rewardItemName: _rewardType == PointsRewardType.item ? item?.name ?? _rewardItemName : '',
+      requiredPoints:
+          int.tryParse(_requiredPoints.text.trim()) ?? PointsRewardModel.defaultRequiredPoints,
+      rewardItemId: isItem ? item?.id ?? '' : '',
+      rewardItemName: itemName,
       discountText: _rewardType == PointsRewardType.discount ? _discountText.text : '',
-      imageUrl: _imageUrl,
+      // Bild für Nicht-Item-Typen nur halten, wenn es nicht aus einem Item kam.
+      imageUrl: (!isItem && _imageFromItem) ? '' : _imageUrl,
       status: status,
       isActive: status == PointsStatus.active,
       isArchived: status == PointsStatus.archived,
@@ -253,14 +312,24 @@ class _PointRewardEditViewState extends State<_PointRewardEditView> {
     MerchantPointsProvider provider,
     PointsRewardModel existing,
   ) async {
+    if (_busy) return;
     final texts = context.read<LanguageService>();
     if (!_validate(context, provider)) return;
-    final id = await provider.saveReward(_rewardFromForm(provider, existing));
-    if (!context.mounted || id == null) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(texts.text('merchant.points.saved'))),
-    );
-    context.pushReplacement('/merchant/points/rewards/edit/$id');
+    setState(() => _busy = true);
+    try {
+      final draft = _rewardFromForm(provider, existing);
+      final id = await provider.saveReward(draft);
+      if (!context.mounted || id == null) return;
+      // Gespeicherten Datensatz mit id übernehmen, statt die Seite neu zu
+      // mounten – lokaler UI-State bleibt erhalten.
+      provider.adoptReward(draft.copyWith(id: id));
+      _hydratedId = id;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(texts.text('merchant.points.saved'))),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   Future<void> _publish(
@@ -268,32 +337,52 @@ class _PointRewardEditViewState extends State<_PointRewardEditView> {
     MerchantPointsProvider provider,
     PointsRewardModel existing,
   ) async {
+    if (_busy) return;
     if (!_validate(context, provider)) return;
-    final accepted = await _confirmPublish(context);
-    if (accepted != true || !context.mounted) return;
-    final id = await provider.publishReward(
-      _rewardFromForm(provider, existing, forcedStatus: PointsStatus.active),
-    );
-    if (!context.mounted || id == null) return;
-    context.go('/merchant/points');
+    setState(() => _busy = true);
+    try {
+      final accepted = await _confirmPublish(context);
+      if (accepted != true || !context.mounted) return;
+      final id = await provider.publishReward(
+        _rewardFromForm(provider, existing, forcedStatus: PointsStatus.active),
+      );
+      if (!context.mounted || id == null) return;
+      context.go('/merchant/points');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   bool _validate(BuildContext context, MerchantPointsProvider provider) {
     final texts = context.read<LanguageService>();
+    final points = int.tryParse(_requiredPoints.text.trim()) ?? 0;
     String? message;
     if (_title.text.trim().isEmpty) {
       message = texts.text('merchant.points.error.rewardTitle');
-    } else if ((int.tryParse(_requiredPoints.text.trim()) ?? 0) <= 0) {
+    } else if (_title.text.trim().length > AppLimits.pointsTitleMaxLength) {
+      message = texts.text('merchant.points.error.titleTooLong');
+    } else if (points <= 0) {
       message = texts.text('merchant.points.error.requiredPoints');
+    } else if (points > AppLimits.pointsRequiredPointsMax) {
+      message = texts.text('merchant.points.error.requiredPointsMax');
     } else if (_rewardType == PointsRewardType.item && _findItem(provider.items, _rewardItemId) == null) {
       message = texts.text('merchant.points.error.rewardItem');
     } else if (_rewardType == PointsRewardType.discount && _discountText.text.trim().isEmpty) {
       message = texts.text('merchant.points.error.discountText');
+    } else if (_rewardType == PointsRewardType.discount &&
+        _discountText.text.trim().length > AppLimits.pointsDiscountMaxLength) {
+      message = texts.text('merchant.points.error.discountTooLong');
+    } else if (_description.text.trim().length > AppLimits.pointsDescriptionMaxLength) {
+      message = texts.text('merchant.points.error.descriptionTooLong');
     }
     if (message == null) return true;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
     return false;
   }
+}
+
+void _setIfChanged(TextEditingController controller, String value) {
+  if (controller.text != value) controller.text = value;
 }
 
 List<PointsRewardModel> _scaleRewards(
@@ -329,12 +418,14 @@ class _RewardScaleMini extends StatelessWidget {
                   texts.text('merchant.points.rewardScale'),
                   style: const TextStyle(
                     color: MerchantPremiumColors.ink,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
               Tooltip(
                 message: texts.text('merchant.points.rewardScaleTip'),
+                triggerMode: TooltipTriggerMode.tap,
+                showDuration: const Duration(seconds: 8),
                 child: const Icon(Icons.info_outline_rounded,
                     size: 18, color: MerchantPremiumColors.muted),
               ),
@@ -347,10 +438,10 @@ class _RewardScaleMini extends StatelessWidget {
               children: rewards
                   .map(
                     (reward) => Padding(
-                      padding: const EdgeInsets.only(right: 8),
+                      padding: const EdgeInsets.only(right: AppSpacing.sm),
                       child: Container(
                         width: 126,
-                        padding: const EdgeInsets.all(10),
+                        padding: const EdgeInsets.all(AppSpacing.sm + 2),
                         decoration: BoxDecoration(
                           color: MerchantPremiumColors.surfaceAlt,
                           borderRadius: BorderRadius.circular(20),
@@ -360,7 +451,7 @@ class _RewardScaleMini extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             PointsRewardPreview(reward: reward),
-                            const SizedBox(height: 8),
+                            const SizedBox(height: AppSpacing.sm),
                             Text(
                               reward.title.trim().isEmpty
                                   ? texts.text('merchant.points.rewardUntitled')
@@ -369,10 +460,10 @@ class _RewardScaleMini extends StatelessWidget {
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
                                 color: MerchantPremiumColors.ink,
-                                fontWeight: FontWeight.w900,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
-                            const SizedBox(height: 2),
+                            const SizedBox(height: AppSpacing.xs / 2),
                             Text(
                               '${reward.requiredPoints} ${texts.text('merchant.points.points')}',
                               maxLines: 1,
@@ -380,7 +471,7 @@ class _RewardScaleMini extends StatelessWidget {
                               style: const TextStyle(
                                 color: MerchantPremiumColors.muted,
                                 fontSize: 12,
-                                fontWeight: FontWeight.w800,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                           ],
@@ -425,15 +516,15 @@ class _PreviewShell extends StatelessWidget {
                   style: const TextStyle(
                     color: MerchantPremiumColors.ink,
                     fontSize: 20,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: AppSpacing.xs + 2),
                 Text(
                   '${reward.requiredPoints} ${texts.text('merchant.points.points')}',
                   style: const TextStyle(
                     color: MerchantPremiumColors.muted,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ],
@@ -466,8 +557,8 @@ class _ChipWrap extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Wrap(
-      spacing: 8,
-      runSpacing: 8,
+      spacing: AppSpacing.sm,
+      runSpacing: AppSpacing.sm,
       children: options
           .map(
             (option) => ChoiceChip(
@@ -480,7 +571,7 @@ class _ChipWrap extends StatelessWidget {
                 color: selected == option.value
                     ? MerchantPremiumColors.base
                     : MerchantPremiumColors.ink,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w700,
               ),
               side: BorderSide(
                 color: selected == option.value
@@ -500,17 +591,21 @@ class _ItemDropdown extends StatelessWidget {
     required this.items,
     required this.value,
     required this.onChanged,
+    required this.onCreateItem,
   });
 
   final String label;
   final List<MerchantItemData> items;
   final String value;
   final ValueChanged<MerchantItemData?> onChanged;
+  final VoidCallback onCreateItem;
 
   @override
   Widget build(BuildContext context) {
     final texts = context.watch<LanguageService>();
     if (items.isEmpty) {
+      // Leere Item-Liste: keine wählbare Eingabe – stattdessen Hinweis + CTA
+      // zur Artikel-Anlage, statt den Nutzer in einer toten Auswahl zu lassen.
       return Container(
         padding: const EdgeInsets.all(AppSpacing.md),
         decoration: BoxDecoration(
@@ -518,12 +613,23 @@ class _ItemDropdown extends StatelessWidget {
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: MerchantPremiumColors.line),
         ),
-        child: Text(
-          texts.text('merchant.points.noItems'),
-          style: const TextStyle(
-            color: MerchantPremiumColors.muted,
-            fontWeight: FontWeight.w700,
-          ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              texts.text('merchant.points.noItems'),
+              style: const TextStyle(
+                color: MerchantPremiumColors.muted,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            MerchantSecondaryButton(
+              label: texts.text('merchant.points.noItemsCreate'),
+              icon: Icons.add_rounded,
+              onPressed: onCreateItem,
+            ),
+          ],
         ),
       );
     }
@@ -536,13 +642,13 @@ class _ItemDropdown extends StatelessWidget {
         texts.text('merchant.points.selectItem'),
         style: const TextStyle(
           color: MerchantPremiumColors.muted,
-          fontWeight: FontWeight.w700,
+          fontWeight: FontWeight.w600,
         ),
       ),
       dropdownColor: MerchantPremiumColors.surfaceAlt,
       style: const TextStyle(
         color: MerchantPremiumColors.ink,
-        fontWeight: FontWeight.w800,
+        fontWeight: FontWeight.w700,
       ),
       iconEnabledColor: MerchantPremiumColors.muted,
       decoration: merchantPremiumInputDecoration(label: label),
@@ -564,54 +670,13 @@ class _ItemDropdown extends StatelessWidget {
 
 Future<bool?> _confirmPublish(BuildContext context) {
   final texts = context.read<LanguageService>();
-  return showModalBottomSheet<bool>(
+  return showMerchantConfirmSheet(
     context: context,
-    showDragHandle: true,
-    backgroundColor: MerchantPremiumColors.surface,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-    ),
-    builder: (sheetContext) => SafeArea(
-      top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              texts.text('merchant.points.activateRewardTitle'),
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: MerchantPremiumColors.ink,
-                fontSize: 24,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              'Nach der Bestätigung wird die Belohnung für deine Kunden sichtbar.',
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: MerchantPremiumColors.muted,
-                fontWeight: FontWeight.w700,
-                height: 1.35,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            MerchantPrimaryButton(
-              label: texts.text('merchant.points.activate'),
-              icon: Icons.rocket_launch_rounded,
-              onPressed: () => Navigator.of(sheetContext).pop(true),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(sheetContext).pop(false),
-              child: Text(texts.text('common.cancel')),
-            ),
-          ],
-        ),
-      ),
-    ),
+    title: texts.text('merchant.points.activateRewardTitle'),
+    message: texts.text('merchant.points.activateRewardMessage'),
+    confirmLabel: texts.text('merchant.points.activate'),
+    cancelLabel: texts.text('common.cancel'),
+    confirmIcon: Icons.rocket_launch_rounded,
   );
 }
 

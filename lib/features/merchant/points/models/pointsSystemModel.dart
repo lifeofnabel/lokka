@@ -185,6 +185,11 @@ class PointsSystemModel {
 }
 
 class PointsRewardModel {
+  /// Standard-Pflichtpunkte für neue Belohnungen. Zentral referenziert, damit
+  /// die Auto-Vorschlags-Heuristik im Editor nicht über einen Magic-String
+  /// '100' bricht, falls sich der Default ändert.
+  static const int defaultRequiredPoints = 100;
+
   const PointsRewardModel({
     required this.id,
     required this.merchantId,
@@ -239,7 +244,7 @@ class PointsRewardModel {
       title: '',
       description: '',
       rewardType: PointsRewardType.custom,
-      requiredPoints: 100,
+      requiredPoints: defaultRequiredPoints,
       rewardItemId: '',
       rewardItemName: '',
       discountText: '',
@@ -257,7 +262,7 @@ class PointsRewardModel {
       title: (map['title'] ?? '').toString(),
       description: (map['description'] ?? '').toString(),
       rewardType: (map['rewardType'] ?? PointsRewardType.custom).toString(),
-      requiredPoints: _readInt(map['requiredPoints'], fallback: 100),
+      requiredPoints: _readInt(map['requiredPoints'], fallback: defaultRequiredPoints),
       rewardItemId: (map['rewardItemId'] ?? '').toString(),
       rewardItemName: (map['rewardItemName'] ?? '').toString(),
       discountText: (map['discountText'] ?? '').toString(),

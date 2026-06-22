@@ -62,6 +62,27 @@ class MerchantPointsProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Übernimmt den gerade gespeicherten Datensatz (inkl. neuer id) als
+  /// aktuellen Edit-Stand, damit die Edit-Seite NICHT per pushReplacement neu
+  /// gemountet werden muss (kein Verlust des lokalen UI-State, kein Re-Mount).
+  void adoptSystem(PointsSystemModel system) {
+    editingSystem = system;
+    systems = [
+      system,
+      ...systems.where((existing) => existing.id != system.id),
+    ];
+    notifyListeners();
+  }
+
+  void adoptReward(PointsRewardModel reward) {
+    editingReward = reward;
+    rewards = [
+      reward,
+      ...rewards.where((existing) => existing.id != reward.id),
+    ];
+    notifyListeners();
+  }
+
   Future<String?> uploadRewardImage() async {
     try {
       isSaving = true;
