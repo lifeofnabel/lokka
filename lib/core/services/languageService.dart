@@ -782,6 +782,7 @@ class LanguageService {
           'Diese Kategorie wird für Händler ausgeblendet.',
       'merchant.items.subtitle':
           'Hier pflegst du Produkte, Preise und Verfügbarkeit.',
+      'merchant.items.search': 'Artikel suchen...',
       'merchant.items.add': 'Artikel hinzufügen',
       'merchant.items.edit': 'Artikel bearbeiten',
       'merchant.items.needCategory': 'Lege zuerst eine Kategorie an.',

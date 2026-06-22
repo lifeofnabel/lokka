@@ -5,6 +5,7 @@ import 'dart:html' as html;
 /// wie die übrigen Web-Plattformdateien des Projekts).
 
 bool _primed = false;
+double _volume = 0.5;
 
 /// Kurzer 880-Hz-Sinus-Beep (0,18 s, 8-bit/8 kHz Mono-WAV) als Data-URI –
 /// braucht kein Audio-Asset und wird über ein <audio>-Element abgespielt.
@@ -34,12 +35,14 @@ bool isPageHidden() {
   }
 }
 
+void setVolume(double v) => _volume = v.clamp(0.0, 1.0);
+
 void playTone() {
   // <audio>-Element mit eingebettetem Beep – kein WebAudio nötig (in neueren
   // SDKs ist dart:web_audio entfernt).
   try {
     html.AudioElement(_beepDataUri)
-      ..volume = 0.5
+      ..volume = _volume
       ..play();
   } catch (_) {/* Audio gesperrt (noch keine Geste) – ignorieren */}
 }

@@ -55,8 +55,14 @@ class _MerchantOrdersViewState extends State<_MerchantOrdersView> {
   int _lastSignal = 0;
   Timer? _beepTimer;
 
+  // Sound-Einstellungen: 1=einmal, 2=zweimal, 3=dreimal; Lautstärke 1–3.
+  int _soundType = 1; // 1=Glocke, 2=Doppel, 3=Alarm
+  int _volumeLevel = 2; // 1=Leise, 2=Mittel, 3=Laut
+
   static const _muteKey = 'lokka_orders_muted';
   static const _ringLoopKey = 'lokka_orders_ringloop';
+  static const _soundTypeKey = 'lokka_orders_soundtype';
+  static const _volumeKey = 'lokka_orders_volume';
 
   @override
   void initState() {
@@ -67,17 +73,37 @@ class _MerchantOrdersViewState extends State<_MerchantOrdersView> {
   Future<void> _loadAlertPrefs() async {
     final muted = await LocalCacheStorage.read(_muteKey);
     final loop = await LocalCacheStorage.read(_ringLoopKey);
+    final soundType = await LocalCacheStorage.read(_soundTypeKey);
+    final volume = await LocalCacheStorage.read(_volumeKey);
     if (!mounted) return;
     setState(() {
       _muted = muted == '1';
       _ringLoop = loop == null ? true : loop == '1';
+      _soundType = int.tryParse(soundType ?? '1') ?? 1;
+      _volumeLevel = int.tryParse(volume ?? '2') ?? 2;
     });
+    _applyVolume();
+  }
+
+  void _applyVolume() {
+    const volumes = [0.2, 0.5, 1.0];
+    OrderAlert.setVolume(volumes[(_volumeLevel - 1).clamp(0, 2)]);
   }
 
   @override
   void dispose() {
     _beepTimer?.cancel();
     super.dispose();
+  }
+
+  void _playSound() {
+    OrderAlert.playTone();
+    if (_soundType >= 2) {
+      Future.delayed(const Duration(milliseconds: 180), OrderAlert.playTone);
+    }
+    if (_soundType >= 3) {
+      Future.delayed(const Duration(milliseconds: 360), OrderAlert.playTone);
+    }
   }
 
   void _triggerAlert() {
@@ -90,16 +116,16 @@ class _MerchantOrdersViewState extends State<_MerchantOrdersView> {
         texts.text('merchant.orders.alertBody'),
       );
     }
-    OrderAlert.playTone();
+    _playSound();
     setState(() => _alerting = true);
     _beepTimer?.cancel();
     if (_ringLoop) {
-      _beepTimer = Timer.periodic(const Duration(milliseconds: 700), (_) {
+      _beepTimer = Timer.periodic(const Duration(milliseconds: 900), (_) {
         if (_muted || !mounted) {
           _acknowledge();
           return;
         }
-        OrderAlert.playTone();
+        _playSound();
       });
     } else {
       Timer(const Duration(seconds: 5), () {
@@ -233,6 +259,20 @@ class _MerchantOrdersViewState extends State<_MerchantOrdersView> {
               const SizedBox(height: AppSpacing.md),
             ],
             _ControlBox(provider: provider),
+            const SizedBox(height: AppSpacing.sm),
+            _SoundBar(
+              soundType: _soundType,
+              volumeLevel: _volumeLevel,
+              onSoundType: (v) {
+                setState(() => _soundType = v);
+                LocalCacheStorage.write(_soundTypeKey, v.toString());
+              },
+              onVolumeLevel: (v) {
+                setState(() => _volumeLevel = v);
+                LocalCacheStorage.write(_volumeKey, v.toString());
+                _applyVolume();
+              },
+            ),
             const SizedBox(height: AppSpacing.md),
             _ordersArea(context, provider, texts),
           ],
@@ -268,6 +308,7 @@ class _MerchantOrdersViewState extends State<_MerchantOrdersView> {
               padding: const EdgeInsets.only(bottom: 12),
               child: OrderCard(
                 order: order,
+                runnerName: provider.runnerNameOf(order.runnerId),
                 onTap: wide
                     ? () => setState(() => _selectedId = order.id)
                     : () => context.push('/merchant/orders/${order.id}'),
@@ -635,6 +676,132 @@ class _FilterChip extends StatelessWidget {
               fontSize: 12.5,
               fontWeight: FontWeight.w900,
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Minimale Sound-Einstellungsleiste: 3 Tonstile + 3 Lautstärken.
+class _SoundBar extends StatelessWidget {
+  const _SoundBar({
+    required this.soundType,
+    required this.volumeLevel,
+    required this.onSoundType,
+    required this.onVolumeLevel,
+  });
+
+  final int soundType;
+  final int volumeLevel;
+  final ValueChanged<int> onSoundType;
+  final ValueChanged<int> onVolumeLevel;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: MerchantPremiumColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: MerchantPremiumColors.glassBorder),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.music_note_rounded,
+              size: 16, color: MerchantPremiumColors.muted),
+          const SizedBox(width: 8),
+          _SoundChip(
+            icon: Icons.notifications_rounded,
+            selected: soundType == 1,
+            tooltip: 'Einmal',
+            onTap: () => onSoundType(1),
+          ),
+          const SizedBox(width: 6),
+          _SoundChip(
+            icon: Icons.notifications_active_rounded,
+            selected: soundType == 2,
+            tooltip: 'Zweimal',
+            onTap: () => onSoundType(2),
+          ),
+          const SizedBox(width: 6),
+          _SoundChip(
+            icon: Icons.graphic_eq_rounded,
+            selected: soundType == 3,
+            tooltip: 'Dreimal',
+            onTap: () => onSoundType(3),
+          ),
+          const Spacer(),
+          const Icon(Icons.volume_up_rounded,
+              size: 16, color: MerchantPremiumColors.muted),
+          const SizedBox(width: 8),
+          _SoundChip(
+            icon: Icons.volume_mute_rounded,
+            selected: volumeLevel == 1,
+            tooltip: 'Leise',
+            onTap: () => onVolumeLevel(1),
+          ),
+          const SizedBox(width: 6),
+          _SoundChip(
+            icon: Icons.volume_down_rounded,
+            selected: volumeLevel == 2,
+            tooltip: 'Mittel',
+            onTap: () => onVolumeLevel(2),
+          ),
+          const SizedBox(width: 6),
+          _SoundChip(
+            icon: Icons.volume_up_rounded,
+            selected: volumeLevel == 3,
+            tooltip: 'Laut',
+            onTap: () => onVolumeLevel(3),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SoundChip extends StatelessWidget {
+  const _SoundChip({
+    required this.icon,
+    required this.selected,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final bool selected;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          width: 32,
+          height: 32,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: selected
+                ? MerchantPremiumColors.goldSoft
+                : MerchantPremiumColors.surfaceAlt,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: selected
+                  ? MerchantPremiumColors.gold.withValues(alpha: 0.5)
+                  : MerchantPremiumColors.glassBorder,
+            ),
+          ),
+          child: Icon(
+            icon,
+            size: 16,
+            color: selected
+                ? MerchantPremiumColors.gold
+                : MerchantPremiumColors.muted,
           ),
         ),
       ),

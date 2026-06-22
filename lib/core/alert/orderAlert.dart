@@ -23,6 +23,9 @@ class OrderAlert {
   /// Ob die Seite/der Tab aktuell verborgen ist (Hintergrund). Mobile: false.
   static bool isPageHidden() => platform.isPageHidden();
 
+  /// Setzt die Lautstärke für Hinweistöne (0.0–1.0; Web only, No-Op auf nativ).
+  static void setVolume(double v) => platform.setVolume(v);
+
   /// Spielt einen kurzen Hinweiston.
   static void playTone() => platform.playTone();
 

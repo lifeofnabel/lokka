@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../../catalog/models/runnerData.dart';
 import '../models/orderModel.dart';
 import '../services/merchantOrdersService.dart';
 
@@ -17,6 +18,7 @@ class MerchantOrdersProvider extends ChangeNotifier {
   String tableAreaFilter = 'all'; // Bereich-Filter der Tisch-Einsicht ('' = ohne Bereich)
   String search = '';
   List<OrderModel> orders = [];
+  List<RunnerData> runners = [];
   OrderModel? selectedOrder;
 
   /// Zählt hoch, sobald eine NEUE Bestellung (Status „new") eintrifft – die UI
@@ -50,6 +52,14 @@ class MerchantOrdersProvider extends ChangeNotifier {
         order.placeLabel.toLowerCase().contains(query) ||
         order.tableLabel.toLowerCase().contains(query) ||
         order.itemsText.toLowerCase().contains(query);
+  }
+
+  String runnerNameOf(String id) {
+    if (id.isEmpty) return '';
+    for (final r in runners) {
+      if (r.id == id) return r.name;
+    }
+    return '';
   }
 
   int get newCount => orders.where((order) => order.status == 'new').length;
@@ -112,6 +122,10 @@ class MerchantOrdersProvider extends ChangeNotifier {
   }
 
   void watch({String? orderId}) {
+    service.loadRunners().then((list) {
+      runners = list;
+      notifyListeners();
+    }).catchError((_) {/* runner names are cosmetic, non-blocking */});
     try {
       isLoading = true;
       error = null;

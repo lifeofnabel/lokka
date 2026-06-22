@@ -58,23 +58,23 @@ class _OrderHeader extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
-        color: MerchantPremiumColors.ink,
-        gradient: const LinearGradient(
+        gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            MerchantPremiumColors.ink,
+            MerchantPremiumColors.surface,
             MerchantPremiumColors.baseElevated,
           ],
         ),
         borderRadius: BorderRadius.circular(32),
-        border: Border.all(color: MerchantPremiumColors.gold.withValues(alpha: 0.20)),
+        border: Border.all(color: MerchantPremiumColors.gold.withValues(alpha: 0.22)),
         boxShadow: MerchantPremiumShadows.card,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
                 child: Text(
@@ -84,19 +84,33 @@ class _OrderHeader extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    color: MerchantPremiumColors.surface,
+                    color: MerchantPremiumColors.ink,
                     fontSize: 28,
                     fontWeight: FontWeight.w900,
                     height: 1,
                   ),
                 ),
               ),
-              Text(
-                order.timeText,
-                style: const TextStyle(
-                  color: MerchantPremiumColors.mutedLight,
-                  fontWeight: FontWeight.w800,
-                ),
+              const SizedBox(width: 8),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    order.dateText,
+                    style: const TextStyle(
+                      color: MerchantPremiumColors.muted,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  Text(
+                    order.timeText,
+                    style: const TextStyle(
+                      color: MerchantPremiumColors.ink,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -129,13 +143,13 @@ class _OrderHeader extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Icon(Icons.sticky_note_2_outlined,
-                    size: 18, color: MerchantPremiumColors.goldSoft),
+                    size: 18, color: MerchantPremiumColors.gold),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     order.customerNote.trim(),
                     style: const TextStyle(
-                      color: MerchantPremiumColors.mutedLight,
+                      color: MerchantPremiumColors.muted,
                       fontWeight: FontWeight.w700,
                       height: 1.3,
                     ),
@@ -150,8 +164,8 @@ class _OrderHeader extends StatelessWidget {
               Expanded(
                 child: Text(
                   texts.text('merchant.orders.total'),
-                  style: TextStyle(
-                    color: MerchantPremiumColors.mutedLight,
+                  style: const TextStyle(
+                    color: MerchantPremiumColors.muted,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -159,7 +173,7 @@ class _OrderHeader extends StatelessWidget {
               Text(
                 _price(order.totalPrice, texts),
                 style: const TextStyle(
-                  color: MerchantPremiumColors.surface,
+                  color: MerchantPremiumColors.gold,
                   fontSize: 26,
                   fontWeight: FontWeight.w900,
                 ),
@@ -369,7 +383,7 @@ class _LightPill extends StatelessWidget {
       child: Text(
         label,
         style: const TextStyle(
-          color: MerchantPremiumColors.goldSoft,
+          color: MerchantPremiumColors.mint,
           fontSize: 12,
           fontWeight: FontWeight.w900,
         ),

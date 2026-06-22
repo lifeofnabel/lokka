@@ -26,10 +26,15 @@ class PublicShopPage extends StatelessWidget {
     super.key,
     required this.merchantId,
     this.tableId = '',
+    this.forceRunner = false,
   });
 
   final String merchantId;
   final String tableId;
+
+  /// Wenn true, wird der Runner-Modus immer aktiviert (für den Staff-Link
+  /// `/runner/:merchantId`, unabhängig von catalogConfig.modeRunner).
+  final bool forceRunner;
 
   @override
   Widget build(BuildContext context) {
@@ -39,15 +44,16 @@ class PublicShopPage extends StatelessWidget {
           firestoreService: context.read<FirestoreService>(),
         ),
       )..load(merchantId: merchantId, tableId: tableId),
-      child: _PublicShopView(merchantId: merchantId),
+      child: _PublicShopView(merchantId: merchantId, forceRunner: forceRunner),
     );
   }
 }
 
 class _PublicShopView extends StatefulWidget {
-  const _PublicShopView({required this.merchantId});
+  const _PublicShopView({required this.merchantId, this.forceRunner = false});
 
   final String merchantId;
+  final bool forceRunner;
 
   @override
   State<_PublicShopView> createState() => _PublicShopViewState();
@@ -212,6 +218,7 @@ class _PublicShopViewState extends State<_PublicShopView> {
         palette: palette,
       );
     } else {
+      final runnerMode = provider.catalogConfig.modeRunner || widget.forceRunner;
       content = Stack(
         children: [
           ListView(
@@ -233,11 +240,22 @@ class _PublicShopViewState extends State<_PublicShopView> {
                     ? PublicShopContactRail(merchant: provider.merchant!, palette: palette)
                     : null,
               ),
-              if (provider.catalogConfig.modeRunner) ...[
+              if (runnerMode) ...[
                 const SizedBox(height: AppSpacing.md),
                 _RunnerBar(
                   palette: palette,
                   onSwitch: () => _pickRunner(provider, palette),
+                  onMyOrders: provider.activeRunner != null
+                      ? () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => PublicMyOrdersPage(
+                                palette: palette,
+                                merchantId: widget.merchantId,
+                                runnerId: provider.activeRunner!.id,
+                              ),
+                            ),
+                          )
+                      : null,
                 ),
               ],
               if ((provider.merchant!['publicNotice'] ?? '').toString().trim().isNotEmpty) ...[
@@ -248,7 +266,7 @@ class _PublicShopViewState extends State<_PublicShopView> {
                 ),
               ],
               const SizedBox(height: AppSpacing.md),
-              if (provider.catalogConfig.modeRunner) ...[
+              if (runnerMode) ...[
                 _RunnerSearchBar(palette: palette),
                 const SizedBox(height: AppSpacing.md),
               ],
@@ -256,25 +274,7 @@ class _PublicShopViewState extends State<_PublicShopView> {
               const SizedBox(height: AppSpacing.md),
               _buildItems(provider, palette, texts),
               const SizedBox(height: AppSpacing.lg),
-              // Runner-Modus mit gewähltem Mitarbeiter: „Meine Bestellungen"
-              // statt Impressum.
-              if (provider.catalogConfig.modeRunner &&
-                  provider.activeRunner != null)
-                _MyOrdersCard(
-                  palette: palette,
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => PublicMyOrdersPage(
-                        palette: palette,
-                        merchantId: widget.merchantId,
-                        runnerId: provider.activeRunner!.id,
-                      ),
-                    ),
-                  ),
-                )
-              else
-                PublicShopFooter(
-                    merchant: provider.merchant!, palette: palette),
+              PublicShopFooter(merchant: provider.merchant!, palette: palette),
             ],
           ),
           if (provider.canOrder)
@@ -291,7 +291,7 @@ class _PublicShopViewState extends State<_PublicShopView> {
     }
 
     // Runner-Modus: beim ersten Anzeigen direkt fragen, wer reingeht.
-    if (provider.catalogConfig.modeRunner &&
+    if ((provider.catalogConfig.modeRunner || widget.forceRunner) &&
         !provider.runnerChosen &&
         !_runnerPromptScheduled &&
         !provider.isLoading &&
@@ -388,11 +388,18 @@ class _PublicShopViewState extends State<_PublicShopView> {
 
 /// Runner-Modus: zeigt, wer gerade bedient (Runner oder „Zuschauer"), und
 /// erlaubt direktes Wechseln per Auswahl-Sheet – ohne PIN/Login.
+/// Wenn [onMyOrders] gesetzt ist (Runner aktiv), erscheint ein direkter
+/// „Meine Bestellungen"-Link innerhalb der Karte.
 class _RunnerBar extends StatelessWidget {
-  const _RunnerBar({required this.palette, required this.onSwitch});
+  const _RunnerBar({
+    required this.palette,
+    required this.onSwitch,
+    this.onMyOrders,
+  });
 
   final PublicShopPalette palette;
   final VoidCallback onSwitch;
+  final VoidCallback? onMyOrders;
 
   @override
   Widget build(BuildContext context) {
@@ -407,49 +414,81 @@ class _RunnerBar extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: palette.accent.withValues(alpha: 0.3)),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Icon(
-            isViewer ? Icons.visibility_rounded : Icons.directions_run_rounded,
-            color: palette.accent,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  texts.text('public.shop.runnerActiveLabel'),
-                  style: TextStyle(
-                    color: palette.muted,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 11.5,
-                  ),
+          Row(
+            children: [
+              Icon(
+                isViewer ? Icons.visibility_rounded : Icons.directions_run_rounded,
+                color: palette.accent,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      texts.text('public.shop.runnerActiveLabel'),
+                      style: TextStyle(
+                        color: palette.muted,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 11.5,
+                      ),
+                    ),
+                    Text(
+                      isViewer
+                          ? texts.text('public.shop.runnerViewer')
+                          : runner.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: palette.ink,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ],
                 ),
-                Text(
-                  isViewer
-                      ? texts.text('public.shop.runnerViewer')
-                      : runner.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: palette.ink,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 15,
-                  ),
+              ),
+              TextButton.icon(
+                onPressed: onSwitch,
+                icon: Icon(Icons.swap_horiz_rounded, color: palette.accent, size: 18),
+                label: Text(
+                  texts.text('public.shop.runnerSwitch'),
+                  style: TextStyle(color: palette.accent, fontWeight: FontWeight.w900),
                 ),
-              ],
-            ),
+                style: TextButton.styleFrom(minimumSize: const Size(0, 44)),
+              ),
+            ],
           ),
-          TextButton.icon(
-            onPressed: onSwitch,
-            icon: Icon(Icons.swap_horiz_rounded, color: palette.accent, size: 18),
-            label: Text(
-              texts.text('public.shop.runnerSwitch'),
-              style: TextStyle(color: palette.accent, fontWeight: FontWeight.w900),
+          if (onMyOrders != null) ...[
+            Divider(color: palette.accent.withValues(alpha: 0.2), height: 16),
+            InkWell(
+              onTap: onMyOrders,
+              borderRadius: BorderRadius.circular(10),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Row(
+                  children: [
+                    Icon(Icons.receipt_long_rounded, color: palette.accent, size: 18),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        texts.text('public.shop.myOrders'),
+                        style: TextStyle(
+                          color: palette.ink,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                    Icon(Icons.chevron_right_rounded, color: palette.muted, size: 18),
+                  ],
+                ),
+              ),
             ),
-            style: TextButton.styleFrom(minimumSize: const Size(0, 44)),
-          ),
+          ],
         ],
       ),
     );
@@ -522,76 +561,6 @@ class _RunnerSearchBarState extends State<_RunnerSearchBar> {
   }
 }
 
-/// „Meine Bestellungen"-Karte am Fuß der Karte (statt Impressum) – nur im
-/// Runner-Modus, wenn ein Mitarbeiter gewählt ist.
-class _MyOrdersCard extends StatelessWidget {
-  const _MyOrdersCard({required this.palette, required this.onTap});
-
-  final PublicShopPalette palette;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final texts = context.watch<LanguageService>();
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: palette.card,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: palette.line),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 46,
-                height: 46,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: palette.accent.withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Icon(Icons.receipt_long_rounded, color: palette.accent),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      texts.text('public.shop.myOrders'),
-                      style: TextStyle(
-                        color: palette.ink,
-                        fontWeight: FontWeight.w900,
-                        fontSize: 16,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      texts.text('public.shop.myOrdersHint'),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: palette.muted,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 12.5,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Icon(Icons.chevron_right_rounded, color: palette.muted),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 class _PublicTopControls extends StatelessWidget {
   const _PublicTopControls({

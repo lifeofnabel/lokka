@@ -17,6 +17,7 @@ class OrderCard extends StatelessWidget {
     this.onAccept,
     this.onDone,
     this.onCancel,
+    this.runnerName = '',
   });
 
   final OrderModel order;
@@ -24,6 +25,7 @@ class OrderCard extends StatelessWidget {
   final VoidCallback? onAccept;
   final VoidCallback? onDone;
   final VoidCallback? onCancel;
+  final String runnerName;
 
   @override
   Widget build(BuildContext context) {
@@ -88,14 +90,29 @@ class OrderCard extends StatelessWidget {
               _StatusPill(label: _statusLabel(texts, order.status), color: statusColor),
             ],
           ),
-          if (order.isTableOrder) ...[
+          if (order.isTableOrder || runnerName.isNotEmpty) ...[
             const SizedBox(height: 10),
-            MerchantPremiumPill(
-              icon: Icons.table_restaurant_rounded,
-              label: order.tableDisplayLabel,
-              background: MerchantPremiumColors.goldSoft,
-              foreground: MerchantPremiumColors.mint,
-              borderColor: MerchantPremiumColors.gold.withValues(alpha: 0.22),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: [
+                if (order.isTableOrder)
+                  MerchantPremiumPill(
+                    icon: Icons.table_restaurant_rounded,
+                    label: order.tableDisplayLabel,
+                    background: MerchantPremiumColors.goldSoft,
+                    foreground: MerchantPremiumColors.mint,
+                    borderColor: MerchantPremiumColors.gold.withValues(alpha: 0.22),
+                  ),
+                if (runnerName.isNotEmpty)
+                  MerchantPremiumPill(
+                    icon: Icons.directions_run_rounded,
+                    label: runnerName,
+                    background: MerchantPremiumColors.surface,
+                    foreground: MerchantPremiumColors.muted,
+                    borderColor: MerchantPremiumColors.glassBorder,
+                  ),
+              ],
             ),
           ],
           const SizedBox(height: 11),

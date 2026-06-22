@@ -43,7 +43,6 @@ class MerchantCatalogPage extends StatelessWidget {
           _CatalogAction(
             icon: Icons.palette_rounded,
             title: texts.text('merchant.catalog.design'),
-            subtitle: texts.text('merchant.catalog.designSubtitle'),
             tooltip: texts.text('merchant.catalog.designTip'),
             onTap: () => context.push('/merchant/catalog/design'),
           ),
@@ -51,35 +50,30 @@ class MerchantCatalogPage extends StatelessWidget {
           _CatalogAction(
             icon: Icons.inventory_2_rounded,
             title: texts.text('merchant.catalog.items'),
-            subtitle: texts.text('merchant.catalog.itemsSubtitle'),
             tooltip: texts.text('merchant.catalog.itemsTip'),
             onTap: () => context.push('/merchant/tools/items'),
           ),
           _CatalogAction(
             icon: Icons.category_rounded,
             title: texts.text('merchant.catalog.categories'),
-            subtitle: texts.text('merchant.catalog.categoriesSubtitle'),
             tooltip: texts.text('merchant.catalog.categoriesTip'),
             onTap: () => context.push('/merchant/tools/categories'),
           ),
           _CatalogAction(
             icon: Icons.fact_check_rounded,
             title: texts.text('merchant.itemTags.title'),
-            subtitle: texts.text('merchant.itemTags.subtitle'),
             tooltip: texts.text('merchant.itemTags.tooltip'),
             onTap: () => context.push('/merchant/tools/itemTags'),
           ),
           _CatalogAction(
             icon: Icons.table_bar_rounded,
             title: texts.text('merchant.catalog.tables'),
-            subtitle: texts.text('merchant.catalog.tablesSubtitle'),
             tooltip: texts.text('merchant.catalog.tablesTip'),
             onTap: () => context.push('/merchant/tools/tables'),
           ),
           _CatalogAction(
             icon: Icons.receipt_long_rounded,
             title: texts.text('merchant.catalog.orders'),
-            subtitle: texts.text('merchant.orders.subtitle'),
             tooltip: texts.text('merchant.catalog.ordersTip'),
             onTap: () => context.push('/merchant/orders'),
           ),
@@ -132,7 +126,6 @@ class _ModeTileState extends State<_ModeTile> {
       return _CatalogAction(
         icon: Icons.directions_run_rounded,
         title: texts.text('merchant.catalog.runners'),
-        subtitle: texts.text('merchant.catalog.runnersSubtitle'),
         tooltip: texts.text('merchant.catalog.runnersTip'),
         onTap: () => context.push('/merchant/catalog/runners'),
       );
@@ -140,7 +133,6 @@ class _ModeTileState extends State<_ModeTile> {
     return _CatalogAction(
       icon: Icons.qr_code_2_rounded,
       title: texts.text('merchant.catalog.qrCodes'),
-      subtitle: texts.text('merchant.catalog.qrCodesSubtitle'),
       tooltip: texts.text('merchant.catalog.qrCodesTip'),
       onTap: () => context.push('/merchant/catalog/qr'),
     );
@@ -278,14 +270,12 @@ class _CatalogAction extends StatelessWidget {
   const _CatalogAction({
     required this.icon,
     required this.title,
-    required this.subtitle,
     required this.tooltip,
     required this.onTap,
   });
 
   final IconData icon;
   final String title;
-  final String subtitle;
   final String tooltip;
   final VoidCallback onTap;
 
@@ -311,28 +301,13 @@ class _CatalogAction extends StatelessWidget {
               ),
               const SizedBox(width: AppSpacing.md),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        color: MerchantPremiumColors.ink,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: MerchantPremiumColors.muted,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    color: MerchantPremiumColors.ink,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
               ),
               Tooltip(

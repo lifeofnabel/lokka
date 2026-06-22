@@ -133,15 +133,24 @@ class MerchantItemsProvider extends ChangeNotifier {
 
   bool isLoading = true;
   bool isSaving = false;
+  double? uploadProgress;
   String? error;
   String selectedCategoryId = 'all';
+  String _search = '';
   List<ItemCategoryData> categories = [];
   List<MerchantItemData> items = [];
   List<ItemTagData> itemTags = [];
 
   List<MerchantItemData> get visibleItems {
-    if (selectedCategoryId == 'all') return items;
-    return items.where((item) => item.categoryId == selectedCategoryId).toList();
+    final q = _search.trim().toLowerCase();
+    return items.where((item) {
+      final matchesCat =
+          selectedCategoryId == 'all' || item.categoryId == selectedCategoryId;
+      if (!matchesCat) return false;
+      if (q.isEmpty) return true;
+      return item.name.toLowerCase().contains(q) ||
+          item.articleNumber.toLowerCase().contains(q);
+    }).toList();
   }
 
   Future<void> load() async {
@@ -165,6 +174,11 @@ class MerchantItemsProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setSearch(String query) {
+    _search = query;
+    notifyListeners();
+  }
+
   Future<String?> uploadImage({bool wide = false}) async {
     try {
       isSaving = true;
@@ -177,6 +191,36 @@ class MerchantItemsProvider extends ChangeNotifier {
       error = e.toString();
       return null;
     } finally {
+      isSaving = false;
+      notifyListeners();
+    }
+  }
+
+  Future<String?> uploadCroppedImage({
+    required Uint8List bytes,
+    required String fileName,
+    required UploadImageType type,
+  }) async {
+    try {
+      uploadProgress = 0;
+      isSaving = true;
+      error = null;
+      notifyListeners();
+      final media = await uploadService.uploadOptimizedImageBytes(
+        bytes: bytes,
+        fileName: fileName,
+        type: type,
+        onProgress: (p) {
+          uploadProgress = p;
+          notifyListeners();
+        },
+      );
+      return media.secureUrl.isNotEmpty ? media.secureUrl : media.url;
+    } catch (e) {
+      error = e.toString();
+      return null;
+    } finally {
+      uploadProgress = null;
       isSaving = false;
       notifyListeners();
     }

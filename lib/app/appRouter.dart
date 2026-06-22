@@ -316,6 +316,13 @@ class AppRouter {
         ),
       ),
       GoRoute(
+        path: '/runner/:merchantId',
+        builder: (context, state) => PublicShopPage(
+          merchantId: state.pathParameters['merchantId'] ?? '',
+          forceRunner: true,
+        ),
+      ),
+      GoRoute(
         path: '/merchant/dashboard',
         name: merchantDashboard,
         builder: (context, state) => _merchantDark(const MerchantDashboardPage()),

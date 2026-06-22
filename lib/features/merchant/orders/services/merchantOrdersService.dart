@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../../core/constants/firebasePaths.dart';
 import '../../../../core/services/authService.dart';
 import '../../../../core/services/firestoreService.dart';
+import '../../catalog/models/runnerData.dart';
 import '../models/orderModel.dart';
 
 class MerchantOrdersService {
@@ -25,6 +26,13 @@ class MerchantOrdersService {
     final uid = authService.currentUser?.uid;
     if (uid == null) throw StateError('auth.error.signInAgain');
     return uid;
+  }
+
+  Future<List<RunnerData>> loadRunners() async {
+    final data = await firestoreService.readDocument(
+      FirebasePaths.publicMerchant(merchantId),
+    );
+    return RunnerData.listFromRaw(data?['runners']);
   }
 
   Future<List<OrderModel>> loadOrders() async {

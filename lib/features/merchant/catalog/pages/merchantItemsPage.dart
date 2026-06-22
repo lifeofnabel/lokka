@@ -8,6 +8,7 @@ import '../../../../core/services/firestoreService.dart';
 import '../../../../core/services/languageService.dart';
 import '../../../../core/services/uploadService.dart';
 import '../../../../core/theme/appSpacing.dart';
+import '../../feedManager/widgets/squareImageCropSheet.dart';
 import '../../shared/widgets/merchantPremiumUi.dart';
 import '../../tools/providers/merchantToolsProvider.dart';
 import '../../tools/services/merchantToolsService.dart';
@@ -31,8 +32,21 @@ class MerchantItemsPage extends StatelessWidget {
   }
 }
 
-class _MerchantItemsView extends StatelessWidget {
+class _MerchantItemsView extends StatefulWidget {
   const _MerchantItemsView();
+
+  @override
+  State<_MerchantItemsView> createState() => _MerchantItemsViewState();
+}
+
+class _MerchantItemsViewState extends State<_MerchantItemsView> {
+  final _searchController = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -61,6 +75,8 @@ class _MerchantItemsView extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.sm),
           _SeedButton(provider: provider),
+          const SizedBox(height: AppSpacing.sm),
+          _ItemSearchBar(controller: _searchController, provider: provider),
           const SizedBox(height: AppSpacing.md),
           if (provider.isLoading)
             const MerchantLoadingCards()
@@ -85,6 +101,61 @@ class _MerchantItemsView extends StatelessWidget {
               ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+class _ItemSearchBar extends StatelessWidget {
+  const _ItemSearchBar({
+    required this.controller,
+    required this.provider,
+  });
+
+  final TextEditingController controller;
+  final MerchantItemsProvider provider;
+
+  @override
+  Widget build(BuildContext context) {
+    final texts = context.watch<LanguageService>();
+    return TextField(
+      controller: controller,
+      onChanged: (value) => provider.setSearch(value),
+      style: const TextStyle(
+        color: MerchantPremiumColors.ink,
+        fontWeight: FontWeight.w700,
+      ),
+      decoration: InputDecoration(
+        hintText: texts.text('merchant.items.search'),
+        hintStyle: const TextStyle(
+          color: MerchantPremiumColors.muted,
+          fontWeight: FontWeight.w600,
+        ),
+        prefixIcon: const Icon(Icons.search_rounded, color: MerchantPremiumColors.muted),
+        suffixIcon: controller.text.isEmpty
+            ? null
+            : IconButton(
+                icon: const Icon(Icons.close_rounded, color: MerchantPremiumColors.muted),
+                onPressed: () {
+                  controller.clear();
+                  provider.setSearch('');
+                },
+              ),
+        filled: true,
+        fillColor: MerchantPremiumColors.surface,
+        contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: MerchantPremiumColors.glassBorder),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: MerchantPremiumColors.glassBorder),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: MerchantPremiumColors.gold, width: 1.4),
+        ),
       ),
     );
   }
@@ -181,7 +252,11 @@ class _ItemCard extends StatelessWidget {
                 clipBehavior: Clip.antiAlias,
                 child: item.imageUrl.isEmpty
                     ? const Icon(Icons.restaurant_menu_rounded, size: 30)
-                    : CachedNetworkImage(imageUrl: item.imageUrl, fit: BoxFit.cover),
+                    : CachedNetworkImage(
+                        imageUrl: item.imageUrl,
+                        fit: BoxFit.cover,
+                        errorWidget: (_, _, _) => const Icon(Icons.restaurant_menu_rounded, size: 30),
+                      ),
               ),
               const SizedBox(width: AppSpacing.md),
               Expanded(
@@ -908,13 +983,47 @@ Future<void> _openItemSheet(BuildContext context, {MerchantItemData? item}) asyn
                   showSelectedIcon: false,
                 ),
                 const SizedBox(height: AppSpacing.sm),
-                OutlinedButton.icon(
-                  onPressed: () async {
-                    final uploaded = await provider.uploadImage(wide: imageRatio == 'wide');
-                    if (uploaded != null && uploaded.isNotEmpty) setState(() => imageUrl = uploaded);
-                  },
-                  icon: const Icon(Icons.image_rounded),
-                  label: Text(imageUrl.isEmpty ? texts.text('common.uploadImage') : texts.text('common.replaceImage')),
+                Consumer<MerchantItemsProvider>(
+                  builder: (context, prov, _) => Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      OutlinedButton.icon(
+                        onPressed: prov.isSaving
+                            ? null
+                            : () async {
+                                final picked = await prov.uploadService.pickImageWithFilePicker();
+                                if (picked == null || !context.mounted) return;
+                                final double ratio = imageRatio == 'wide' ? 16 / 9 : 1.0;
+                                final Uint8List? cropped = await showSquareImageCropSheet(
+                                  context: context,
+                                  imageBytes: picked.bytes,
+                                  aspectRatio: ratio,
+                                );
+                                if (cropped == null || !context.mounted) return;
+                                final uploaded = await prov.uploadCroppedImage(
+                                  bytes: cropped,
+                                  fileName: picked.fileName,
+                                  type: imageRatio == 'wide' ? UploadImageType.itemWide : UploadImageType.item,
+                                );
+                                if (uploaded != null && uploaded.isNotEmpty) {
+                                  setState(() => imageUrl = uploaded);
+                                }
+                              },
+                        icon: const Icon(Icons.image_rounded),
+                        label: Text(imageUrl.isEmpty ? texts.text('common.uploadImage') : texts.text('common.replaceImage')),
+                      ),
+                      if (prov.isSaving) ...[
+                        const SizedBox(height: 6),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: LinearProgressIndicator(
+                            value: prov.uploadProgress,
+                            minHeight: 3,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
                 SwitchListTile(value: isActive, onChanged: (value) => setState(() => isActive = value), title: Text(texts.text('common.active'))),
                 SwitchListTile(value: isAvailable, onChanged: (value) => setState(() => isAvailable = value), title: Text(texts.text('common.available'))),
@@ -1006,7 +1115,13 @@ class _PreviewCard extends StatelessWidget {
               border: Border.all(color: MerchantPremiumColors.line),
             ),
             clipBehavior: Clip.antiAlias,
-            child: imageUrl.isEmpty ? const Icon(Icons.image_rounded) : CachedNetworkImage(imageUrl: imageUrl, fit: BoxFit.cover),
+            child: imageUrl.isEmpty
+                ? const Icon(Icons.image_rounded)
+                : CachedNetworkImage(
+                    imageUrl: imageUrl,
+                    fit: BoxFit.cover,
+                    errorWidget: (_, _, _) => const Icon(Icons.image_rounded),
+                  ),
           ),
           const SizedBox(width: AppSpacing.md),
           Expanded(

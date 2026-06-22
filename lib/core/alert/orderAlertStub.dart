@@ -12,6 +12,8 @@ void ensurePermission() {}
 
 bool isPageHidden() => false;
 
+void setVolume(double v) {} // No-op auf nativen Plattformen
+
 void playTone() {
   // Plattformeigener Alarmton – graceful, falls die Plattform ihn nicht kennt.
   SystemSound.play(SystemSoundType.alert);
