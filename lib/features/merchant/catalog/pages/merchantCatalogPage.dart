@@ -25,6 +25,7 @@ class MerchantCatalogPage extends StatelessWidget {
     return MerchantToolScaffold(
       title: texts.text('merchant.catalog.title'),
       subtitle: texts.text('merchant.catalog.subtitle'),
+      backPath: '/merchant/dashboard',
       trailing: MerchantInfoTooltip(message: texts.text('merchant.catalog.tooltip')),
       child: Column(
         children: [

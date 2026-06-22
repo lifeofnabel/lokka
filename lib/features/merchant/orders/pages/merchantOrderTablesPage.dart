@@ -486,14 +486,14 @@ class _TableSummary extends StatelessWidget {
               label: texts.text('merchant.orders.title'),
             ),
           ),
-          _DividerLine(),
+          const _DividerLine(),
           Expanded(
             child: _SummaryValue(
               value: openCount.toString(),
               label: texts.text('merchant.orders.open'),
             ),
           ),
-          _DividerLine(),
+          const _DividerLine(),
           Expanded(
             child: _SummaryValue(
               value: _euro(total, texts),

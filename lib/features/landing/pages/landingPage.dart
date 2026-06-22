@@ -493,13 +493,13 @@ class _StoreSheet extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          _HowToRow(
+          const _HowToRow(
             icon: Icons.ios_share_rounded,
             title: 'iPhone (Safari)',
             body: 'Teilen-Symbol antippen → „Zum Home-Bildschirm".',
           ),
           const SizedBox(height: 10),
-          _HowToRow(
+          const _HowToRow(
             icon: Icons.more_vert_rounded,
             title: 'Android (Chrome)',
             body: 'Menü ⋮ → „Zum Startbildschirm hinzufügen".',

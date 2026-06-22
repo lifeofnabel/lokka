@@ -54,12 +54,7 @@ class MerchantMenuSettingsProvider extends ChangeNotifier {
 
   void setLayout(MenuLayoutStyle layout) {
     if (style.layout == layout) return;
-    // Galerie wirkt im 2-Spalten-Karten-Look am besten – als sinnvolle
-    // Vorgabe mitsetzen (Merchant kann die Spalten weiterhin umstellen).
-    style = style.copyWith(
-      layout: layout,
-      columns: layout == MenuLayoutStyle.gallery ? 2 : style.columns,
-    );
+    style = style.copyWith(layout: layout);
     notifyListeners();
   }
 

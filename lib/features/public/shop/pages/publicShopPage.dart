@@ -1,8 +1,8 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../core/services/firestoreService.dart';
+import '../../../../core/widgets/appImage.dart';
 import '../../../../core/services/languageService.dart';
 import '../../../../core/services/translatorService.dart';
 import '../../../../core/theme/appRadius.dart';
@@ -71,6 +71,23 @@ class _PublicShopViewState extends State<_PublicShopView> {
   /// Verhindert, dass die „Wer geht rein?"-Abfrage (Runner-Modus) mehrfach
   /// geplant wird.
   bool _runnerPromptScheduled = false;
+
+  /// Artikel werden in 6er-Schritten gerendert, damit die Seite schnell
+  /// aufbaut. Beim Runterscrollen lädt automatisch der nächste Block nach.
+  static const int _pageSize = 6;
+  int _visibleCount = _pageSize;
+  String _lastFilterKey = '';
+
+  bool _onScroll(ScrollNotification notification, int total) {
+    if (notification.metrics.pixels >=
+            notification.metrics.maxScrollExtent - 400 &&
+        _visibleCount < total) {
+      setState(() {
+        _visibleCount = (_visibleCount + _pageSize).clamp(0, total);
+      });
+    }
+    return false;
+  }
 
   /// Übersetzt [text] in die gewählte Sprache (gecacht). Gibt das Original
   /// zurück, solange die Übersetzung lädt oder 'original' aktiv ist.
@@ -219,9 +236,18 @@ class _PublicShopViewState extends State<_PublicShopView> {
       );
     } else {
       final runnerMode = provider.catalogConfig.modeRunner || widget.forceRunner;
+      // Bei Kategorie-/Suchwechsel wieder bei den ersten 6 anfangen.
+      final filterKey = '${provider.selectedCategoryId}|${provider.itemSearch}';
+      if (filterKey != _lastFilterKey) {
+        _lastFilterKey = filterKey;
+        _visibleCount = _pageSize;
+      }
       content = Stack(
         children: [
-          ListView(
+          NotificationListener<ScrollNotification>(
+            onNotification: (notification) =>
+                _onScroll(notification, provider.visibleItems.length),
+            child: ListView(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 128),
             children: [
               _PublicTopControls(
@@ -277,6 +303,7 @@ class _PublicShopViewState extends State<_PublicShopView> {
               PublicShopFooter(merchant: provider.merchant!, palette: palette),
             ],
           ),
+          ),
           if (provider.canOrder)
             Align(
               alignment: Alignment.bottomCenter,
@@ -323,14 +350,17 @@ class _PublicShopViewState extends State<_PublicShopView> {
     PublicShopPalette palette,
     LanguageService texts,
   ) {
-    final items = provider.visibleItems;
-    if (items.isEmpty) {
+    final allItems = provider.visibleItems;
+    if (allItems.isEmpty) {
       return _PublicEmpty(
         title: texts.text('public.shop.emptyTitle'),
         message: texts.text('public.shop.emptyMessage'),
         palette: palette,
       );
     }
+    // Nur die ersten _visibleCount Artikel rendern (Lazy-Aufbau in 6er-Schritten).
+    final items = allItems.take(_visibleCount).toList();
+    final hasMore = _visibleCount < allItems.length;
     final layout = provider.design.layout;
     final cols = provider.design.safeColumns;
 
@@ -371,6 +401,7 @@ class _PublicShopViewState extends State<_PublicShopView> {
           ),
         ));
       }
+      if (hasMore) rows.add(_loadMoreIndicator(palette));
       return Column(children: rows);
     }
 
@@ -381,9 +412,21 @@ class _PublicShopViewState extends State<_PublicShopView> {
             padding: const EdgeInsets.only(bottom: 12),
             child: card(item, false),
           ),
+        if (hasMore) _loadMoreIndicator(palette),
       ],
     );
   }
+
+  Widget _loadMoreIndicator(PublicShopPalette palette) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        child: Center(
+          child: SizedBox(
+            width: 22,
+            height: 22,
+            child: CircularProgressIndicator(strokeWidth: 2, color: palette.accent),
+          ),
+        ),
+      );
 }
 
 /// Runner-Modus: zeigt, wer gerade bedient (Runner oder „Zuschauer"), und
@@ -879,7 +922,11 @@ void _openItemSheet(
                               ),
                               child: item.imageUrl.isEmpty
                                   ? Icon(Icons.restaurant_menu_rounded, color: palette.muted, size: 42)
-                                  : CachedNetworkImage(imageUrl: item.imageUrl, fit: BoxFit.cover),
+                                  : AppImage(
+                                      imageUrl: item.imageUrl,
+                                      memCacheWidth: 600,
+                                      errorWidget: Icon(Icons.restaurant_menu_rounded, color: palette.muted, size: 42),
+                                    ),
                             ),
                           ),
                           const SizedBox(height: AppSpacing.md),

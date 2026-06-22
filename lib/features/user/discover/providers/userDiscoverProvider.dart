@@ -25,7 +25,7 @@ class UserDiscoverProvider extends ChangeNotifier {
   List<DiscoverFeedItem> _visibleItems = [];
   UserLocation _location = UserDiscoverService.westendplatz;
   bool _isLoading = true;
-  bool _isLoadingMore = false;
+  final bool _isLoadingMore = false;
   String? _error;
   String? _shopType;
   String _city = 'Frankfurt';

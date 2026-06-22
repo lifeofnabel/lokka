@@ -89,6 +89,7 @@ class StorageService {
     required Uint8List bytes,
     String contentType = 'image/jpeg',
     Map<String, String>? customMetadata,
+    void Function(double progress)? onProgress,
   }) async {
     final ref = _storage.ref(path);
     final metadata = SettableMetadata(
@@ -98,6 +99,13 @@ class StorageService {
     );
 
     final UploadTask task = ref.putData(bytes, metadata);
+    StreamSubscription<TaskSnapshot>? progressSub;
+    if (onProgress != null) {
+      progressSub = task.snapshotEvents.listen((snapshot) {
+        final total = snapshot.totalBytes;
+        if (total > 0) onProgress(snapshot.bytesTransferred / total);
+      });
+    }
     try {
       await task.timeout(_uploadTimeout);
       final url = await ref.getDownloadURL();
@@ -114,6 +122,8 @@ class StorageService {
       );
     } on FirebaseException catch (e) {
       throw StorageException(_friendlyMessage(e), cause: e);
+    } finally {
+      await progressSub?.cancel();
     }
   }
 

@@ -258,11 +258,11 @@ class _TableSelectButton extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(999),
         onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+        child: const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 11),
           child: Row(
             mainAxisSize: MainAxisSize.min,
-            children: const [
+            children: [
               Icon(Icons.event_seat_rounded, color: Colors.white, size: 18),
               SizedBox(width: 8),
               Text(
@@ -408,8 +408,6 @@ class _MenuItemTile extends StatelessWidget {
         return grid ? _imageTopCard(imageAspect: 16 / 9) : _imageLeftRow();
       case MenuLayoutStyle.compact:
         return _compactRow();
-      case MenuLayoutStyle.gallery:
-        return _imageTopCard(imageAspect: grid ? 1 : 4 / 3);
       case MenuLayoutStyle.magazine:
         return _heroCard(height: grid ? 150 : 200);
     }

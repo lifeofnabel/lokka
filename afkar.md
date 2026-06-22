@@ -163,3 +163,54 @@ i18n: bestehende `merchant.finance.*`-Keys (de/en/ar) wiederverwendet, 6 fehlend
 **Ergebnis:** `flutter analyze` = **0 Errors, 0 Warnings** (vorher 7 Errors). `flutter build` ist damit nicht mehr durch dieses Feature blockiert.
 
 **Hinweis zum `qimport`-Typo:** Der von dir gemeldete `qimport`-Fehler in `merchantOrderDetailPage.dart` existiert in diesem Worktree **nicht** (Datei ist sauber) — vermutlich eine unkommittierte Tipp-Panne in deinem Haupt-Checkout. Dort einfach das führende `q` in Zeile 1 entfernen.
+
+---
+
+# Menükarte — Release-Hardening (4 Modi)
+
+## Current Project State
+- **Goal:** Menükarte release-ready in allen 4 Modi (Runner, Tisch-QR, Kasse-zeigen, Nur-Karte), fehlerfrei, Multi-Tenant.
+- **Tech Stack:** Flutter Web + Firebase (Firestore/Auth/Storage). **State-Management bleibt Provider/ChangeNotifier** (bewusste Entscheidung — KEIN Riverpod-Mix, kein Rewrite; das Feature war bereits durchgängig Provider, ein Mix hätte „Beiträge" gefährdet).
+- **Important Architecture:** Modi via `PublicCatalogConfig` (Flags, exklusiv durchgesetzt in `PublicShopService.loadCatalogConfig`). Bestellungen unter `merchants/{mid}/orders/{id}` (merchantId == Auth-UID → Multi-Tenant-Scoping). Vor-Kasse-Bestellung = `status:'qr_pending'` (verborgen) → wird per Code/QR-Scan auf `'new'` bestätigt (`confirmPendingByCode`).
+- **Important Files:** `publicShopProvider/Service.dart`, `publicCartPage.dart`, `merchantOrdersPage.dart` + `widgets/merchantScanOrderSheet.dart` (neu), `core/services/connectivityService.dart` (neu), `firestore.rules`.
+- **Current Bugs:** keine offenen aus dieser Runde (analyze 0 Errors, web build OK, 13 neue Tests grün).
+- **Open Decisions:** `orders` `list` ist weiterhin öffentlich lesbar (Datenschutz-Abwägung; später anonymes Auth). Scanner ist scan-on-demand (zuverlässiger im Web als Dauer-Kamera).
+- **Next Steps:** `firebase deploy --only firestore:rules`; Smoke-Test je Modus auf echtem Gerät; ggf. anonymes Auth für `orders.list`.
+
+## Work Log
+
+### 2026-06-22 — Claude (Opus 4.8)
+**Prompt Summary:** Pre-Release-Hardening Menükarte, alle 4 Modi fehlerfrei + Kamera/QR-Flow bauen + Edge-Cases + Rules + Tests.
+**Answer / Action Summary:**
+- **Audit:** Runner/Tisch/Nur-Karte bereits E2E-fertig; einzige echte Lücke = Kamera-Scan für „Kasse-zeigen" (`mobile_scanner` im pubspec, nirgends verdrahtet; „Coming Soon"-Stub).
+- **Riverpod NICHT migriert** (Begründung oben) — stattdessen bestehende Provider-Flows gehärtet.
+- **Scanner gebaut:** `merchantScanOrderSheet.dart` (Live-Kamera via `mobile_scanner` 7.2.0 + Rahmen-Overlay + Blitz, Debounce gegen Doppel-Scan, **Manuelle-Code-Eingabe als Fallback**, Permission-/Kein-Gerät-/Unlesbar-Handling via `errorBuilder`). Verdrahtet in Orders-Toolbar (`_ScanAction`) und Dashboard-`ScannerCard` (`comingSoon` entfernt). Scan/Manuell → `confirmPendingByCode`.
+- **Idempotenz (#1 Doppelbestellung):** `PublicShopService.newOrderId` + deterministischer `orderCodeFor(id)`; Provider hält `_pendingOrderId` (Wiederverwendung bei Retry) + **Recovery-Read** (`existingOrderCode`) — verhindert Duplikate auch bei Timeout-nach-Write. UI-Doppel-Tap-Guard (`_submitting`) im Cart.
+- **Offline (#2):** `ConnectivityService` (connectivity_plus) — `placeOrder` blockt offline mit klarem Hinweis (`public.shop.offlineError`) statt hängendem Write; Idempotenz-ID bleibt → kein Duplikat bei spätem Retry.
+- **Leerer Korb (#4):** war bereits geguarded (bestätigt + getestet).
+- **Ungültiger QR (#3):** Scanner ignoriert Unlesbares, „nicht gefunden" sauber gemeldet; nie Crash/Fake-Order.
+- **Rules gehärtet:** `validNewOrder(mid)` — Gast darf nur valide Eingangs-Bestellung anlegen (richtiger merchantId, status∈{new,qr_pending}, kein `paid`, totalPrice≥0); Update/Delete bleibt Merchant.
+- **i18n:** `merchant.scan.*` + `public.shop.offlineError` in de/en/ar.
+- **Tests:** `test/menu_modes_test.dart` (Modus-Gating + Code-Stabilität) + `test/order_idempotency_test.dart` (leerer Korb/offline/Retry-selbe-ID/Recovery) — 13/13 grün.
+**Files Changed:** + `connectivityService.dart`, + `merchantScanOrderSheet.dart`, + 2 Tests; ~ `publicShopProvider.dart`, `publicShopService.dart`, `publicCartPage.dart`, `merchantOrdersPage.dart`, `merchantDashboardPage.dart`, `firestore.rules`, `assets/i18n/{de,en,ar}.json`.
+**Important Decision:** Provider behalten (kein Riverpod), Scanner scan-on-demand, Idempotenz über stabile Doc-ID + Recovery-Read (rules-konform, da Gast-Retry sonst an der Update-Regel scheitert).
+**Verification:** `flutter analyze lib test` = 0 Errors/Warnings (nur 56 vorbestehende `unnecessary_underscores`-Infos in fremden Dateien); `flutter build web` = √; 13/13 Tests grün.
+**Next Useful Step:** `firebase deploy --only firestore:rules` + Geräte-Smoke-Test je Modus.
+
+---
+
+# Merchant Re-Skin (Deep-Green) + Web-Perf
+
+## Work Log
+
+### 2026-06-22 — Claude (Opus 4.8)
+**Prompt Summary:** Optimieren (Web-Perf) + Merchant-Redesign (bold, dunkleres Grün aus User-Bereich). Entscheidung des Users: dark-only (KEIN Light/Dark-Toggle), Optimierung = Web-Perf-Fokus.
+**Answer / Action Summary:**
+- **Theme-Entscheidung:** Light/Dark-Toggle bewusst NICHT gebaut — `MerchantPremiumColors.*` wird ~1100× als `static const` referenziert (46 Dateien); ein echter Runtime-Toggle hieße ~1100 const-Stellen auf ThemeExtension migrieren = großer Refactor + Regressionsrisiko für die 4 Modi. Stattdessen elegant: nur Token-WERTE in EINER Datei geändert → ganze Merchant-Area re-skint, null Call-Site-Churn, null const-Bruch.
+- **Re-Skin (Deep-Green):** `merchantPremiumUi.dart` (`MerchantPremiumColors`) + synchron `appTheme.dart` (`merchantDark`). Aus User-Grün abgeleitet (AppColors.green #1FA97E / mintStrong #45C9A4), aber tiefer/dunkler: accent #55D8B0→#2FB389, base #24272D→#181E1A (grün-getönt), surface #313640→#222B26, line→#3A463F, ink #F2F6F3, muted #A9B5AD (AA). Schatten braun→grün-schwarz (#050B08). Token-Namen unverändert.
+- **Web-Perf:** `prefer_const_*`-Lints in analysis_options aktiviert + `dart fix --apply` (17 const-Fixes/11 Dateien — Codebase war schon const-stark). `memCacheWidth` an 4 Scroll-Listen-Bildern (publicShopItemCard 400, publicShopPage 600, merchantItems 240, cart 200) → kleinere Bitmaps. **Leak gefixt:** `merchantTablesPage` Area-/Tisch-Sheet erzeugte 4 `TextEditingController` ohne dispose → deferred dispose (400 ms, wie items-page). shopSettings-„Leak" war Fehlalarm (Loop-dispose).
+- **Bundle:** main.dart.js 5.157.451 → 5.156.807 B (flach; war schon icon-tree-shaked + const-stark). Echte Wins = Bild-Decode-Caps + Leak, nicht Bundle.
+**Files Changed:** ~ `merchantPremiumUi.dart`, `appTheme.dart`, `analysis_options.yaml`, `merchantTablesPage.dart`, `publicShopItemCard.dart`, `publicShopPage.dart`, `merchantItemsPage.dart`, `publicCartPage.dart` + 11 Dateien via `dart fix`.
+**Important Decision:** Re-Skin über Token-Werte (kein Toggle). Light/Dark als sauberer Folge-PR (ThemeExtension), wenn gewünscht.
+**Verification:** `flutter analyze lib test` = 0 Errors/0 Warnings (54 vorbestehende `unnecessary_underscores`-Infos). 13/13 eigene Tests grün; `test/widget_test.dart` (Default-Scaffold) schlägt VORBESTEHEND fehl (`[core/no-app]` — pumpt App() ohne Firebase.initializeApp, nicht von mir verursacht). `flutter build web --release` = √.
+**Next Useful Step:** Optional Light/Dark-Toggle via ThemeExtension (großer Refactor); `widget_test.dart` ersetzen/entfernen (kaputtes Default-Scaffold).

@@ -47,7 +47,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
       icon: Icons.lock_reset_rounded,
       children: [
         AuthErrorBox(message: _localError ?? provider.error),
-        if (provider.message != null) AuthWarningBox(messageKey: 'auth.reset.sent'),
+        if (provider.message != null) const AuthWarningBox(messageKey: 'auth.reset.sent'),
         AuthTextField(
           controller: _email,
           labelKey: 'auth.email',

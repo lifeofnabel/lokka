@@ -10,6 +10,7 @@ import '../../../../core/services/localCacheService.dart';
 import '../../../../core/services/uploadService.dart';
 import '../../../../core/theme/appRadius.dart';
 import '../../../../core/theme/appSpacing.dart';
+import '../../../../core/widgets/appImage.dart';
 import '../../shared/widgets/merchantPremiumUi.dart';
 import '../../shared/widgets/merchantUiComponents.dart';
 import '../../tools/widgets/merchantToolUi.dart';
@@ -1242,7 +1243,13 @@ class _CatalogPickerRow extends StatelessWidget {
                       color: MerchantPremiumColors.goldSoft,
                       child: Icon(Icons.restaurant_rounded, color: MerchantPremiumColors.ink),
                     )
-                  : CachedNetworkImage(imageUrl: item.imageUrl, fit: BoxFit.cover),
+                  : AppImage(
+                      imageUrl: item.imageUrl,
+                      errorWidget: const ColoredBox(
+                        color: MerchantPremiumColors.goldSoft,
+                        child: Icon(Icons.restaurant_rounded, color: MerchantPremiumColors.ink),
+                      ),
+                    ),
             ),
           ),
           const SizedBox(width: AppSpacing.sm),

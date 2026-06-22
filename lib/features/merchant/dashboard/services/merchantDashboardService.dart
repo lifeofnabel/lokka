@@ -35,6 +35,7 @@ class MerchantHeroFields {
     required this.shopName,
     required this.logoUrl,
     required this.coverUrl,
+    required this.coverFocusY,
     required this.typeLine,
     required this.city,
   });
@@ -42,6 +43,10 @@ class MerchantHeroFields {
   final String shopName;
   final String logoUrl;
   final String coverUrl;
+
+  /// Vertikaler Fokus des Cover-Bilds (0 = oben, 1 = unten, 0.5 = Mitte).
+  /// Erlaubt das Neu-Positionieren direkt im Dashboard.
+  final double coverFocusY;
   final String typeLine;
   final String city;
 
@@ -56,10 +61,13 @@ class MerchantHeroFields {
             .join(', ')
         : text('shopType');
 
+    final focusRaw = (merchant['coverFocusY'] as num?)?.toDouble() ?? 0.5;
+
     return MerchantHeroFields(
       shopName: text('shopName'),
       logoUrl: text('logoUrl'),
       coverUrl: text('coverUrl'),
+      coverFocusY: focusRaw.clamp(0.0, 1.0),
       typeLine: typeLine,
       // Geo-Migration: 'city' bevorzugen, 'area' nur als Legacy-Fallback (#239).
       city: text('city').isNotEmpty ? text('city') : text('area'),
@@ -196,6 +204,19 @@ class MerchantDashboardService {
         data['isActive'] == true ||
         status == 'active' ||
         status == 'enabled';
+  }
+
+  /// Speichert nur den Cover-Fokus (Y) im Merchant- und im publicMerchants-Doc,
+  /// damit die Neu-Positionierung aus dem Dashboard sofort wirkt.
+  Future<void> saveCoverFocus(String merchantId, double focusY) async {
+    if (merchantId.isEmpty) return;
+    final data = {'coverFocusY': focusY.clamp(0.0, 1.0)};
+    await firestoreService.updateDocument(FirebasePaths.merchant(merchantId), data);
+    try {
+      await firestoreService.updateDocument(FirebasePaths.publicMerchant(merchantId), data);
+    } catch (_) {
+      // publicMerchant existiert evtl. noch nicht – Merchant-Doc ist führend.
+    }
   }
 
   Future<void> signOut() => authService.signOut();

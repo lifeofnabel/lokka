@@ -70,6 +70,7 @@ class _MerchantPointsView extends StatelessWidget {
     return MerchantToolScaffold(
       title: texts.text('merchant.points.title'),
       subtitle: texts.text('merchant.points.subtitle'),
+      backPath: '/merchant/dashboard',
       trailing: MerchantInfoTooltip(
         message: texts.text('merchant.points.tooltip'),
       ),

@@ -12,19 +12,27 @@ import '../../tools/widgets/merchantToolUi.dart';
 Future<Uint8List?> showSquareImageCropSheet({
   required BuildContext context,
   required Uint8List imageBytes,
+  double aspectRatio = 1.0,
 }) {
   return showModalBottomSheet<Uint8List>(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (_) => _SquareImageCropSheet(imageBytes: imageBytes),
+    builder: (_) => _SquareImageCropSheet(
+      imageBytes: imageBytes,
+      aspectRatio: aspectRatio,
+    ),
   );
 }
 
 class _SquareImageCropSheet extends StatefulWidget {
-  const _SquareImageCropSheet({required this.imageBytes});
+  const _SquareImageCropSheet({
+    required this.imageBytes,
+    this.aspectRatio = 1.0,
+  });
 
   final Uint8List imageBytes;
+  final double aspectRatio;
 
   @override
   State<_SquareImageCropSheet> createState() => _SquareImageCropSheetState();
@@ -86,11 +94,28 @@ class _SquareImageCropSheetState extends State<_SquareImageCropSheet> {
             ClipRRect(
               borderRadius: BorderRadius.circular(26),
               child: AspectRatio(
-                aspectRatio: 1,
+                aspectRatio: widget.aspectRatio,
                 child: Crop(
                   image: widget.imageBytes,
                   controller: _controller,
-                  aspectRatio: 1,
+                  aspectRatio: widget.aspectRatio,
+                  // Zoom (Pinch / Mausrad) + Verschieben des Bildes hinter
+                  // einem festen Zuschnitt-Rahmen.
+                  interactive: true,
+                  fixCropRect: true,
+                  initialRectBuilder: InitialRectBuilder.withSizeAndRatio(
+                    size: 0.92,
+                    aspectRatio: widget.aspectRatio,
+                  ),
+                  baseColor: MerchantPremiumColors.base,
+                  maskColor: Colors.black.withValues(alpha: 0.55),
+                  progressIndicator: const Center(
+                    child: SizedBox(
+                      width: 26,
+                      height: 26,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
                   onCropped: (result) {
                     if (result is CropSuccess) {
                       Navigator.of(context).pop(result.croppedImage);

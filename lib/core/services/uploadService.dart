@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show compute, kIsWeb;
 import 'package:file_picker/file_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
@@ -116,6 +117,7 @@ class UploadService {
     required String fileName,
     required UploadImageType type,
     String? ownerId,
+    void Function(double progress)? onProgress,
   }) async {
     final uid = (ownerId?.isNotEmpty ?? false)
         ? ownerId!
@@ -126,7 +128,12 @@ class UploadService {
       );
     }
 
-    final prepared = _prepareImage(bytes: bytes, type: type);
+    // Bild-Aufbereitung (decode/resize/encode) ist CPU-schwer. Auf Mobile in
+    // einen Hintergrund-Isolate auslagern, damit die UI flüssig bleibt. Im Web
+    // gibt es keine Isolates → läuft dort inline.
+    final prepared = kIsWeb
+        ? _prepareImage(bytes: bytes, type: type)
+        : await compute(_prepareImageTask, _PrepareRequest(bytes, type));
     final folder = _folderFor(type, uid);
     final id = _uuid.v4();
 
@@ -139,6 +146,7 @@ class UploadService {
         'width': '${prepared.width}',
         'height': '${prepared.height}',
       },
+      onProgress: onProgress,
     );
 
     String? thumbUrl;
@@ -173,7 +181,7 @@ class UploadService {
     );
   }
 
-  _PreparedImage _prepareImage({
+  static _PreparedImage _prepareImage({
     required Uint8List bytes,
     required UploadImageType type,
   }) {
@@ -225,7 +233,7 @@ class UploadService {
     );
   }
 
-  Uint8List _encodeWithinLimit(img.Image source, _ImageSpec spec) {
+  static Uint8List _encodeWithinLimit(img.Image source, _ImageSpec spec) {
     var current = source;
     var quality = spec.quality;
 
@@ -252,9 +260,12 @@ class UploadService {
     return Uint8List.fromList(img.encodeJpg(current, quality: spec.minQuality));
   }
 
-  img.Image _centerCrop(img.Image source, int aspectWidth, int aspectHeight) {
+  static img.Image _centerCrop(img.Image source, int aspectWidth, int aspectHeight) {
     final targetRatio = aspectWidth / aspectHeight;
     final sourceRatio = source.width / source.height;
+    // Bereits passendes Seitenverhältnis (z. B. vorab quadratisch zugeschnitten)
+    // → keinen unnötigen Kopier-Crop machen.
+    if ((sourceRatio - targetRatio).abs() < 0.01) return source;
 
     int width = source.width;
     int height = source.height;
@@ -307,7 +318,7 @@ class UploadService {
     };
   }
 
-  _ImageSpec _specFor(UploadImageType type) {
+  static _ImageSpec _specFor(UploadImageType type) {
     return switch (type) {
       UploadImageType.userProfile => const _ImageSpec(
           width: 600,
@@ -443,6 +454,17 @@ class UploadService {
     };
   }
 }
+
+/// Eingabe für die Bild-Aufbereitung im Hintergrund-Isolate (via `compute`).
+class _PrepareRequest {
+  const _PrepareRequest(this.bytes, this.type);
+  final Uint8List bytes;
+  final UploadImageType type;
+}
+
+/// Isolate-Einstieg: ruft die (zustandslose) statische Aufbereitung auf.
+_PreparedImage _prepareImageTask(_PrepareRequest request) =>
+    UploadService._prepareImage(bytes: request.bytes, type: request.type);
 
 class _ImageSpec {
   const _ImageSpec({

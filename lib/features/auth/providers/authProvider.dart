@@ -290,7 +290,7 @@ class AuthProvider extends ChangeNotifier {
   Future<AuthDestination> roleGateDestination() async {
     final user = _authService.currentUser;
     if (user == null) {
-      throw AuthRedirectException(AuthDestination.chooseRole, '/auth/userLogin');
+      throw const AuthRedirectException(AuthDestination.chooseRole, '/auth/userLogin');
     }
     return _destinationForUser(user.uid);
   }

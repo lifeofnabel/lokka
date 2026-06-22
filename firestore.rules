@@ -35,6 +35,20 @@ service cloud.firestore {
       return incoming().diff(existing()).affectedKeys()
         .hasOnly(['likesCount', 'viewsCount', 'opensCount', 'clicksCount', 'updatedAt']);
     }
+    // Validierung einer NEUEN (öffentlich, ohne Login angelegten) Bestellung:
+    // verhindert, dass ein Gast eine manipulierte/„bezahlte"/erledigte oder einem
+    // fremden Merchant zugeordnete Bestellung einschleust (Edge-Case „ungültige
+    // Bestellung" + Write-Validierung). Status darf nur ein Eingangs-Status sein;
+    // bezahlt/archiviert/erledigt bleibt allein dem Merchant vorbehalten.
+    function validNewOrder(mid) {
+      return incoming().merchantId == mid
+        && incoming().status in ['new', 'qr_pending']
+        && incoming().totalPrice is number
+        && incoming().totalPrice >= 0
+        && incoming().items is list
+        && incoming().get('paid', false) == false
+        && incoming().get('isArchived', false) == false;
+    }
 
     // ---- Öffentliche Referenzdaten ----------------------------------------
     match /system/{doc=**}    { allow read: if true; allow write: if false; }
@@ -96,7 +110,11 @@ service cloud.firestore {
       // Datenschutz-Hinweis: list ist öffentlich – für ein leichtgewichtiges
       // Merchant-System vertretbar; später ggf. mit anonymem Auth härten.
       match /orders/{orderId} {
-        allow get, list, create: if true;
+        allow get, list: if true;
+        // Gast (ohne Login) darf eine NEUE Bestellung anlegen – aber nur eine
+        // valide (richtiger Merchant, Eingangs-Status, nicht „bezahlt"). Ändern/
+        // Löschen (Status, bezahlt, storniert …) bleibt beim Merchant.
+        allow create: if validNewOrder(mid);
         allow update, delete: if isMerchantOwner(mid);
       }
 

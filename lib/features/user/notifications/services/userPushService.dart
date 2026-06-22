@@ -55,7 +55,7 @@ class UserPushService {
   }
 
   Future<void> _refreshToken() async {
-    final vapid = AppConfig.fcmVapidKey;
+    const vapid = AppConfig.fcmVapidKey;
     final token =
         await _messaging.getToken(vapidKey: vapid.isEmpty ? null : vapid);
     if (token != null) await _saveToken(token);

@@ -12,6 +12,8 @@ import '../../../../core/theme/appSpacing.dart';
 import '../../../../core/widgets/appEmptyState.dart';
 import '../../../../core/widgets/appErrorState.dart';
 import '../../../../core/widgets/appLoadingState.dart';
+import '../../orders/services/merchantOrdersService.dart';
+import '../../orders/widgets/merchantScanOrderSheet.dart';
 import '../../shared/widgets/merchantPremiumUi.dart';
 import '../models/dashboardModules.dart';
 import '../providers/merchantDashboardProvider.dart';
@@ -118,11 +120,20 @@ class _MerchantDashboardView extends StatelessWidget {
                         onSettingsTap: () => context.push('/merchant/shop'),
                         onFeedTap: () => context.push('/merchant/feed/manage'),
                         onTodayTap: () => showTodaySheet(context, data),
+                        onSaveFocus: provider.saveCoverFocus,
                       ),
                       const SizedBox(height: AppSpacing.lg),
                       ScannerCard(
-                        comingSoon: true,
-                        onTap: () => showComingSoonSheet(context, title: texts.text('merchant.dashboard.scanner')),
+                        onTap: () {
+                          final ordersService = MerchantOrdersService(
+                            authService: context.read<AuthService>(),
+                            firestoreService: context.read<FirestoreService>(),
+                          );
+                          showOrderScanner(
+                            context,
+                            onConfirm: ordersService.confirmPendingByCode,
+                          );
+                        },
                       ),
                       if (data.ordersEnabled) ...[
                         const SizedBox(height: AppSpacing.md),

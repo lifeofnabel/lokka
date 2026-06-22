@@ -3,34 +3,34 @@ import 'package:flutter/material.dart';
 class MerchantPremiumColors {
   const MerchantPremiumColors._();
 
-  // ── Soft-Dark – neutral, dunkel, Grün als Akzent ─────────────────────────
-  // Token-Namen bleiben gleich (alle Merchant-Seiten erben automatisch).
-  // ACHTUNG: surface ist DUNKEL, ink ist HELL (Theme invertiert).
-  // Aufgehellt (weiches Anthrazit statt Fast-Schwarz) + helleres Grün für
-  // besseren Kontrast/Lesbarkeit – bleibt aber dunkler als der User-Bereich.
+  // ── Deep-Green Operator-Theme – dunkel, grün-getönt, kräftiger Akzent ─────
+  // Token-Namen bleiben gleich (alle Merchant-Seiten erben automatisch das
+  // neue Skin – KEINE Call-Site-Änderungen). ACHTUNG: surface ist DUNKEL, ink
+  // ist HELL. Aus dem User-Grün abgeleitet (AppColors.green #1FA97E /
+  // mintStrong #45C9A4), aber bewusst tiefer/dunkler = ernster Betriebs-Look.
   // WICHTIG: Werte mit `AppTheme.merchantDark` (appTheme.dart) synchron halten.
-  static const Color base = Color(0xFF24272D); // Hintergrund (helleres Anthrazit)
-  static const Color baseElevated = Color(0xFF2B2F36);
-  static const Color baseSoft = Color(0xFF343941);
-  static const Color surface = Color(0xFF313640); // Karten (klar abgesetzt)
-  static const Color surfaceAlt = Color(0xFF3C424C);
-  static const Color surfaceWarm = Color(0xFF454B56);
-  static const Color ink = Color(0xFFF6F8FA); // Primärtext (hoher Kontrast)
-  static const Color muted = Color(0xFFC2C9D1); // Sekundärtext (klar lesbar)
-  static const Color mutedLight = Color(0xFFDFE3E8);
-  static const Color line = Color(0xFF565C68); // Border/Divider (sichtbar)
-  static const Color gold = Color(0xFF55D8B0); // Akzent = Grün (heller)
-  static const Color goldSoft = Color(0xFF1D4A3D); // grüner Container
-  static const Color mint = Color(0xFF9CEFD4);
-  static const Color mintSoft = Color(0xFF1D4A3D);
-  static const Color coral = Color(0xFFFF9270);
-  static const Color coralSoft = Color(0xFF402720);
-  static const Color success = Color(0xFF63D996);
-  static const Color successSoft = Color(0xFF173D2F);
-  static const Color danger = Color(0xFFF58578);
-  static const Color dangerSoft = Color(0xFF40221E);
-  static const Color warning = Color(0xFFFBCB73);
-  static const Color warningSoft = Color(0xFF40331A);
+  static const Color base = Color(0xFF181E1A); // grün-getöntes Tief-Anthrazit
+  static const Color baseElevated = Color(0xFF1E2521);
+  static const Color baseSoft = Color(0xFF252E28);
+  static const Color surface = Color(0xFF222B26); // Karten (klar abgesetzt)
+  static const Color surfaceAlt = Color(0xFF2B352F);
+  static const Color surfaceWarm = Color(0xFF35413A);
+  static const Color ink = Color(0xFFF2F6F3); // Primärtext (AA, hoher Kontrast)
+  static const Color muted = Color(0xFFA9B5AD); // Sekundärtext (AA auf surface)
+  static const Color mutedLight = Color(0xFFD4DBD6);
+  static const Color line = Color(0xFF3A463F); // Border/Divider (sichtbar)
+  static const Color gold = Color(0xFF2FB389); // Akzent = tiefes Grün (kräftig)
+  static const Color goldSoft = Color(0xFF143A2C); // grüner Container
+  static const Color mint = Color(0xFF5FE0B8); // heller Grün-Highlight
+  static const Color mintSoft = Color(0xFF143A2C);
+  static const Color coral = Color(0xFFFF8C6A);
+  static const Color coralSoft = Color(0xFF38231B);
+  static const Color success = Color(0xFF45C98A);
+  static const Color successSoft = Color(0xFF123528);
+  static const Color danger = Color(0xFFEF7A6C);
+  static const Color dangerSoft = Color(0xFF381F1B);
+  static const Color warning = Color(0xFFF2C04E);
+  static const Color warningSoft = Color(0xFF382D15);
 
   // Transparenz / Glas (Google-Home-Feel auf dunklem Grund).
   static const Color glass = Color(0x14FFFFFF); // subtiler heller Overlay
@@ -42,7 +42,7 @@ class MerchantPremiumShadows {
 
   static List<BoxShadow> get card => [
         BoxShadow(
-          color: const Color(0xFF3B2415).withValues(alpha: 0.18),
+          color: const Color(0xFF050B08).withValues(alpha: 0.32),
           blurRadius: 32,
           offset: const Offset(0, 16),
         ),
@@ -50,7 +50,7 @@ class MerchantPremiumShadows {
 
   static List<BoxShadow> get soft => [
         BoxShadow(
-          color: const Color(0xFF3B2415).withValues(alpha: 0.08),
+          color: const Color(0xFF050B08).withValues(alpha: 0.16),
           blurRadius: 24,
           offset: const Offset(0, 12),
         ),

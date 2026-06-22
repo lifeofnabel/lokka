@@ -160,26 +160,21 @@ class _DesignCard extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.md),
 
-          // 2×2 Vorlagen mit Live-Mini-Vorschau.
+          // Vorlagen als volle Zeilen mit großer Live-Vorschau. Quelle ist
+          // MenuLayoutStyle.values – neue/entfernte Vorlagen erscheinen hier
+          // automatisch und werden 1:1 in der Kundensicht gerendert.
           const _SectionLabel('Vorlage'),
           const SizedBox(height: AppSpacing.sm),
-          GridView.count(
-            crossAxisCount: 2,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: 10,
-            crossAxisSpacing: 10,
-            childAspectRatio: 0.86,
-            children: [
-              for (final layout in MenuLayoutStyle.values)
-                _LayoutChoiceTile(
-                  layout: layout,
-                  style: style,
-                  selected: style.layout == layout,
-                  onTap: () => provider.setLayout(layout),
-                ),
-            ],
-          ),
+          for (final layout in MenuLayoutStyle.values) ...[
+            _LayoutChoiceRow(
+              layout: layout,
+              style: style,
+              selected: style.layout == layout,
+              onTap: () => provider.setLayout(layout),
+            ),
+            if (layout != MenuLayoutStyle.values.last)
+              const SizedBox(height: 10),
+          ],
           const SizedBox(height: AppSpacing.md),
 
           // Akzentfarbe.
@@ -249,9 +244,10 @@ class _SectionLabel extends StatelessWidget {
   }
 }
 
-/// Ein anklickbares Vorlagen-Kästchen mit Live-Mini-Vorschau und Label.
-class _LayoutChoiceTile extends StatelessWidget {
-  const _LayoutChoiceTile({
+/// Eine anklickbare Vorlagen-Zeile: große Live-Vorschau links, Name +
+/// Tagline + Beschreibung rechts. Ausgewählt = Akzent-Rahmen + gefüllter Haken.
+class _LayoutChoiceRow extends StatelessWidget {
+  const _LayoutChoiceRow({
     required this.layout,
     required this.style,
     required this.selected,
@@ -269,43 +265,90 @@ class _LayoutChoiceTile extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        padding: const EdgeInsets.all(8),
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
+        padding: const EdgeInsets.all(11),
         decoration: BoxDecoration(
-          color: MerchantPremiumColors.surfaceAlt,
-          borderRadius: BorderRadius.circular(18),
+          color: selected
+              ? accent.withValues(alpha: 0.06)
+              : MerchantPremiumColors.surfaceAlt,
+          borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: selected ? accent : MerchantPremiumColors.line,
             width: selected ? 2 : 1,
           ),
+          boxShadow: selected
+              ? [
+                  BoxShadow(
+                    color: accent.withValues(alpha: 0.18),
+                    blurRadius: 16,
+                    offset: const Offset(0, 6),
+                  ),
+                ]
+              : null,
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+        child: Row(
           children: [
-            Expanded(child: _MiniMenuPreview(layout: layout, style: style)),
-            const SizedBox(height: 7),
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    layout.label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+            // Größere Live-Vorschau (echtes Layout, echte Akzentfarbe).
+            SizedBox(
+              width: 92,
+              height: 92,
+              child: _MiniMenuPreview(layout: layout, style: style),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    layout.tagline.toUpperCase(),
                     style: TextStyle(
-                      color: selected ? accent : MerchantPremiumColors.ink,
-                      fontSize: 13,
+                      color: selected ? accent : MerchantPremiumColors.muted,
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.6,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    layout.label,
+                    style: const TextStyle(
+                      color: MerchantPremiumColors.ink,
+                      fontSize: 17,
                       fontWeight: FontWeight.w900,
                     ),
                   ),
+                  const SizedBox(height: 3),
+                  Text(
+                    layout.description,
+                    style: const TextStyle(
+                      color: MerchantPremiumColors.muted,
+                      fontSize: 12.5,
+                      height: 1.25,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              width: 26,
+              height: 26,
+              decoration: BoxDecoration(
+                color: selected ? accent : Colors.transparent,
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: selected ? accent : MerchantPremiumColors.line,
+                  width: 2,
                 ),
-                Icon(
-                  selected
-                      ? Icons.check_circle_rounded
-                      : Icons.circle_outlined,
-                  size: 17,
-                  color: selected ? accent : MerchantPremiumColors.muted,
-                ),
-              ],
+              ),
+              child: selected
+                  ? const Icon(Icons.check_rounded,
+                      color: Colors.white, size: 17)
+                  : null,
             ),
           ],
         ),
@@ -346,12 +389,6 @@ class _MiniMenuPreview extends StatelessWidget {
     switch (layout) {
       case MenuLayoutStyle.magazine:
         return _rows(rows: 1, cols: cols, build: () => _heroMini(accent));
-      case MenuLayoutStyle.gallery:
-        return _rows(
-          rows: cols == 2 ? 2 : 2,
-          cols: cols,
-          build: () => _galleryMini(card, line, accent),
-        );
       case MenuLayoutStyle.compact:
         return _rows(
           rows: cols == 2 ? 3 : 4,

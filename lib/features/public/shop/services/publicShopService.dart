@@ -126,8 +126,40 @@ class PublicShopService {
     return [...defaultItemTags(merchantId), ...customTags];
   }
 
+  /// Erzeugt eine frische Bestell-ID (clientseitig), bevor geschrieben wird.
+  /// Der Aufrufer (Provider) merkt sie sich pro Checkout-Versuch und reicht sie
+  /// erneut ein, falls der erste Versuch scheitert → Idempotenz (#1 Doppel-
+  /// Bestellung): derselbe Doc-Pfad wird nie zweimal als zwei Bestellungen
+  /// angelegt.
+  String newOrderId(String merchantId) =>
+      firestoreService.collection(FirebasePaths.merchantOrders(merchantId)).doc().id;
+
+  /// Stabiler, menschenlesbarer Bestellcode – deterministisch aus der ID
+  /// abgeleitet, damit ein Wiederholungsversuch denselben Code erzeugt (kein
+  /// Drift zwischen Original- und Retry-Schreibvorgang).
+  static String orderCodeFor(String orderId) {
+    final clean = orderId.replaceAll(RegExp('[^A-Za-z0-9]'), '');
+    final slug = (clean.isEmpty ? orderId : clean).toUpperCase();
+    return 'LK-${slug.length <= 6 ? slug : slug.substring(0, 6)}';
+  }
+
+  /// Liest den Code einer evtl. schon angelegten Bestellung – für die
+  /// Idempotenz-Wiederherstellung: Wenn der Client den ersten Write für
+  /// gescheitert hält (Timeout/Permission beim Retry auf ein bereits
+  /// existierendes Doc), prüft er per öffentlichem `get`, ob die Bestellung
+  /// in Wahrheit doch angelegt wurde, und behandelt sie dann als Erfolg.
+  Future<String?> existingOrderCode(String merchantId, String orderId) async {
+    if (orderId.isEmpty) return null;
+    final data = await firestoreService.readDocument(
+      FirebasePaths.merchantOrder(merchantId, orderId),
+    );
+    if (data == null) return null;
+    return (data['orderCode'] ?? '').toString();
+  }
+
   Future<({String id, String code})> createOrder({
     required String merchantId,
+    required String orderId,
     required List<Map<String, dynamic>> items,
     required num totalPrice,
     TableData? table,
@@ -138,11 +170,7 @@ class PublicShopService {
     String pickupTime = '',
     String fulfillment = 'sent',
   }) async {
-    final orderId = firestoreService
-        .collection(FirebasePaths.merchantOrders(merchantId))
-        .doc()
-        .id;
-    final orderCode = 'LK-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
+    final orderCode = orderCodeFor(orderId);
     await firestoreService.setDocument(
       FirebasePaths.merchantOrder(merchantId, orderId),
       {

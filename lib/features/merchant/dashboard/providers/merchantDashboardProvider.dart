@@ -33,5 +33,35 @@ class MerchantDashboardProvider extends ChangeNotifier {
     }
   }
 
+  /// Cover-Fokus aus dem Dashboard neu positionieren. Aktualisiert lokal sofort
+  /// (optimistisch) und persistiert in Firestore.
+  Future<void> saveCoverFocus(double focusY) async {
+    final current = _data;
+    if (current == null) return;
+    final clamped = focusY.clamp(0.0, 1.0);
+    final hero = current.hero;
+    final updatedHero = MerchantHeroFields(
+      shopName: hero.shopName,
+      logoUrl: hero.logoUrl,
+      coverUrl: hero.coverUrl,
+      coverFocusY: clamped,
+      typeLine: hero.typeLine,
+      city: hero.city,
+    );
+    _data = MerchantDashboardData(
+      merchant: {...current.merchant, 'coverFocusY': clamped},
+      hero: updatedHero,
+      metrics: current.metrics,
+      moduleActive: current.moduleActive,
+      ordersEnabled: current.ordersEnabled,
+    );
+    notifyListeners();
+    try {
+      await _service.saveCoverFocus(current.merchantId, clamped);
+    } catch (error, stack) {
+      debugPrint('MerchantDashboardProvider.saveCoverFocus failed: $error\n$stack');
+    }
+  }
+
   Future<void> signOut() => _service.signOut();
 }

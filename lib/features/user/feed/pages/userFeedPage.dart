@@ -199,8 +199,8 @@ class _SkeletonCard extends StatelessWidget {
         ),
         child: Column(
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
+            const Padding(
+              padding: EdgeInsets.fromLTRB(
                 AppSpacing.md,
                 AppSpacing.sm,
                 AppSpacing.md,
@@ -209,13 +209,13 @@ class _SkeletonCard extends StatelessWidget {
               child: Row(
                 children: [
                   _Bone(width: 36, height: 36, radius: 8),
-                  const SizedBox(width: AppSpacing.sm),
+                  SizedBox(width: AppSpacing.sm),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         _Bone(width: 120, height: 12),
-                        const SizedBox(height: 5),
+                        SizedBox(height: 5),
                         _Bone(width: 80, height: 10),
                       ],
                     ),
@@ -227,8 +227,8 @@ class _SkeletonCard extends StatelessWidget {
               aspectRatio: 1,
               child: Container(color: AppColors.gray100),
             ),
-            Padding(
-              padding: const EdgeInsets.all(AppSpacing.md),
+            const Padding(
+              padding: EdgeInsets.all(AppSpacing.md),
               child: Row(
                 children: [_Bone(width: 70, height: 18)],
               ),

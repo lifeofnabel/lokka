@@ -1,9 +1,9 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../../../core/services/languageService.dart';
+import '../../../../core/widgets/appImage.dart';
 import '../../../../core/theme/appSpacing.dart';
 import '../../../merchant/catalog/models/merchantItemData.dart';
 import '../providers/publicShopProvider.dart';
@@ -316,7 +316,13 @@ class _RecommendationCard extends StatelessWidget {
                     color: palette.soft,
                     child: Icon(Icons.restaurant_menu_rounded, color: palette.muted),
                   )
-                : CachedNetworkImage(imageUrl: item.imageUrl, fit: BoxFit.cover),
+                : AppImage(
+                    imageUrl: item.imageUrl,
+                    errorWidget: Container(
+                      color: palette.soft,
+                      child: Icon(Icons.restaurant_menu_rounded, color: palette.muted),
+                    ),
+                  ),
           ),
           Padding(
             padding: const EdgeInsets.all(9),

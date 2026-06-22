@@ -33,8 +33,13 @@ class LanguageService {
     }
   }
 
-  factory LanguageService.fallback() {
-    return const LanguageService._({
+  factory LanguageService.fallback() => const LanguageService._(_defaults);
+
+  /// Vollständiges Deutsch-Wörterbuch. Dient zweierlei: als Notfall, wenn keine
+  /// JSON-Datei geladen werden kann, UND als Fallback-Ebene in [text] – fehlt
+  /// ein Key in der aktiven Sprachdatei, greift hier Deutsch statt den rohen
+  /// Key anzuzeigen. So erscheinen nie wieder Schlüssel wie `merchant.items.search`.
+  static const Map<String, String> _defaults = {
       'app.name': 'Lokka',
       'landing.headline': 'Lokale Deals. Direkt in deiner Wallet.',
       'landing.subline':
@@ -1008,6 +1013,9 @@ class LanguageService {
       'merchant.shop.geoNotFound': 'Adresse nicht gefunden',
       'merchant.shop.geoHint': 'Das wird als Adresse + Koordinaten gespeichert.',
       'merchant.shop.maxCategories': 'Maximal 2 Kategorien',
+      'merchant.shop.optionMissing':
+          'Gewünschte Kategorie oder Herkunft nicht dabei? Melde dich einfach –',
+      'merchant.shop.optionMissingContact': 'Kontaktiere uns',
       'merchant.shop.save': 'Shopdaten speichern',
       'merchant.shop.images': 'Bilder',
       'merchant.shop.logoTitle': 'Logo bearbeiten',
@@ -1127,8 +1135,8 @@ class LanguageService {
       'feed.cta.unavailableTitle': 'Aktion',
       'feed.cta.unavailableMessage':
           'Diese Aktion ist vorbereitet, aber noch nicht vollständig verbunden.',
-    });
-  }
+  };
 
-  String text(String key) => _texts[key] ?? key;
+  /// Aktive Sprache zuerst, dann Deutsch-Fallback, erst zuletzt der rohe Key.
+  String text(String key) => _texts[key] ?? _defaults[key] ?? key;
 }

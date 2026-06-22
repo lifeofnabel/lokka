@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../../merchant/tables/models/merchantTableData.dart';
 import '../../../../core/services/languageService.dart';
 import '../../../../core/theme/appSpacing.dart';
+import '../../../../core/widgets/appImage.dart';
 import '../providers/publicShopProvider.dart';
 import '../widgets/publicShopTheme.dart';
 import 'publicOrderConfirmationPage.dart';
@@ -47,24 +48,36 @@ class _PublicCartPageState extends State<PublicCartPage> {
   String _price(num value, LanguageService texts) =>
       '${value.toStringAsFixed(2).replaceAll('.', ',')} ${texts.text('common.euro')}';
 
+  /// Lokaler Schutz gegen Doppel-Tap im selben Frame (zusätzlich zur
+  /// Idempotenz im Provider): während ein Absenden läuft, keinen zweiten
+  /// Versuch starten.
+  bool _submitting = false;
+
   Future<void> _order(String fulfillment) async {
-    final provider = context.read<PublicShopProvider>();
-    final ok = await provider.placeOrder(widget.merchantId, fulfillment: fulfillment);
-    if (!mounted) return;
-    if (ok) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (_) => ChangeNotifierProvider.value(
-            value: provider,
-            child: PublicOrderConfirmationPage(palette: _p),
+    if (_submitting) return;
+    _submitting = true;
+    try {
+      final provider = context.read<PublicShopProvider>();
+      final ok = await provider.placeOrder(widget.merchantId, fulfillment: fulfillment);
+      if (!mounted) return;
+      if (ok) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => ChangeNotifierProvider.value(
+              value: provider,
+              child: PublicOrderConfirmationPage(palette: _p),
+            ),
           ),
-        ),
-      );
-    } else {
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(
-            content: Text(context.read<LanguageService>().text('common.errorTitle'))));
+        );
+      } else {
+        final texts = context.read<LanguageService>();
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(
+              content: Text(texts.text(provider.saveErrorKey ?? 'common.errorTitle'))));
+      }
+    } finally {
+      _submitting = false;
     }
   }
 
@@ -726,7 +739,14 @@ class _CartItemRow extends StatelessWidget {
                         color: palette.soft,
                         child: Icon(Icons.restaurant_menu_rounded, color: palette.muted, size: 22),
                       )
-                    : CachedNetworkImage(imageUrl: imageUrl, fit: BoxFit.cover),
+                    : AppImage(
+                        imageUrl: imageUrl,
+                        memCacheWidth: 200,
+                        errorWidget: Container(
+                          color: palette.soft,
+                          child: Icon(Icons.restaurant_menu_rounded, color: palette.muted, size: 22),
+                        ),
+                      ),
               ),
             ),
             const SizedBox(width: 11),

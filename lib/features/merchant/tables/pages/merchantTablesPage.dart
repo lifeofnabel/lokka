@@ -119,7 +119,7 @@ class _AreaChips extends StatelessWidget {
               label: area.name,
               selected: provider.selectedAreaId == area.areaId,
               onTap: () => provider.selectArea(area.areaId),
-              onLongPress: () => _openAreaSheet(context, area: area),
+              onLongPress: () => _openAreaActions(context, area),
             ),
           ),
         ],
@@ -276,6 +276,80 @@ class _StatusPill extends StatelessWidget {
   }
 }
 
+/// Aktionen beim Gedrückthalten eines Bereichs: Bearbeiten oder Löschen.
+Future<void> _openAreaActions(BuildContext context, TableAreaData area) async {
+  final texts = context.read<LanguageService>();
+  await showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    backgroundColor: AppColors.background,
+    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(32))),
+    builder: (sheetContext) => SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(22, 0, 22, 8),
+            child: Text(area.name, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+          ),
+          ListTile(
+            leading: const Icon(Icons.edit_rounded),
+            title: Text(texts.text('merchant.tables.editArea')),
+            onTap: () {
+              Navigator.of(sheetContext).pop();
+              _openAreaSheet(context, area: area);
+            },
+          ),
+          ListTile(
+            leading: Icon(Icons.delete_outline_rounded, color: Colors.red.shade700),
+            title: Text(
+              texts.text('merchant.tables.deleteArea'),
+              style: TextStyle(color: Colors.red.shade700, fontWeight: FontWeight.w800),
+            ),
+            onTap: () {
+              Navigator.of(sheetContext).pop();
+              _confirmDeleteArea(context, area);
+            },
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+Future<void> _confirmDeleteArea(BuildContext context, TableAreaData area) async {
+  final provider = context.read<MerchantTablesProvider>();
+  final texts = context.read<LanguageService>();
+  final tableCount = provider.tables.where((table) => table.areaId == area.areaId).length;
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: Text(texts.text('merchant.tables.deleteArea')),
+      content: Text(
+        tableCount == 0
+            ? texts.text('merchant.tables.deleteAreaConfirm').replaceAll('{name}', area.name)
+            : texts
+                .text('merchant.tables.deleteAreaWithTables')
+                .replaceAll('{name}', area.name)
+                .replaceAll('{count}', tableCount.toString()),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(false),
+          child: Text(texts.text('common.cancel')),
+        ),
+        FilledButton(
+          style: FilledButton.styleFrom(backgroundColor: Colors.red.shade700),
+          onPressed: () => Navigator.of(dialogContext).pop(true),
+          child: Text(texts.text('common.delete')),
+        ),
+      ],
+    ),
+  );
+  if (confirmed != true) return;
+  await provider.deleteArea(area.areaId);
+}
+
 Future<void> _openAreaSheet(BuildContext context, {TableAreaData? area}) async {
   final provider = context.read<MerchantTablesProvider>();
   final texts = context.read<LanguageService>();
@@ -330,6 +404,12 @@ Future<void> _openAreaSheet(BuildContext context, {TableAreaData? area}) async {
       ),
     ),
   );
+  // Controller nach der Schließ-Animation freigeben (Memory-Leak vermeiden,
+  // ohne use-after-dispose während des Ausblendens).
+  Future.delayed(const Duration(milliseconds: 400), () {
+    name.dispose();
+    sortOrder.dispose();
+  });
 }
 
 Future<void> _openTableSheet(BuildContext context, {TableData? table}) async {
@@ -399,6 +479,12 @@ Future<void> _openTableSheet(BuildContext context, {TableData? table}) async {
       ),
     ),
   );
+  // Controller nach der Schließ-Animation freigeben (Memory-Leak vermeiden,
+  // ohne use-after-dispose während des Ausblendens).
+  Future.delayed(const Duration(milliseconds: 400), () {
+    label.dispose();
+    seats.dispose();
+  });
 }
 
 void _showQr(BuildContext context, TableData table) {

@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
-import '../../../../core/constants/firebasePaths.dart';
 import '../../../../core/services/authService.dart';
 import '../../../../core/services/firestoreService.dart';
 import '../../../../core/services/geoapifyService.dart';
@@ -221,7 +220,7 @@ class _ShopFormState extends State<_ShopForm> {
   void initState() {
     super.initState();
     for (final day in _days) {
-      openingHours[day.key] = [_HourSlot(open: '09:00', close: '18:00')];
+      openingHours[day.key] = [const _HourSlot(open: '09:00', close: '18:00')];
       closed[day.key] = false;
     }
     // Jede Texteingabe markiert das Formular als „geändert" (dirty) und löst
@@ -489,12 +488,8 @@ class _ShopFormState extends State<_ShopForm> {
               onToggle: _toggleShopType,
             ),
             const SizedBox(height: AppSpacing.sm),
-            // Eigene Kategorie tippen: wird ausgewählt UND im Hintergrund für
-            // alle dauerhaft gespeichert (chooser/shopTypes).
-            _InlineAddField(
-              hint: 'Eigene Kategorie hinzufügen',
-              onAdd: (value) => _addCustomShopType(provider, value),
-            ),
+            // Nur Auswahl aus dem Bestand – Wunsch fehlt? Hinweis zum Support.
+            const _MissingOptionHint(),
             const SizedBox(height: AppSpacing.lg),
             const Text('Herkunft', style: TextStyle(color: AppColors.gray500, fontWeight: FontWeight.w700)),
             const SizedBox(height: 4),
@@ -509,7 +504,7 @@ class _ShopFormState extends State<_ShopForm> {
             const SizedBox(height: AppSpacing.sm),
             if (_originChoices.isEmpty)
               const Text(
-                'Noch keine Herkunfts-Optionen – tippe einfach deine eigene ein.',
+                'Aktuell sind keine Herkunfts-Optionen verfügbar.',
                 style: TextStyle(
                   color: MerchantPremiumColors.muted,
                   fontWeight: FontWeight.w700,
@@ -522,11 +517,7 @@ class _ShopFormState extends State<_ShopForm> {
                 onToggle: _toggleOrigin,
               ),
             const SizedBox(height: AppSpacing.sm),
-            // Eigene Herkunft tippen: auswählen + dauerhaft speichern (origins).
-            _InlineAddField(
-              hint: 'Eigene Herkunft hinzufügen',
-              onAdd: (value) => _addCustomOrigin(value),
-            ),
+            const _MissingOptionHint(),
           ],
         ),
         _SectionCard(
@@ -788,50 +779,6 @@ class _ShopFormState extends State<_ShopForm> {
         ...selectedOrigins,
       }.toList();
 
-  /// Eigene Kategorie: lokal sofort auswählen (max. 2 beachten) und im
-  /// Hintergrund dauerhaft in chooser/shopTypes ablegen (fire-and-forget).
-  void _addCustomShopType(MerchantShopProvider provider, String raw) {
-    final value = raw.trim();
-    if (value.isEmpty) return;
-    final existing = _shopTypeChoices(provider).firstWhere(
-      (option) => option.toLowerCase() == value.toLowerCase(),
-      orElse: () => '',
-    );
-    final label = existing.isNotEmpty ? existing : value;
-    if (!selectedShopTypes.contains(label) && selectedShopTypes.length >= 2) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Max. 2 Kategorien – bitte zuerst eine abwählen.')),
-      );
-      return;
-    }
-    setState(() {
-      // Neue Option lokal in die Auswahlliste des Providers aufnehmen, damit
-      // der Chip sofort sichtbar ist (auch ohne Reload).
-      if (!provider.shopTypes.contains(label)) provider.shopTypes.add(label);
-      if (!selectedShopTypes.contains(label)) selectedShopTypes.add(label);
-    });
-    _markDirty();
-    // Hintergrund: für alle persistieren – Fehler werden bewusst geschluckt.
-    context.read<FirestoreService>().addChooserValue(FirebasePaths.shopTypes, label);
-  }
-
-  /// Eigene Herkunft: lokal auswählen + im Hintergrund in chooser/origins.
-  void _addCustomOrigin(String raw) {
-    final value = raw.trim();
-    if (value.isEmpty) return;
-    final existing = _originChoices.firstWhere(
-      (option) => option.toLowerCase() == value.toLowerCase(),
-      orElse: () => '',
-    );
-    final label = existing.isNotEmpty ? existing : value;
-    setState(() {
-      if (!originOptions.contains(label)) originOptions.add(label);
-      if (!selectedOrigins.contains(label)) selectedOrigins.add(label);
-    });
-    _markDirty();
-    context.read<FirestoreService>().addChooserValue(FirebasePaths.origins, label);
-  }
-
   /// Lädt ein Galerie-Foto hoch – jedes Shop-Bild wird vorher auf 1:1
   /// zugeschnitten (Square-Crop-Sheet). Das erste Foto wird automatisch
   /// zum Cover, falls noch keins gewählt ist.
@@ -998,7 +945,7 @@ class _ShopFormState extends State<_ShopForm> {
   Future<void> _openHoursSheet(BuildContext context, _Day day) async {
     final texts = context.read<LanguageService>();
     var isClosed = closed[day.key] ?? false;
-    final slots = List<_HourSlot>.from(openingHours[day.key] ?? [_HourSlot(open: '09:00', close: '18:00')]);
+    final slots = List<_HourSlot>.from(openingHours[day.key] ?? [const _HourSlot(open: '09:00', close: '18:00')]);
     final openControllers = slots.map((slot) => TextEditingController(text: slot.open)).toList();
     final closeControllers = slots.map((slot) => TextEditingController(text: slot.close)).toList();
 
@@ -1636,67 +1583,49 @@ class _CollapsibleChipsState extends State<_CollapsibleChips> {
   }
 }
 
-/// Schmales Inline-Feld „+ eigene": Wert tippen und mit Enter oder dem
-/// Plus-Button bestätigen. Leert sich nach dem Hinzufügen wieder.
-class _InlineAddField extends StatefulWidget {
-  const _InlineAddField({required this.hint, required this.onAdd});
-
-  final String hint;
-  final ValueChanged<String> onAdd;
-
-  @override
-  State<_InlineAddField> createState() => _InlineAddFieldState();
-}
-
-class _InlineAddFieldState extends State<_InlineAddField> {
-  final _controller = TextEditingController();
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _submit() {
-    final value = _controller.text.trim();
-    if (value.isEmpty) return;
-    widget.onAdd(value);
-    _controller.clear();
-    FocusScope.of(context).unfocus();
-  }
+/// Hinweis unter den Auswahl-Chips: Kategorien & Herkunft sind feste Optionen
+/// (nur Auswahl, kein freies Anlegen mehr). Fehlt ein Wunsch, führt
+/// „Kontaktiere uns" direkt in die Support-Seite.
+class _MissingOptionHint extends StatelessWidget {
+  const _MissingOptionHint();
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: TextField(
-            controller: _controller,
-            textInputAction: TextInputAction.done,
-            onSubmitted: (_) => _submit(),
-            style: const TextStyle(
-              color: MerchantPremiumColors.ink,
-              fontWeight: FontWeight.w700,
+    final texts = context.read<LanguageService>();
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => context.push('/merchant/tools/support'),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.info_outline_rounded,
+              size: 16, color: MerchantPremiumColors.muted),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text.rich(
+              TextSpan(
+                style: const TextStyle(
+                  color: MerchantPremiumColors.muted,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  height: 1.3,
+                ),
+                children: [
+                  TextSpan(text: '${texts.text('merchant.shop.optionMissing')} '),
+                  TextSpan(
+                    text: texts.text('merchant.shop.optionMissingContact'),
+                    style: const TextStyle(
+                      color: MerchantPremiumColors.gold,
+                      fontWeight: FontWeight.w900,
+                      decoration: TextDecoration.underline,
+                    ),
+                  ),
+                ],
+              ),
             ),
-            decoration: merchantPremiumInputDecoration(label: widget.hint),
           ),
-        ),
-        const SizedBox(width: AppSpacing.sm),
-        SizedBox(
-          height: 52,
-          width: 52,
-          child: FilledButton(
-            onPressed: _submit,
-            style: FilledButton.styleFrom(
-              backgroundColor: MerchantPremiumColors.gold,
-              foregroundColor: MerchantPremiumColors.base,
-              padding: EdgeInsets.zero,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-            ),
-            child: const Icon(Icons.add_rounded),
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -2260,14 +2189,14 @@ class _FeaturesNavTile extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: AppSpacing.md),
       padding: const EdgeInsets.all(AppSpacing.md),
       onTap: () => context.push('/merchant/features'),
-      child: Row(
+      child: const Row(
         children: [
-          const MerchantPremiumIconBox(icon: Icons.widgets_rounded),
-          const SizedBox(width: AppSpacing.md),
+          MerchantPremiumIconBox(icon: Icons.widgets_rounded),
+          SizedBox(width: AppSpacing.md),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: const [
+              children: [
                 Text(
                   'Funktionen verwalten',
                   style: TextStyle(
@@ -2288,7 +2217,7 @@ class _FeaturesNavTile extends StatelessWidget {
               ],
             ),
           ),
-          const Icon(
+          Icon(
             Icons.arrow_forward_ios_rounded,
             color: MerchantPremiumColors.muted,
             size: 16,

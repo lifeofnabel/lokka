@@ -47,6 +47,7 @@ class _MerchantFeedManageViewState extends State<_MerchantFeedManageView> {
     return MerchantToolScaffold(
       title: texts.text('merchant.feedManage.title'),
       subtitle: texts.text('merchant.feedManage.tooltip'),
+      backPath: '/merchant/dashboard',
       trailing: MerchantInfoTooltip(message: texts.text('merchant.feedManage.tooltip')),
       child: provider.isLoading
           ? const MerchantLoadingCards()

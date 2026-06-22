@@ -1,14 +1,14 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/models/menuDesign.dart';
+import '../../../../core/widgets/appImage.dart';
 import '../../../../core/services/languageService.dart';
 import '../../../merchant/catalog/models/itemTagData.dart';
 import '../../../merchant/catalog/models/merchantItemData.dart';
 import 'publicShopTheme.dart';
 
 /// Artikelkarte der Kundensicht – rendert je nach vom Merchant gewählter
-/// Vorlage (Liste / Klassisch / Galerie / Magazin) und nutzt die Akzentfarbe.
+/// Vorlage (Liste / Klassisch / Magazin) und nutzt die Akzentfarbe.
 /// Bestell-Button erscheint nur, wenn [canOrder].
 class PublicShopItemCard extends StatelessWidget {
   const PublicShopItemCard({
@@ -55,7 +55,6 @@ class PublicShopItemCard extends StatelessWidget {
       child: switch (layout) {
         MenuLayoutStyle.list => grid ? _imageTopCard(imageAspect) : _imageLeftRow(),
         MenuLayoutStyle.compact => _compactRow(),
-        MenuLayoutStyle.gallery => _imageTopCard(imageAspect),
         MenuLayoutStyle.magazine => _heroCard(grid ? 150 : 196),
       },
     );
@@ -269,11 +268,13 @@ class PublicShopItemCard extends StatelessWidget {
         ),
       );
     }
-    return CachedNetworkImage(
+    return AppImage(
       imageUrl: item.imageUrl,
-      fit: BoxFit.cover,
-      placeholder: (context, url) => Container(color: palette.soft),
-      errorWidget: (context, url, error) => Container(
+      // Decode-Breite begrenzen → kleinere Bitmaps, flüssigeres Scrollen in der
+      // Karten-Liste (meistgerenderte Bilder der App).
+      memCacheWidth: 400,
+      placeholder: Container(color: palette.soft),
+      errorWidget: Container(
         color: palette.soft,
         child: Center(child: Icon(Icons.restaurant_menu_rounded, color: palette.muted)),
       ),

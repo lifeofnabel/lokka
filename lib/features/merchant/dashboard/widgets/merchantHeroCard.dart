@@ -8,7 +8,7 @@ import '../../../../core/theme/appSpacing.dart';
 import '../../shared/widgets/merchantPremiumUi.dart';
 import '../services/merchantDashboardService.dart';
 
-class MerchantHeroCard extends StatelessWidget {
+class MerchantHeroCard extends StatefulWidget {
   const MerchantHeroCard({
     super.key,
     required this.hero,
@@ -18,6 +18,7 @@ class MerchantHeroCard extends StatelessWidget {
     required this.onSettingsTap,
     required this.onFeedTap,
     required this.onTodayTap,
+    required this.onSaveFocus,
   });
 
   final MerchantHeroFields hero;
@@ -28,83 +29,171 @@ class MerchantHeroCard extends StatelessWidget {
   final VoidCallback onFeedTap;
   final VoidCallback onTodayTap;
 
+  /// Speichert den neuen vertikalen Cover-Fokus (0..1).
+  final ValueChanged<double> onSaveFocus;
+
+  @override
+  State<MerchantHeroCard> createState() => _MerchantHeroCardState();
+}
+
+class _MerchantHeroCardState extends State<MerchantHeroCard> {
+  bool _repositioning = false;
+  late double _focusY = widget.hero.coverFocusY;
+  double _cardHeight = 284;
+
+  @override
+  void didUpdateWidget(MerchantHeroCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Externe Updates (z.B. neues Cover) übernehmen, solange nicht aktiv gezogen.
+    if (!_repositioning && oldWidget.hero.coverFocusY != widget.hero.coverFocusY) {
+      _focusY = widget.hero.coverFocusY;
+    }
+  }
+
+  void _onDrag(DragUpdateDetails details) {
+    setState(() {
+      // Nach oben ziehen zeigt tieferen Bildausschnitt -> Fokus nach unten.
+      _focusY = (_focusY - details.delta.dy / _cardHeight).clamp(0.0, 1.0);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
+    final hero = widget.hero;
+    final metrics = widget.metrics;
     final texts = context.watch<LanguageService>();
     final shopName =
         hero.shopName.isEmpty ? texts.text('merchant.dashboard.yourShop') : hero.shopName;
     final subtitle = [hero.city, hero.typeLine]
         .where((value) => value.isNotEmpty)
         .join(' | ');
+    final hasCover = hero.coverUrl.isNotEmpty;
 
-    return Container(
-      constraints: const BoxConstraints(minHeight: 284),
-      decoration: BoxDecoration(
-        color: MerchantPremiumColors.baseElevated,
-        borderRadius: BorderRadius.circular(AppRadius.xxl),
-        border: Border.all(color: MerchantPremiumColors.glassBorder),
-        boxShadow: MerchantPremiumShadows.card,
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Stack(
-        children: [
-          Positioned.fill(
-            child: hero.coverUrl.isEmpty
-                ? const _CoverFallback()
-                : CachedNetworkImage(
-                    imageUrl: hero.coverUrl,
-                    fit: BoxFit.cover,
-                    memCacheWidth: 1080,
-                    maxWidthDiskCache: 1080,
-                    placeholder: (_, _) => const _CoverFallback(),
-                    errorWidget: (_, _, _) => const _CoverFallback(),
-                  ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return Container(
+          // Beim Positionieren wird der Inhalts-Block (der einzige NICHT-
+          // positionierte Stack-Child, der die Höhe vorgibt) ausgeblendet. Ohne
+          // feste Höhe hätte der Stack dann nur Positioned.fill-Kinder und keine
+          // Größe mehr → Layout-Assertions (stack.dart/box.dart). Darum hier die
+          // zuletzt gemessene Karten-Höhe fixieren, solange positioniert wird.
+          height: _repositioning ? _cardHeight : null,
+          constraints: const BoxConstraints(minHeight: 284),
+          decoration: BoxDecoration(
+            color: MerchantPremiumColors.baseElevated,
+            borderRadius: BorderRadius.circular(AppRadius.xxl),
+            border: Border.all(
+              color: _repositioning
+                  ? MerchantPremiumColors.gold
+                  : MerchantPremiumColors.glassBorder,
+            ),
+            boxShadow: MerchantPremiumShadows.card,
           ),
-          Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                // Bild-Scrim: bewusste Ausnahme – schwarzer Verlauf für
-                // Textlesbarkeit über beliebigen Cover-Bildern.
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.black.withValues(alpha: 0.10),
-                    Colors.black.withValues(alpha: 0.72),
-                    Colors.black.withValues(alpha: 0.94),
-                  ],
-                  stops: const [0, 0.48, 1],
+          clipBehavior: Clip.antiAlias,
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: LayoutBuilder(
+                  builder: (context, c) {
+                    _cardHeight = c.maxHeight.isFinite ? c.maxHeight : _cardHeight;
+                    return hero.coverUrl.isEmpty
+                        ? const _CoverFallback()
+                        : CachedNetworkImage(
+                            imageUrl: hero.coverUrl,
+                            fit: BoxFit.cover,
+                            alignment: Alignment(0, _focusY * 2 - 1),
+                            memCacheWidth: 1080,
+                            maxWidthDiskCache: 1080,
+                            placeholder: (_, _) => const _CoverFallback(),
+                            errorWidget: (_, _, _) => const _CoverFallback(),
+                          );
+                  },
                 ),
               ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(AppSpacing.md),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    _GlassButton(
-                      icon: Icons.remove_red_eye_rounded,
-                      label: texts.text('merchant.dashboard.shopPreview'),
-                      onTap: onShopTap,
+              Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    // Bild-Scrim: bewusste Ausnahme – schwarzer Verlauf für
+                    // Textlesbarkeit über beliebigen Cover-Bildern. Beim
+                    // Positionieren abgeschwächt, damit man das Bild sieht.
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: _repositioning
+                          ? [
+                              Colors.black.withValues(alpha: 0.10),
+                              Colors.black.withValues(alpha: 0.20),
+                              Colors.black.withValues(alpha: 0.35),
+                            ]
+                          : [
+                              Colors.black.withValues(alpha: 0.10),
+                              Colors.black.withValues(alpha: 0.72),
+                              Colors.black.withValues(alpha: 0.94),
+                            ],
+                      stops: const [0, 0.48, 1],
                     ),
-                    const Spacer(),
-                    _IconGlassButton(
-                      icon: Icons.insights_rounded,
-                      tooltip: texts.text('merchant.dashboard.today'),
-                      onTap: onTodayTap,
-                    ),
-                    const SizedBox(width: 8),
-                    _IconGlassButton(
-                      icon: Icons.tune_rounded,
-                      tooltip: texts.text('merchant.shop.title'),
-                      onTap: onSettingsTap,
-                    ),
-                  ],
+                  ),
                 ),
-                const SizedBox(height: 50),
+              ),
+              if (_repositioning)
+                Positioned.fill(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onVerticalDragUpdate: _onDrag,
+                    child: _RepositionOverlay(
+                      hint: texts.text('merchant.dashboard.repositionHint'),
+                      saveLabel: texts.text('common.save'),
+                      cancelLabel: texts.text('common.cancel'),
+                      onSave: () {
+                        widget.onSaveFocus(_focusY);
+                        setState(() => _repositioning = false);
+                      },
+                      onCancel: () => setState(() {
+                        _focusY = hero.coverFocusY;
+                        _repositioning = false;
+                      }),
+                    ),
+                  ),
+                ),
+              if (!_repositioning)
+                Padding(
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          _GlassButton(
+                            icon: Icons.remove_red_eye_rounded,
+                            label: texts.text('merchant.dashboard.shopPreview'),
+                            onTap: widget.onShopTap,
+                          ),
+                          const Spacer(),
+                          if (hasCover) ...[
+                            _IconGlassButton(
+                              icon: Icons.open_with_rounded,
+                              tooltip: texts.text('merchant.dashboard.reposition'),
+                              onTap: () => setState(() {
+                                _focusY = hero.coverFocusY;
+                                _repositioning = true;
+                              }),
+                            ),
+                            const SizedBox(width: 8),
+                          ],
+                          _IconGlassButton(
+                            icon: Icons.insights_rounded,
+                            tooltip: texts.text('merchant.dashboard.today'),
+                            onTap: widget.onTodayTap,
+                          ),
+                          const SizedBox(width: 8),
+                          _IconGlassButton(
+                            icon: Icons.tune_rounded,
+                            tooltip: texts.text('merchant.shop.title'),
+                            onTap: widget.onSettingsTap,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 50),
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
@@ -151,7 +240,7 @@ class MerchantHeroCard extends StatelessWidget {
                         label: texts.text('merchant.customers.title'),
                         value: metrics.customers.toString(),
                         icon: Icons.groups_rounded,
-                        onTap: onCustomersTap,
+                        onTap: widget.onCustomersTap,
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -160,13 +249,93 @@ class MerchantHeroCard extends StatelessWidget {
                         label: texts.text('merchant.dashboard.feedHub'),
                         value: metrics.feedPosts.toString(),
                         icon: Icons.campaign_rounded,
-                        onTap: onFeedTap,
+                        onTap: widget.onFeedTap,
                       ),
                     ),
                   ],
                 ),
               ],
             ),
+          ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _RepositionOverlay extends StatelessWidget {
+  const _RepositionOverlay({
+    required this.hint,
+    required this.saveLabel,
+    required this.cancelLabel,
+    required this.onSave,
+    required this.onCancel,
+  });
+
+  final String hint;
+  final String saveLabel;
+  final String cancelLabel;
+  final VoidCallback onSave;
+  final VoidCallback onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: _glassDecoration(),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.swipe_vertical_rounded, color: MerchantPremiumColors.ink, size: 18),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    hint,
+                    style: const TextStyle(
+                      color: MerchantPremiumColors.ink,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Spacer(),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: onCancel,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: MerchantPremiumColors.ink,
+                    side: BorderSide(color: MerchantPremiumColors.gold.withValues(alpha: 0.4)),
+                    backgroundColor: MerchantPremiumColors.glass,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  child: Text(cancelLabel),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: FilledButton(
+                  onPressed: onSave,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: MerchantPremiumColors.gold,
+                    foregroundColor: MerchantPremiumColors.base,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  child: Text(saveLabel),
+                ),
+              ),
+            ],
           ),
         ],
       ),

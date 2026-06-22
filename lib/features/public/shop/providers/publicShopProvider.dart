@@ -6,6 +6,7 @@ import '../../../merchant/catalog/models/itemOptionGroup.dart';
 import '../../../merchant/catalog/models/itemTagData.dart';
 import '../../../merchant/catalog/models/merchantItemData.dart';
 import '../../../../core/cache/localCacheStorage.dart';
+import '../../../../core/services/connectivityService.dart';
 import '../../../merchant/catalog/models/runnerData.dart';
 import '../../../merchant/tables/models/merchantTableData.dart';
 import '../services/publicShopService.dart';
@@ -52,13 +53,26 @@ class PublicCartItem {
 }
 
 class PublicShopProvider extends ChangeNotifier {
-  PublicShopProvider({required this.service});
+  PublicShopProvider({
+    required this.service,
+    this.connectivity = const ConnectivityService(),
+  });
 
   final PublicShopService service;
+  final ConnectivityService connectivity;
 
   bool isLoading = true;
   bool isSaving = false;
   String? error;
+
+  /// i18n-Key des letzten Fehlers beim Absenden (für eine treffende Snackbar):
+  /// `public.shop.offlineError` bei fehlendem Netz, sonst generisch.
+  String? saveErrorKey;
+
+  /// Bestell-ID des laufenden Checkout-Versuchs. Wird beim ersten Absende-
+  /// Versuch erzeugt und bei Wiederholungen WIEDERVERWENDET, bis der Versuch
+  /// erfolgreich war – verhindert Doppelbestellungen (#1).
+  String? _pendingOrderId;
   String selectedCategoryId = 'all';
   Map<String, dynamic>? merchant;
   TableData? table;
@@ -272,6 +286,7 @@ class PublicShopProvider extends ChangeNotifier {
       createdOrderMerchantId = null;
       lastFulfillment = '';
       orderNote = '';
+      _pendingOrderId = null; // neue Bestell-Session ⇒ frische Idempotenz-ID
     }
     final entry = PublicCartItem(
       item: item,
@@ -324,13 +339,33 @@ class PublicShopProvider extends ChangeNotifier {
   }
 
   Future<bool> placeOrder(String merchantId, {required String fulfillment}) async {
+    // Edge-Case #4: leerer Warenkorb / kein Bestell-Modus → gar nicht senden.
     if (cart.isEmpty || !canOrder) return false;
-    try {
-      isSaving = true;
-      error = null;
+    // Mehrfach-Tap / laufender Versuch → ignorieren (zusätzlich zur ID-Idempotenz).
+    if (isSaving) return false;
+    saveErrorKey = null;
+    isSaving = true;
+    error = null;
+    notifyListeners();
+
+    // Edge-Case #2: Offline → nicht in einen hängenden Write laufen, sondern
+    // sofort klar blocken. Die Idempotenz-ID bleibt erhalten, sodass ein
+    // späterer Versuch dieselbe Bestellung schreibt (kein Duplikat).
+    if (!await connectivity.isOnline()) {
+      saveErrorKey = 'public.shop.offlineError';
+      isSaving = false;
       notifyListeners();
+      return false;
+    }
+
+    // Idempotenz (#1): ID einmal pro Checkout-Versuch erzeugen, bei Retry erneut
+    // verwenden. Derselbe Doc-Pfad ⇒ nie zwei Bestellungen aus einem Korb.
+    final orderId = _pendingOrderId ??= service.newOrderId(merchantId);
+
+    try {
       final result = await service.createOrder(
         merchantId: merchantId,
+        orderId: orderId,
         table: effectiveTable,
         totalPrice: totalPrice,
         note: orderNote.trim(),
@@ -358,18 +393,40 @@ class PublicShopProvider extends ChangeNotifier {
                 })
             .toList(),
       );
-      createdOrderId = result.id;
-      createdOrderCode = result.code;
-      createdOrderMerchantId = merchantId;
-      lastFulfillment = fulfillment;
-      cart = [];
+      _onOrderPlaced(merchantId, result.id, result.code, fulfillment);
       return true;
     } catch (e) {
+      // Idempotenz-Wiederherstellung: Vielleicht war der erste Versuch in
+      // Wahrheit erfolgreich (Timeout nach dem Schreiben; der Retry trifft dann
+      // ein bereits existierendes Doc → Update-Regel verweigert dem Gast).
+      // Per öffentlichem `get` prüfen, ob die Bestellung doch existiert.
+      try {
+        final code = await service.existingOrderCode(merchantId, orderId);
+        if (code != null && code.isNotEmpty) {
+          _onOrderPlaced(merchantId, orderId, code, fulfillment);
+          return true;
+        }
+      } catch (_) {/* Recovery-Read scheiterte ebenfalls → echter Fehler unten */}
       error = e.toString();
-      return false;
-    } finally {
+      saveErrorKey = 'common.errorTitle';
       isSaving = false;
       notifyListeners();
+      return false;
     }
+  }
+
+  /// Erfolgsfall zentral: Bestelldaten merken, Korb leeren, Idempotenz-ID
+  /// freigeben und UI benachrichtigen.
+  void _onOrderPlaced(
+      String merchantId, String orderId, String orderCode, String fulfillment) {
+    createdOrderId = orderId;
+    createdOrderCode = orderCode;
+    createdOrderMerchantId = merchantId;
+    lastFulfillment = fulfillment;
+    _pendingOrderId = null;
+    saveErrorKey = null;
+    cart = [];
+    isSaving = false;
+    notifyListeners();
   }
 }

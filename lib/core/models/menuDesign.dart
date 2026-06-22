@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
-/// Vier Vorlagen, mit denen ein Merchant das Aussehen seiner öffentlichen
-/// Speisekarte (Kundenansicht) bestimmt.
+/// Drei Vorlagen, mit denen ein Merchant das Aussehen seiner öffentlichen
+/// Speisekarte (Kundenansicht) bestimmt. Diese Liste ist die EINZIGE
+/// Wahrheit – Auswahl-UI und Renderer leiten sich daraus ab. Hier eine
+/// Vorlage hinzufügen/entfernen ändert beides automatisch.
 ///
 /// Wird vom Merchant-Setting geschrieben und von der `UserMenuPage` gerendert.
 enum MenuLayoutStyle {
@@ -11,24 +13,26 @@ enum MenuLayoutStyle {
   /// Klassische Speisekarte: Name · · · Preis mit Führungspunkten, ohne Bilder.
   compact,
 
-  /// Galerie: Karten mit großem Foto oben, Text darunter.
-  gallery,
-
   /// Magazin: große Hero-Karten mit Bild-Overlay.
   magazine;
+
+  /// Kurzer Hinweis, für welchen Shop die Vorlage gedacht ist.
+  String get tagline => switch (this) {
+        MenuLayoutStyle.list => 'Der Allrounder',
+        MenuLayoutStyle.compact => 'Schnörkellos & schnell',
+        MenuLayoutStyle.magazine => 'Maximaler Appetit',
+      };
 
   String get label => switch (this) {
         MenuLayoutStyle.list => 'Liste',
         MenuLayoutStyle.compact => 'Klassisch',
-        MenuLayoutStyle.gallery => 'Galerie',
         MenuLayoutStyle.magazine => 'Magazin',
       };
 
   String get description => switch (this) {
         MenuLayoutStyle.list => 'Foto links, Text rechts',
-        MenuLayoutStyle.compact => 'Name · · · Preis',
-        MenuLayoutStyle.gallery => 'Foto-Karten, 2 Spalten',
-        MenuLayoutStyle.magazine => 'Große Hero-Karten',
+        MenuLayoutStyle.compact => 'Name · · · Preis, ohne Bilder',
+        MenuLayoutStyle.magazine => 'Große Hero-Karten mit Foto',
       };
 
   static MenuLayoutStyle fromId(String? id) => MenuLayoutStyle.values.firstWhere(

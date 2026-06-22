@@ -217,16 +217,17 @@ class AppTheme {
   /// (Eingabefelder, Dialoge, Sheets) dunkel rendern.
   // WICHTIG: Werte mit `MerchantPremiumColors` (merchantPremiumUi.dart) synchron
   // halten – beide beschreiben dieselbe Merchant-Palette (Material-Widgets hier,
-  // direkte Tokens dort). Aufgehellt + helleres Grün für besseren Kontrast.
+  // direkte Tokens dort). Deep-Green Operator-Look: tiefes, grün-getöntes Dunkel
+  // + kräftiger Grün-Akzent (aus dem User-Grün abgeleitet, aber dunkler).
   static ThemeData get merchantDark {
-    const base = Color(0xFF24272D);
-    const elevated = Color(0xFF2B2F36);
-    const surface = Color(0xFF313640);
-    const surfaceAlt = Color(0xFF3C424C);
-    const ink = Color(0xFFF6F8FA);
-    const muted = Color(0xFFC2C9D1);
-    const line = Color(0xFF565C68);
-    const accent = Color(0xFF55D8B0);
+    const base = Color(0xFF181E1A);
+    const elevated = Color(0xFF1E2521);
+    const surface = Color(0xFF222B26);
+    const surfaceAlt = Color(0xFF2B352F);
+    const ink = Color(0xFFF2F6F3);
+    const muted = Color(0xFFA9B5AD);
+    const line = Color(0xFF3A463F);
+    const accent = Color(0xFF2FB389);
 
     final scheme = ColorScheme.fromSeed(
       seedColor: accent,

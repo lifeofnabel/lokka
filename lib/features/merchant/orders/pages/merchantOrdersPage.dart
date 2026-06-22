@@ -15,6 +15,7 @@ import '../../tools/widgets/merchantToolUi.dart';
 import '../models/orderModel.dart';
 import '../providers/merchantOrdersProvider.dart';
 import '../services/merchantOrdersService.dart';
+import '../widgets/merchantScanOrderSheet.dart';
 import '../widgets/orderCard.dart';
 import '../widgets/orderDetailPanel.dart';
 
@@ -149,66 +150,165 @@ class _MerchantOrdersViewState extends State<_MerchantOrdersView> {
     if (_muted) _acknowledge();
   }
 
-  Future<void> _openRingModeSheet() async {
+  void _setMuted(bool muted) {
+    setState(() => _muted = muted);
+    LocalCacheStorage.write(_muteKey, muted ? '1' : '0');
+    if (muted) _acknowledge();
+  }
+
+  void _setRingLoop(bool loop) {
+    setState(() => _ringLoop = loop);
+    LocalCacheStorage.write(_ringLoopKey, loop ? '1' : '0');
+  }
+
+  void _setSoundType(int value) {
+    setState(() => _soundType = value);
+    LocalCacheStorage.write(_soundTypeKey, value.toString());
+  }
+
+  void _setVolumeLevel(int value) {
+    setState(() => _volumeLevel = value);
+    LocalCacheStorage.write(_volumeKey, value.toString());
+    _applyVolume();
+  }
+
+  /// Benachrichtigungs-Einstellungen NUR auf Tippen der Glocke (oben rechts) –
+  /// als minimales Popup, nicht mehr als feste Leiste zwischen Header und
+  /// Bestellungen. Bündelt Stumm/An, Klingel-Modus, Ton und Lautstärke.
+  Future<void> _openNotificationSettings() async {
+    // Geste nutzen, um Audio/Benachrichtigungen scharf zu machen (Autoplay).
+    OrderAlert.prime();
+    OrderAlert.ensurePermission();
     final texts = context.read<LanguageService>();
-    final choice = await showModalBottomSheet<bool>(
+    await showModalBottomSheet<void>(
       context: context,
       backgroundColor: MerchantPremiumColors.baseElevated,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
-      builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 14),
-            Text(
-              texts.text('merchant.orders.alertModeTitle'),
-              style: const TextStyle(
-                color: MerchantPremiumColors.ink,
-                fontSize: 17,
-                fontWeight: FontWeight.w900,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            void apply(VoidCallback change) {
+              change();
+              setSheetState(() {});
+            }
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Center(
+                      child: Text(
+                        texts.text('merchant.orders.notifications'),
+                        style: const TextStyle(
+                          color: MerchantPremiumColors.ink,
+                          fontSize: 17,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      activeThumbColor: MerchantPremiumColors.gold,
+                      value: !_muted,
+                      onChanged: (on) => apply(() => _setMuted(!on)),
+                      title: Text(
+                        texts.text('merchant.orders.alertSoundOn'),
+                        style: const TextStyle(
+                            color: MerchantPremiumColors.ink,
+                            fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                    if (!_muted) ...[
+                      const SizedBox(height: 6),
+                      _SheetLabel(
+                          text: texts.text('merchant.orders.alertModeTitle')),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _SheetOption(
+                              icon: Icons.notifications_active_rounded,
+                              label:
+                                  texts.text('merchant.orders.alertModeLoop'),
+                              selected: _ringLoop,
+                              onTap: () => apply(() => _setRingLoop(true)),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _SheetOption(
+                              icon: Icons.notifications_none_rounded,
+                              label:
+                                  texts.text('merchant.orders.alertModeOnce'),
+                              selected: !_ringLoop,
+                              onTap: () => apply(() => _setRingLoop(false)),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      _SheetLabel(text: texts.text('merchant.orders.alertTone')),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          _SoundChip(
+                              icon: Icons.notifications_rounded,
+                              selected: _soundType == 1,
+                              tooltip: 'Einmal',
+                              onTap: () => apply(() => _setSoundType(1))),
+                          const SizedBox(width: 8),
+                          _SoundChip(
+                              icon: Icons.notifications_active_rounded,
+                              selected: _soundType == 2,
+                              tooltip: 'Zweimal',
+                              onTap: () => apply(() => _setSoundType(2))),
+                          const SizedBox(width: 8),
+                          _SoundChip(
+                              icon: Icons.graphic_eq_rounded,
+                              selected: _soundType == 3,
+                              tooltip: 'Dreimal',
+                              onTap: () => apply(() => _setSoundType(3))),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      _SheetLabel(
+                          text: texts.text('merchant.orders.alertVolume')),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          _SoundChip(
+                              icon: Icons.volume_mute_rounded,
+                              selected: _volumeLevel == 1,
+                              tooltip: 'Leise',
+                              onTap: () => apply(() => _setVolumeLevel(1))),
+                          const SizedBox(width: 8),
+                          _SoundChip(
+                              icon: Icons.volume_down_rounded,
+                              selected: _volumeLevel == 2,
+                              tooltip: 'Mittel',
+                              onTap: () => apply(() => _setVolumeLevel(2))),
+                          const SizedBox(width: 8),
+                          _SoundChip(
+                              icon: Icons.volume_up_rounded,
+                              selected: _volumeLevel == 3,
+                              tooltip: 'Laut',
+                              onTap: () => apply(() => _setVolumeLevel(3))),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 6),
-            ListTile(
-              leading: const Icon(Icons.notifications_active_rounded,
-                  color: MerchantPremiumColors.gold),
-              title: Text(
-                texts.text('merchant.orders.alertModeLoop'),
-                style: const TextStyle(
-                    color: MerchantPremiumColors.ink,
-                    fontWeight: FontWeight.w800),
-              ),
-              trailing: _ringLoop
-                  ? const Icon(Icons.check_rounded,
-                      color: MerchantPremiumColors.gold)
-                  : null,
-              onTap: () => Navigator.of(sheetContext).pop(true),
-            ),
-            ListTile(
-              leading: const Icon(Icons.notifications_none_rounded,
-                  color: MerchantPremiumColors.muted),
-              title: Text(
-                texts.text('merchant.orders.alertModeOnce'),
-                style: const TextStyle(
-                    color: MerchantPremiumColors.ink,
-                    fontWeight: FontWeight.w800),
-              ),
-              trailing: !_ringLoop
-                  ? const Icon(Icons.check_rounded,
-                      color: MerchantPremiumColors.gold)
-                  : null,
-              onTap: () => Navigator.of(sheetContext).pop(false),
-            ),
-            const SizedBox(height: 14),
-          ],
-        ),
-      ),
+            );
+          },
+        );
+      },
     );
-    if (choice == null || !mounted) return;
-    setState(() => _ringLoop = choice);
-    LocalCacheStorage.write(_ringLoopKey, choice ? '1' : '0');
   }
 
   @override
@@ -233,11 +333,19 @@ class _MerchantOrdersViewState extends State<_MerchantOrdersView> {
         children: [
           _MuteBell(
             muted: _muted,
-            onTap: _toggleMute,
-            onLongPress: _openRingModeSheet,
-            tooltip: texts.text(_muted
-                ? 'merchant.orders.alertUnmute'
-                : 'merchant.orders.alertMute'),
+            // Tippen → minimales Einstellungs-Popup; langes Drücken → schnell
+            // stummschalten (ohne Popup).
+            onTap: _openNotificationSettings,
+            onLongPress: _toggleMute,
+            tooltip: texts.text('merchant.orders.notifications'),
+          ),
+          const SizedBox(width: 8),
+          _ScanAction(
+            tooltip: texts.text('merchant.scan.title'),
+            onTap: () => showOrderScanner(
+              context,
+              onConfirm: provider.confirmByCode,
+            ),
           ),
           const SizedBox(width: 8),
           _TableViewAction(count: provider.tableGroups.length),
@@ -259,20 +367,6 @@ class _MerchantOrdersViewState extends State<_MerchantOrdersView> {
               const SizedBox(height: AppSpacing.md),
             ],
             _ControlBox(provider: provider),
-            const SizedBox(height: AppSpacing.sm),
-            _SoundBar(
-              soundType: _soundType,
-              volumeLevel: _volumeLevel,
-              onSoundType: (v) {
-                setState(() => _soundType = v);
-                LocalCacheStorage.write(_soundTypeKey, v.toString());
-              },
-              onVolumeLevel: (v) {
-                setState(() => _volumeLevel = v);
-                LocalCacheStorage.write(_volumeKey, v.toString());
-                _applyVolume();
-              },
-            ),
             const SizedBox(height: AppSpacing.md),
             _ordersArea(context, provider, texts),
           ],
@@ -385,6 +479,42 @@ class _SelectHint extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Kassen-Scanner als kompakte Aktion oben rechts: öffnet den QR-/Code-Scanner,
+/// um eine vorab am Gast erstellte Vor-Kasse-Bestellung zu bestätigen.
+class _ScanAction extends StatelessWidget {
+  const _ScanAction({required this.tooltip, required this.onTap});
+
+  final String tooltip;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      triggerMode: TooltipTriggerMode.tap,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(999),
+        child: Container(
+          width: 36,
+          height: 36,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: MerchantPremiumColors.surface,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: MerchantPremiumColors.line),
+          ),
+          child: const Icon(
+            Icons.qr_code_scanner_rounded,
+            color: MerchantPremiumColors.ink,
+            size: 18,
+          ),
+        ),
       ),
     );
   }
@@ -683,79 +813,81 @@ class _FilterChip extends StatelessWidget {
   }
 }
 
-/// Minimale Sound-Einstellungsleiste: 3 Tonstile + 3 Lautstärken.
-class _SoundBar extends StatelessWidget {
-  const _SoundBar({
-    required this.soundType,
-    required this.volumeLevel,
-    required this.onSoundType,
-    required this.onVolumeLevel,
-  });
+/// Kleine Abschnitts-Überschrift im Benachrichtigungs-Popup.
+class _SheetLabel extends StatelessWidget {
+  const _SheetLabel({required this.text});
 
-  final int soundType;
-  final int volumeLevel;
-  final ValueChanged<int> onSoundType;
-  final ValueChanged<int> onVolumeLevel;
+  final String text;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: MerchantPremiumColors.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: MerchantPremiumColors.glassBorder),
+    return Text(
+      text,
+      style: const TextStyle(
+        color: MerchantPremiumColors.muted,
+        fontSize: 12.5,
+        fontWeight: FontWeight.w900,
       ),
-      child: Row(
-        children: [
-          const Icon(Icons.music_note_rounded,
-              size: 16, color: MerchantPremiumColors.muted),
-          const SizedBox(width: 8),
-          _SoundChip(
-            icon: Icons.notifications_rounded,
-            selected: soundType == 1,
-            tooltip: 'Einmal',
-            onTap: () => onSoundType(1),
+    );
+  }
+}
+
+/// Auswahl-Kachel (Icon + Label) für den Klingel-Modus im Popup.
+class _SheetOption extends StatelessWidget {
+  const _SheetOption({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+        decoration: BoxDecoration(
+          color: selected
+              ? MerchantPremiumColors.goldSoft
+              : MerchantPremiumColors.surfaceAlt,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: selected
+                ? MerchantPremiumColors.gold.withValues(alpha: 0.5)
+                : MerchantPremiumColors.glassBorder,
           ),
-          const SizedBox(width: 6),
-          _SoundChip(
-            icon: Icons.notifications_active_rounded,
-            selected: soundType == 2,
-            tooltip: 'Zweimal',
-            onTap: () => onSoundType(2),
-          ),
-          const SizedBox(width: 6),
-          _SoundChip(
-            icon: Icons.graphic_eq_rounded,
-            selected: soundType == 3,
-            tooltip: 'Dreimal',
-            onTap: () => onSoundType(3),
-          ),
-          const Spacer(),
-          const Icon(Icons.volume_up_rounded,
-              size: 16, color: MerchantPremiumColors.muted),
-          const SizedBox(width: 8),
-          _SoundChip(
-            icon: Icons.volume_mute_rounded,
-            selected: volumeLevel == 1,
-            tooltip: 'Leise',
-            onTap: () => onVolumeLevel(1),
-          ),
-          const SizedBox(width: 6),
-          _SoundChip(
-            icon: Icons.volume_down_rounded,
-            selected: volumeLevel == 2,
-            tooltip: 'Mittel',
-            onTap: () => onVolumeLevel(2),
-          ),
-          const SizedBox(width: 6),
-          _SoundChip(
-            icon: Icons.volume_up_rounded,
-            selected: volumeLevel == 3,
-            tooltip: 'Laut',
-            onTap: () => onVolumeLevel(3),
-          ),
-        ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon,
+                size: 18,
+                color: selected
+                    ? MerchantPremiumColors.gold
+                    : MerchantPremiumColors.muted),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: selected
+                      ? MerchantPremiumColors.ink
+                      : MerchantPremiumColors.muted,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

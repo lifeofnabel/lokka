@@ -1,9 +1,9 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../core/services/authService.dart';
+import '../../../../core/widgets/appImage.dart';
 import '../../../../core/services/firestoreService.dart';
 import '../../../../core/services/languageService.dart';
 import '../../../../core/services/uploadService.dart';
@@ -42,62 +42,119 @@ class _MerchantItemsView extends StatefulWidget {
 class _MerchantItemsViewState extends State<_MerchantItemsView> {
   final _searchController = TextEditingController();
 
+  /// Artikel werden in 6er-Schritten gerendert (schneller Seitenaufbau,
+  /// echte Lazy-Slivers). Beim Runterscrollen lädt automatisch der nächste
+  /// Block nach.
+  static const int _pageSize = 6;
+  int _visibleCount = _pageSize;
+  String _lastFilterKey = '';
+
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
   }
 
+  bool _onScroll(ScrollNotification notification, int total) {
+    if (notification.metrics.pixels >=
+            notification.metrics.maxScrollExtent - 400 &&
+        _visibleCount < total) {
+      setState(() {
+        _visibleCount = (_visibleCount + _pageSize).clamp(0, total);
+      });
+    }
+    return false;
+  }
+
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<MerchantItemsProvider>();
     final texts = context.watch<LanguageService>();
-    return MerchantToolScaffold(
-      title: texts.text('merchant.catalog.items'),
-      subtitle: texts.text('merchant.items.subtitle'),
-      trailing: MerchantInfoTooltip(message: texts.text('merchant.catalog.itemsTip')),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          MerchantPrimaryButton(
-            label: texts.text('merchant.items.add'),
-            icon: Icons.add_rounded,
-            isLoading: provider.isSaving,
-            onPressed: () {
-              if (provider.categories.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(texts.text('merchant.items.needCategory'))),
-                );
-                return;
-              }
-              _openItemSheet(context);
-            },
+
+    // Bei Kategorie-/Suchwechsel wieder bei den ersten 6 anfangen.
+    final filterKey = '${provider.selectedCategoryId}|${_searchController.text}';
+    if (filterKey != _lastFilterKey) {
+      _lastFilterKey = filterKey;
+      _visibleCount = _pageSize;
+    }
+
+    final items = provider.visibleItems;
+    final shown = items.take(_visibleCount).toList();
+    final hasMore = _visibleCount < items.length;
+    final ready = !provider.isLoading && provider.error == null;
+
+    return NotificationListener<ScrollNotification>(
+      onNotification: (notification) => _onScroll(notification, items.length),
+      child: MerchantToolScaffold(
+        title: texts.text('merchant.catalog.items'),
+        subtitle: texts.text('merchant.items.subtitle'),
+        backPath: '/merchant/catalog',
+        trailing: MerchantInfoTooltip(message: texts.text('merchant.catalog.itemsTip')),
+        slivers: [
+          SliverToBoxAdapter(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                MerchantPrimaryButton(
+                  label: texts.text('merchant.items.add'),
+                  icon: Icons.add_rounded,
+                  isLoading: provider.isSaving,
+                  onPressed: () {
+                    if (provider.categories.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(texts.text('merchant.items.needCategory'))),
+                      );
+                      return;
+                    }
+                    _openItemSheet(context);
+                  },
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                _ItemSearchBar(controller: _searchController, provider: provider),
+                const SizedBox(height: AppSpacing.md),
+                if (ready) ...[
+                  _CategoryChips(provider: provider),
+                  const SizedBox(height: AppSpacing.md),
+                ],
+              ],
+            ),
           ),
-          const SizedBox(height: AppSpacing.sm),
-          _ItemSearchBar(controller: _searchController, provider: provider),
-          const SizedBox(height: AppSpacing.md),
           if (provider.isLoading)
-            const MerchantLoadingCards()
+            const SliverToBoxAdapter(child: MerchantLoadingCards())
           else if (provider.error != null)
-            MerchantErrorState(message: provider.error!, onRetry: provider.load)
-          else ...[
-            _CategoryChips(provider: provider),
-            const SizedBox(height: AppSpacing.md),
-            if (provider.visibleItems.isEmpty)
-              MerchantEmptyState(
+            SliverToBoxAdapter(
+              child: MerchantErrorState(message: provider.error!, onRetry: provider.load),
+            )
+          else if (items.isEmpty)
+            SliverToBoxAdapter(
+              child: MerchantEmptyState(
                 title: texts.text('merchant.items.emptyTitle'),
                 message: texts.text('merchant.items.emptyMessage'),
                 actionLabel: texts.text('merchant.items.add'),
                 onAction: () => _openItemSheet(context),
-              )
-            else
-              ...provider.visibleItems.map(
-                (item) => Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: _ItemCard(item: item),
+              ),
+            )
+          else
+            SliverList.builder(
+              itemCount: shown.length,
+              itemBuilder: (context, index) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _ItemCard(item: shown[index]),
+              ),
+            ),
+          if (ready && hasMore)
+            const SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 16),
+                child: Center(
+                  child: SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
                 ),
               ),
-          ],
+            ),
         ],
       ),
     );
@@ -250,10 +307,10 @@ class _ItemCard extends StatelessWidget {
                 clipBehavior: Clip.antiAlias,
                 child: item.imageUrl.isEmpty
                     ? const Icon(Icons.restaurant_menu_rounded, size: 30)
-                    : CachedNetworkImage(
+                    : AppImage(
                         imageUrl: item.imageUrl,
-                        fit: BoxFit.cover,
-                        errorWidget: (_, _, _) => const Icon(Icons.restaurant_menu_rounded, size: 30),
+                        memCacheWidth: 240,
+                        errorWidget: const Icon(Icons.restaurant_menu_rounded, size: 30),
                       ),
               ),
               const SizedBox(width: AppSpacing.md),
@@ -821,8 +878,8 @@ Future<void> _openItemSheet(BuildContext context, {MerchantItemData? item}) asyn
   var isPrivate = item?.isPrivate ?? false;
   // „Alter Preis" nur sichtbar, wenn der Aktionspreis-Schalter an ist.
   var showOldPrice = item?.originalPrice != null;
-  // Bildformat: 'square' (1:1) oder 'wide' (16:9, magazin-tauglich).
-  var imageRatio = item?.imageRatio ?? 'square';
+  // Artikelbilder sind immer 1:1 (Format-Auswahl entfernt).
+  const imageRatio = 'square';
   // Optionsgruppen (live vom Options-Editor aktualisiert).
   var optionGroups = item == null ? <ItemOptionGroup>[] : [...item.optionGroups];
   var allergenIds = item == null ? <String>[] : [...item.allergenIds];
@@ -910,26 +967,6 @@ Future<void> _openItemSheet(BuildContext context, {MerchantItemData? item}) asyn
                   onChanged: (groups) => optionGroups = groups,
                 ),
                 const SizedBox(height: AppSpacing.md),
-                Text(texts.text('merchant.items.imageFormat'), style: const TextStyle(fontWeight: FontWeight.w900)),
-                const SizedBox(height: AppSpacing.sm),
-                SegmentedButton<String>(
-                  segments: [
-                    ButtonSegment(
-                      value: 'square',
-                      icon: const Icon(Icons.crop_square_rounded, size: 18),
-                      label: Text(texts.text('merchant.items.imageSquare')),
-                    ),
-                    ButtonSegment(
-                      value: 'wide',
-                      icon: const Icon(Icons.crop_16_9_rounded, size: 18),
-                      label: Text(texts.text('merchant.items.imageWide')),
-                    ),
-                  ],
-                  selected: {imageRatio},
-                  onSelectionChanged: (selection) => setState(() => imageRatio = selection.first),
-                  showSelectedIcon: false,
-                ),
-                const SizedBox(height: AppSpacing.sm),
                 ListenableBuilder(
                   listenable: provider,
                   builder: (context, _) => Column(
@@ -941,17 +978,17 @@ Future<void> _openItemSheet(BuildContext context, {MerchantItemData? item}) asyn
                             : () async {
                                 final picked = await provider.uploadService.pickImageWithFilePicker();
                                 if (picked == null || !context.mounted) return;
-                                final double ratio = imageRatio == 'wide' ? 16 / 9 : 1.0;
+                                // Artikelbilder immer 1:1 zuschneiden.
                                 final Uint8List? cropped = await showSquareImageCropSheet(
                                   context: context,
                                   imageBytes: picked.bytes,
-                                  aspectRatio: ratio,
+                                  aspectRatio: 1.0,
                                 );
                                 if (cropped == null || !context.mounted) return;
                                 final uploaded = await provider.uploadCroppedImage(
                                   bytes: cropped,
                                   fileName: picked.fileName,
-                                  type: imageRatio == 'wide' ? UploadImageType.itemWide : UploadImageType.item,
+                                  type: UploadImageType.item,
                                 );
                                 if (uploaded != null && uploaded.isNotEmpty) {
                                   setState(() => imageUrl = uploaded);
@@ -1028,12 +1065,20 @@ Future<void> _openItemSheet(BuildContext context, {MerchantItemData? item}) asyn
       );
     },
   );
-  // Controller nach Schließen des Sheets freigeben (#27, Memory-Leak).
-  name.dispose();
-  description.dispose();
-  price.dispose();
-  originalPrice.dispose();
-  articleNumber.dispose();
+  // Controller erst NACH der Schließ-Animation freigeben (#27 Memory-Leak).
+  // showModalBottomSheet löst sein Future bereits beim pop() aus – das Sheet
+  // (inkl. der an name/price gebundenen Live-Vorschau in _PreviewCard) baut
+  // sich während des Ausblendens aber noch einmal auf und würde sonst auf
+  // bereits disposte Controller zugreifen ("TextEditingController used after
+  // being disposed"). Ein kurzer Aufschub > Schließ-Animation verhindert das,
+  // ohne den Leak wieder einzuführen.
+  Future.delayed(const Duration(milliseconds: 400), () {
+    name.dispose();
+    description.dispose();
+    price.dispose();
+    originalPrice.dispose();
+    articleNumber.dispose();
+  });
 }
 
 class _PreviewCard extends StatelessWidget {
@@ -1065,10 +1110,9 @@ class _PreviewCard extends StatelessWidget {
             clipBehavior: Clip.antiAlias,
             child: imageUrl.isEmpty
                 ? const Icon(Icons.image_rounded)
-                : CachedNetworkImage(
+                : AppImage(
                     imageUrl: imageUrl,
-                    fit: BoxFit.cover,
-                    errorWidget: (_, _, _) => const Icon(Icons.image_rounded),
+                    errorWidget: const Icon(Icons.image_rounded),
                   ),
           ),
           const SizedBox(width: AppSpacing.md),

@@ -43,6 +43,7 @@ class _MerchantStampsView extends StatelessWidget {
     return MerchantToolScaffold(
       title: texts.text('merchant.stamps.title'),
       subtitle: texts.text('merchant.stamps.subtitle'),
+      backPath: '/merchant/dashboard',
       trailing: MerchantInfoTooltip(message: texts.text('merchant.stamps.tooltip')),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -132,22 +133,22 @@ class _IntroNotice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MerchantPremiumCard(
-      padding: const EdgeInsets.all(AppSpacing.md),
+    return const MerchantPremiumCard(
+      padding: EdgeInsets.all(AppSpacing.md),
       color: MerchantPremiumColors.surfaceAlt,
       radius: 26,
       child: Row(
         children: [
-          const MerchantPremiumIconBox(
+          MerchantPremiumIconBox(
             icon: Icons.loyalty_rounded,
             size: 46,
             iconSize: 22,
           ),
-          const SizedBox(width: AppSpacing.md),
+          SizedBox(width: AppSpacing.md),
           Expanded(
             child: Text(
               kStampIntroMessage,
-              style: const TextStyle(
+              style: TextStyle(
                 color: MerchantPremiumColors.mutedLight,
                 fontWeight: FontWeight.w700,
                 height: 1.3,
