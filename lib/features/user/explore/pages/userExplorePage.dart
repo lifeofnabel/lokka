@@ -12,11 +12,22 @@ import 'package:lokka/core/widgets/appEmptyState.dart';
 import 'package:lokka/core/widgets/appErrorState.dart';
 import 'package:lokka/core/widgets/appLoadingState.dart';
 import 'package:lokka/core/widgets/appSearchField.dart';
+import 'package:lokka/features/user/discover/models/publicMerchantUserModel.dart';
 import 'package:lokka/features/user/discover/providers/userDiscoverProvider.dart';
 import 'package:lokka/features/user/discover/services/userDiscoverService.dart';
+import 'package:lokka/features/user/partners/providers/userPartnersProvider.dart';
+import 'package:lokka/features/user/partners/widgets/partnerCard.dart';
 
-/// Entdecken-Tab: visuelles Stöbern wie ein Pinnwand-Raster.
-/// M3-Suchfeld filtert die Auswahl; große Bild-Kacheln öffnen die Ergebnisse.
+/// Was wird entdeckt: Deals (Beiträge) oder Partner (Shops).
+enum ExploreMode { deals, partners }
+
+/// Ergebnis-Sortierung innerhalb einer Kategorie: Top (beliebt) ↔ Näheste.
+enum _ResultSort { top, near }
+
+/// Entdecken-Tab: eine zusammenhängende Fläche.
+/// Oben ein Deals/Partner-Umschalter, darunter ein Kategorie-Raster. Ein Tap auf
+/// eine Kategorie öffnet die Ergebnisse INLINE (keine neue Seite, kein Back-Pfeil)
+/// mit „Top"/„Näheste"-Sortierung – für Deals genauso wie für Partner.
 class UserExplorePage extends StatefulWidget {
   const UserExplorePage({super.key});
 
@@ -29,6 +40,10 @@ class _UserExplorePageState extends State<UserExplorePage> {
   List<String> _categories = [];
   bool _loading = true;
   String _query = '';
+
+  ExploreMode _mode = ExploreMode.deals;
+  String? _selectedCategory;
+  _ResultSort _sort = _ResultSort.top;
 
   @override
   void initState() {
@@ -51,14 +66,19 @@ class _UserExplorePageState extends State<UserExplorePage> {
     }
   }
 
-  void _openResults(String value) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => _ExploreResultsPage(value: value),
-      ),
-    );
+  void _setMode(ExploreMode mode) {
+    if (_mode == mode) return;
+    setState(() => _mode = mode);
   }
+
+  void _openCategory(String value) {
+    setState(() {
+      _selectedCategory = value;
+      _sort = _ResultSort.top;
+    });
+  }
+
+  void _backToGrid() => setState(() => _selectedCategory = null);
 
   List<String> _filtered(List<String> items) {
     if (_query.isEmpty) return items;
@@ -68,30 +88,21 @@ class _UserExplorePageState extends State<UserExplorePage> {
 
   @override
   Widget build(BuildContext context) {
-    final tt = Theme.of(context).textTheme;
-    final cs = Theme.of(context).colorScheme;
+    return _selectedCategory == null ? _buildBrowse() : _buildResults();
+  }
 
+  // ── Stöbern: Header + Kategorie-Raster ──────────────────────────────────────
+  Widget _buildBrowse() {
     final categories = _filtered(_categories);
     final noMatches =
         !_loading && _categories.isNotEmpty && categories.isEmpty;
 
     return CustomScrollView(
       slivers: [
-        SliverAppBar(
-          floating: true,
-          snap: true,
-          backgroundColor: AppColors.surfaceBg,
-          elevation: 0,
-          scrolledUnderElevation: 0,
-          centerTitle: false,
-          titleSpacing: AppSpacing.md,
-          title: Text(
-            'Entdecken',
-            style: tt.headlineMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-              letterSpacing: -0.5,
-              color: cs.onSurface,
-            ),
+        SliverToBoxAdapter(
+          child: SafeArea(
+            bottom: false,
+            child: _ExploreHeader(mode: _mode, onModeChanged: _setMode),
           ),
         ),
         if (!_loading && _categories.isNotEmpty)
@@ -127,60 +138,326 @@ class _UserExplorePageState extends State<UserExplorePage> {
             ),
           )
         else ...[
-          if (categories.isNotEmpty) ...[
-            const _SectionHeader(title: 'Kategorien'),
-            _TileGrid(
-              items: categories,
-              isArea: false,
-              onTap: (v) => _openResults(v),
-            ),
-          ],
+          _TileGrid(items: categories, onTap: _openCategory),
           const SliverToBoxAdapter(child: SizedBox(height: 140)),
         ],
       ],
     );
   }
-}
 
-// ── Section header ───────────────────────────────────────────────────────────
-
-class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({required this.title});
-
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    final tt = Theme.of(context).textTheme;
-    final cs = Theme.of(context).colorScheme;
-    return SliverToBoxAdapter(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(
-            AppSpacing.md, AppSpacing.lg, AppSpacing.md, AppSpacing.sm),
-        child: Text(
-          title,
-          style: tt.titleLarge?.copyWith(
-            fontWeight: FontWeight.w700,
-            letterSpacing: -0.2,
-            color: cs.onSurface,
+  // ── Ergebnisse INLINE (gleiche Fläche, kein Back-Pfeil) ─────────────────────
+  Widget _buildResults() {
+    final category = _selectedCategory!;
+    return SafeArea(
+      bottom: false,
+      child: Column(
+        children: [
+          _ExploreHeader(
+              mode: _mode, onModeChanged: _setMode, compact: true),
+          _ResultsBar(
+            category: category,
+            mode: _mode,
+            sort: _sort,
+            onBack: _backToGrid,
+            onSortChanged: (s) => setState(() => _sort = s),
           ),
-        ),
+          Expanded(
+            child: _mode == ExploreMode.deals
+                ? _DealsResults(
+                    key: ValueKey('deals-$category'),
+                    category: category,
+                    sort: _sort,
+                  )
+                : _PartnerResults(
+                    key: ValueKey('partner-$category'),
+                    category: category,
+                    sort: _sort,
+                  ),
+          ),
+        ],
       ),
     );
   }
 }
 
-// ── Visuelles Kachel-Raster (Instagram-Discovery) ────────────────────────────
+// ── Moderner Kopfbereich mit Deals/Partner-Umschalter ─────────────────────────
 
-class _TileGrid extends StatelessWidget {
-  const _TileGrid({
-    required this.items,
-    required this.isArea,
-    required this.onTap,
+class _ExploreHeader extends StatelessWidget {
+  const _ExploreHeader({
+    required this.mode,
+    required this.onModeChanged,
+    this.compact = false,
   });
 
+  final ExploreMode mode;
+  final ValueChanged<ExploreMode> onModeChanged;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final subtitle =
+        mode == ExploreMode.deals ? 'Deals entdecken' : 'Partner entdecken';
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+          AppSpacing.md, compact ? AppSpacing.sm : AppSpacing.md, AppSpacing.md,
+          AppSpacing.xs),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (!compact) ...[
+            Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    gradient: AppColors.mintGradient,
+                    borderRadius: BorderRadius.circular(15),
+                  ),
+                  child: const Icon(Icons.travel_explore_rounded,
+                      color: Colors.white, size: 24),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Entdecken',
+                        style: tt.headlineMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -0.5,
+                          color: cs.onSurface,
+                        ),
+                      ),
+                      Text(
+                        subtitle,
+                        style: tt.bodyMedium
+                            ?.copyWith(color: cs.onSurfaceVariant),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.md),
+          ] else ...[
+            Text(
+              subtitle,
+              style: tt.labelLarge?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: cs.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+          ],
+          _PillSwitch<ExploreMode>(
+            value: mode,
+            onChanged: onModeChanged,
+            expand: true,
+            segments: const [
+              (
+                value: ExploreMode.deals,
+                label: 'Deals',
+                icon: Icons.local_offer_rounded
+              ),
+              (
+                value: ExploreMode.partners,
+                label: 'Partner',
+                icon: Icons.storefront_rounded
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Inline-Leiste über den Ergebnissen: „‹ Kategorien"-Pille (statt Back-Pfeil),
+/// die gewählte Kategorie als Überschrift und der Top/Näheste-Umschalter.
+class _ResultsBar extends StatelessWidget {
+  const _ResultsBar({
+    required this.category,
+    required this.mode,
+    required this.sort,
+    required this.onBack,
+    required this.onSortChanged,
+  });
+
+  final String category;
+  final ExploreMode mode;
+  final _ResultSort sort;
+  final VoidCallback onBack;
+  final ValueChanged<_ResultSort> onSortChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final topLabel = mode == ExploreMode.deals ? 'Top Deals' : 'Beliebt';
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+          AppSpacing.md, AppSpacing.xs, AppSpacing.md, AppSpacing.sm),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // „Zurück" als Pille – bewusst KEIN AppBar-Back-Pfeil.
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Material(
+              color: AppColors.surfaceGray,
+              borderRadius: BorderRadius.circular(999),
+              child: InkWell(
+                onTap: onBack,
+                borderRadius: BorderRadius.circular(999),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 7, 14, 7),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.chevron_left_rounded,
+                          size: 18, color: cs.onSurfaceVariant),
+                      const SizedBox(width: 2),
+                      Text(
+                        'Kategorien',
+                        style: tt.labelLarge?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: cs.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            category,
+            style: tt.headlineSmall?.copyWith(
+              fontWeight: FontWeight.w700,
+              letterSpacing: -0.3,
+              color: cs.onSurface,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          _PillSwitch<_ResultSort>(
+            value: sort,
+            onChanged: onSortChanged,
+            segments: [
+              (
+                value: _ResultSort.top,
+                label: topLabel,
+                icon: Icons.local_fire_department_rounded
+              ),
+              (
+                value: _ResultSort.near,
+                label: 'Näheste',
+                icon: Icons.near_me_rounded
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Wiederverwendbarer M3-Segment-Umschalter (Pille mit gleitender Aktiv-Fläche).
+class _PillSwitch<T> extends StatelessWidget {
+  const _PillSwitch({
+    required this.value,
+    required this.segments,
+    required this.onChanged,
+    this.expand = false,
+  });
+
+  final T value;
+  final List<({T value, String label, IconData icon})> segments;
+  final ValueChanged<T> onChanged;
+  final bool expand;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget seg(({T value, String label, IconData icon}) s) {
+      final cs = Theme.of(context).colorScheme;
+      final tt = Theme.of(context).textTheme;
+      final active = s.value == value;
+      final child = AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+        decoration: BoxDecoration(
+          color: active ? cs.surface : Colors.transparent,
+          borderRadius: BorderRadius.circular(999),
+          boxShadow: active
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.08),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(s.icon,
+                size: 18, color: active ? cs.primary : cs.onSurfaceVariant),
+            const SizedBox(width: 7),
+            Flexible(
+              child: Text(
+                s.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: tt.labelLarge?.copyWith(
+                  fontWeight: active ? FontWeight.w600 : FontWeight.w500,
+                  color: active ? cs.onSurface : cs.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+      final tappable = Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(999),
+        child: InkWell(
+          onTap: () => onChanged(s.value),
+          borderRadius: BorderRadius.circular(999),
+          child: child,
+        ),
+      );
+      return expand ? Expanded(child: tappable) : tappable;
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceGray,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
+        children: segments.map(seg).toList(),
+      ),
+    );
+  }
+}
+
+// ── Kategorie-Raster (Instagram-Discovery) ────────────────────────────────────
+
+class _TileGrid extends StatelessWidget {
+  const _TileGrid({required this.items, required this.onTap});
+
   final List<String> items;
-  final bool isArea;
   final ValueChanged<String> onTap;
 
   @override
@@ -199,7 +476,6 @@ class _TileGrid extends StatelessWidget {
             final item = items[index];
             return _ExploreTile(
               label: item,
-              isArea: isArea,
               seed: index,
               onTap: () => onTap(item),
             );
@@ -215,13 +491,11 @@ class _TileGrid extends StatelessWidget {
 class _ExploreTile extends StatelessWidget {
   const _ExploreTile({
     required this.label,
-    required this.isArea,
     required this.seed,
     required this.onTap,
   });
 
   final String label;
-  final bool isArea;
   final int seed;
   final VoidCallback onTap;
 
@@ -240,7 +514,6 @@ class _ExploreTile extends StatelessWidget {
     final tt = Theme.of(context).textTheme;
     final palette = _palettes[seed % _palettes.length];
     final accent = _darken(palette.last);
-    final icon = isArea ? Icons.location_city_rounded : _categoryIcon(label);
 
     return Material(
       color: Colors.transparent,
@@ -270,7 +543,7 @@ class _ExploreTile extends StatelessWidget {
                     color: Colors.white.withValues(alpha: 0.7),
                     borderRadius: BorderRadius.circular(16),
                   ),
-                  child: Icon(icon, size: 24, color: accent),
+                  child: Icon(_categoryIcon(label), size: 24, color: accent),
                 ),
                 Text(
                   label,
@@ -312,14 +585,18 @@ class _ExploreTile extends StatelessWidget {
     }
     if (l.contains('pizza')) return Icons.local_pizza_rounded;
     if (l.contains('eis') || l.contains('ice')) return Icons.icecream_rounded;
-    if (l.contains('blume') || l.contains('flor')) return Icons.local_florist_rounded;
+    if (l.contains('blume') || l.contains('flor')) {
+      return Icons.local_florist_rounded;
+    }
     if (l.contains('mode') || l.contains('kleid') || l.contains('fashion')) {
       return Icons.checkroom_rounded;
     }
     if (l.contains('friseur') || l.contains('beauty') || l.contains('hair')) {
       return Icons.content_cut_rounded;
     }
-    if (l.contains('markt') || l.contains('super') || l.contains('lebensmittel')) {
+    if (l.contains('markt') ||
+        l.contains('super') ||
+        l.contains('lebensmittel')) {
       return Icons.shopping_basket_rounded;
     }
     if (l.contains('apotheke') || l.contains('pharma')) {
@@ -333,19 +610,15 @@ class _ExploreTile extends StatelessWidget {
   }
 }
 
-// ── Kategorie-Feed ────────────────────────────────────────────────────────────
+// ── Deals-Ergebnisse einer Kategorie ──────────────────────────────────────────
 
-/// Tap auf eine Kategorie öffnet einen Beitrags-Feed, der GENAU auf diese
-/// Kategorie (Merchant-shopType) eingegrenzt ist – gleiche Optik & gleiches
-/// Verhalten wie der „Für dich"-Feed, nur gefiltert.
-///
 /// Eigener [UserDiscoverProvider], damit der Haupt-Feed unberührt bleibt; der
 /// globale Nutzer-Standort kommt aus demselben geteilten Cache (konsistent).
-class _ExploreResultsPage extends StatelessWidget {
-  const _ExploreResultsPage({required this.value});
+class _DealsResults extends StatelessWidget {
+  const _DealsResults({super.key, required this.category, required this.sort});
 
-  /// Ausgewählte Kategorie = Merchant-shopType.
-  final String value;
+  final String category;
+  final _ResultSort sort;
 
   @override
   Widget build(BuildContext context) {
@@ -357,84 +630,65 @@ class _ExploreResultsPage extends StatelessWidget {
           cacheService: ctx.read<LocalCacheService>(),
         ),
       ),
-      child: _ExploreCategoryFeed(category: value),
+      child: _DealsResultsBody(category: category, sort: sort),
     );
   }
 }
 
-class _ExploreCategoryFeed extends StatefulWidget {
-  const _ExploreCategoryFeed({required this.category});
+class _DealsResultsBody extends StatefulWidget {
+  const _DealsResultsBody({required this.category, required this.sort});
 
   final String category;
+  final _ResultSort sort;
 
   @override
-  State<_ExploreCategoryFeed> createState() => _ExploreCategoryFeedState();
+  State<_DealsResultsBody> createState() => _DealsResultsBodyState();
 }
 
-class _ExploreCategoryFeedState extends State<_ExploreCategoryFeed> {
+class _DealsResultsBodyState extends State<_DealsResultsBody> {
   bool _scoped = false;
+  _ResultSort? _appliedSort;
 
   @override
   void initState() {
     super.initState();
-    // Nach dem ersten Frame auf die Kategorie eingrenzen. Der Provider lädt
-    // asynchron; sobald das Laden durch ist, den shopType-Filter setzen (und
-    // erneut anwenden, falls der erste Versuch vor dem Laden lag).
-    WidgetsBinding.instance.addPostFrameCallback((_) => _scopeToCategory());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _apply());
   }
 
-  void _scopeToCategory() {
-    if (_scoped || !mounted) return;
-    final provider = context.read<UserDiscoverProvider>();
-    if (provider.isLoading) return; // warten, bis Daten da sind
-    provider.applyFilters(shopType: widget.category);
+  @override
+  void didUpdateWidget(_DealsResultsBody old) {
+    super.didUpdateWidget(old);
+    if (old.sort != widget.sort) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _apply());
+    }
+  }
+
+  /// Erst auf die Kategorie eingrenzen, sobald die Daten geladen sind, dann die
+  /// gewählte Sortierung anwenden. „Top" = meiste Likes, „Näheste" = Distanz.
+  void _apply() {
+    if (!mounted) return;
+    final p = context.read<UserDiscoverProvider>();
+    if (p.isLoading) return;
+    if (_scoped && _appliedSort == widget.sort) return;
     _scoped = true;
+    _appliedSort = widget.sort;
+    if (widget.sort == _ResultSort.near) {
+      p.applyFilters(shopType: widget.category, sort: DiscoverSort.mostLiked);
+      p.setMode(DiscoverFeedMode.nearMe);
+    } else {
+      p.setMode(DiscoverFeedMode.forYou);
+      p.applyFilters(shopType: widget.category, sort: DiscoverSort.mostLiked);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final tt = Theme.of(context).textTheme;
-    final cs = Theme.of(context).colorScheme;
     final provider = context.watch<UserDiscoverProvider>();
-
-    // Solange noch nicht eingegrenzt wurde und das Laden fertig ist, jetzt
-    // nachholen (z. B. wenn der erste Versuch noch während des Ladens lief).
-    if (!_scoped && !provider.isLoading) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _scopeToCategory());
+    if (!provider.isLoading &&
+        (!_scoped || _appliedSort != widget.sort)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _apply());
     }
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        title: Text(
-          widget.category,
-          style: tt.titleLarge?.copyWith(
-            fontWeight: FontWeight.w700,
-            letterSpacing: -0.2,
-            color: cs.onSurface,
-          ),
-        ),
-      ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-                AppSpacing.md, AppSpacing.xs, AppSpacing.md, AppSpacing.sm),
-            child: _FeedModeToggle(
-              mode: provider.mode,
-              onChanged: provider.setMode,
-            ),
-          ),
-          Expanded(child: _buildBody(provider)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBody(UserDiscoverProvider provider) {
     if (provider.isLoading) return const AppLoadingState();
     if (provider.error != null) {
       return AppErrorState(
@@ -443,35 +697,21 @@ class _ExploreCategoryFeedState extends State<_ExploreCategoryFeed> {
       );
     }
     if (provider.visibleItems.isEmpty) {
-      return switch (provider.mode) {
-        DiscoverFeedMode.following => AppEmptyState(
-            icon: Icons.favorite_border_rounded,
-            title: provider.hasFollowing
-                ? 'Noch nichts Neues'
-                : 'Du folgst noch keinem Partner',
-            message: provider.hasFollowing
-                ? 'Deine Partner haben in „${widget.category}" gerade keine Beiträge.'
-                : 'Füge Partner zu deiner Wallet hinzu – ihre Beiträge erscheinen dann hier.',
-          ),
-        DiscoverFeedMode.nearMe => AppEmptyState(
-            icon: Icons.wrong_location_rounded,
-            title: 'Nichts in der Nähe',
-            message:
-                'Für deinen Standort gibt es in „${widget.category}" gerade keine Beiträge mit Adresse.',
-          ),
-        DiscoverFeedMode.forYou => AppEmptyState(
-            icon: Icons.explore_outlined,
-            title: 'Noch keine Beiträge',
-            message: 'In „${widget.category}" ist gerade nichts los – schau später nochmal vorbei.',
-          ),
-      };
+      return AppEmptyState(
+        icon: widget.sort == _ResultSort.near
+            ? Icons.wrong_location_rounded
+            : Icons.explore_outlined,
+        title: 'Noch keine Deals',
+        message: widget.sort == _ResultSort.near
+            ? 'Für deinen Standort gibt es in „${widget.category}" gerade nichts mit Adresse.'
+            : 'In „${widget.category}" ist gerade nichts los – schau später nochmal vorbei.',
+      );
     }
 
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(
-          AppSpacing.md, AppSpacing.sm, AppSpacing.md, AppSpacing.xxl),
-      itemCount:
-          provider.visibleItems.length + (provider.canLoadMore ? 1 : 0),
+          AppSpacing.md, AppSpacing.sm, AppSpacing.md, 140),
+      itemCount: provider.visibleItems.length + (provider.canLoadMore ? 1 : 0),
       separatorBuilder: (_, _) => const SizedBox(height: 18),
       itemBuilder: (_, index) {
         if (index >= provider.visibleItems.length) {
@@ -486,77 +726,110 @@ class _ExploreCategoryFeedState extends State<_ExploreCategoryFeed> {
   }
 }
 
-/// Oberer 3-Segment-Umschalter „Für dich · Folge ich · Neben mir" – lokale
-/// Kopie der (privaten) Discover-Pille, gleiche Semantik.
-class _FeedModeToggle extends StatelessWidget {
-  const _FeedModeToggle({required this.mode, required this.onChanged});
+// ── Partner-Ergebnisse einer Kategorie ────────────────────────────────────────
 
-  final DiscoverFeedMode mode;
-  final ValueChanged<DiscoverFeedMode> onChanged;
+/// Nutzt den geteilten [UserPartnersProvider] (Stream). Standort kommt aus dem
+/// Discover-Provider, damit „Näheste" konsistent zum Feed ist.
+class _PartnerResults extends StatefulWidget {
+  const _PartnerResults({super.key, required this.category, required this.sort});
+
+  final String category;
+  final _ResultSort sort;
+
+  @override
+  State<_PartnerResults> createState() => _PartnerResultsState();
+}
+
+class _PartnerResultsState extends State<_PartnerResults> {
+  late final UserPartnersProvider _provider;
+
+  @override
+  void initState() {
+    super.initState();
+    _provider = context.read<UserPartnersProvider>();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _init());
+  }
+
+  Future<void> _init() async {
+    if (!mounted) return;
+    final uid = context.read<AuthService>().currentUser?.uid;
+    if (uid != null) await _provider.loadExtras(uid);
+    if (!mounted) return;
+    final loc = context.read<UserDiscoverProvider>().location;
+    _provider.updateLocation(loc.lat, loc.lng);
+    _provider.setFilter(category: widget.category);
+  }
+
+  @override
+  void dispose() {
+    // Geteilten Provider sauber zurücksetzen, sonst hält der Kategorie-Filter.
+    _provider.clearFilters();
+    super.dispose();
+  }
+
+  List<PublicMerchantUserModel> _sorted(UserPartnersProvider p) {
+    final list = p.filteredPartners.toList();
+    if (widget.sort == _ResultSort.near && p.userLat != null && p.userLng != null) {
+      final withCoords = list.where((m) => m.hasCoordinates).toList()
+        ..sort((a, b) => LocationUtils.distanceKm(
+                p.userLat!, p.userLng!, a.lat!, a.lng!)
+            .compareTo(LocationUtils.distanceKm(
+                p.userLat!, p.userLng!, b.lat!, b.lng!)));
+      final rest = list.where((m) => !m.hasCoordinates);
+      return [...withCoords, ...rest];
+    }
+    list.sort((a, b) => p
+        .beliebtScoreFor(b.merchantId)
+        .compareTo(p.beliebtScoreFor(a.merchantId)));
+    return list;
+  }
+
+  double? _distanceKm(UserPartnersProvider p, PublicMerchantUserModel m) {
+    if (p.userLat == null || p.userLng == null || !m.hasCoordinates) return null;
+    return LocationUtils.distanceKm(p.userLat!, p.userLng!, m.lat!, m.lng!);
+  }
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Center(
-      child: FittedBox(
-        fit: BoxFit.scaleDown,
-        child: Container(
-          padding: const EdgeInsets.all(4),
-          decoration: BoxDecoration(
-            color: AppColors.surfaceGray,
-            borderRadius: BorderRadius.circular(999),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _segment(context, 'Für dich', DiscoverFeedMode.forYou, cs),
-              _segment(context, 'Folge ich', DiscoverFeedMode.following, cs),
-              _segment(context, 'Neben mir', DiscoverFeedMode.nearMe, cs),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+    final provider = context.watch<UserPartnersProvider>();
+    if (provider.isLoading) return const AppLoadingState();
+    if (provider.error != null) {
+      return AppErrorState(
+        message: 'Partner konnten nicht geladen werden',
+        onRetry: provider.retry,
+      );
+    }
 
-  Widget _segment(
-    BuildContext context,
-    String label,
-    DiscoverFeedMode value,
-    ColorScheme cs,
-  ) {
-    final active = mode == value;
-    final tt = Theme.of(context).textTheme;
-    return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(999),
-      child: InkWell(
-        onTap: () => onChanged(value),
-        borderRadius: BorderRadius.circular(999),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOut,
-          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
-          decoration: BoxDecoration(
-            color: active ? cs.surface : Colors.transparent,
-            borderRadius: BorderRadius.circular(999),
-          ),
-          child: Text(
-            label,
-            style: tt.labelLarge?.copyWith(
-              fontWeight: active ? FontWeight.w600 : FontWeight.w500,
-              color: active ? cs.onSurface : cs.onSurfaceVariant,
-            ),
-          ),
-        ),
-      ),
+    final partners = _sorted(provider);
+    if (partners.isEmpty) {
+      return AppEmptyState(
+        icon: Icons.store_outlined,
+        title: 'Keine Partner',
+        message: 'In „${widget.category}" gibt es gerade keine Partner.',
+      );
+    }
+
+    final showDistance = widget.sort == _ResultSort.near;
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(
+          AppSpacing.md, AppSpacing.sm, AppSpacing.md, 140),
+      itemCount: partners.length,
+      separatorBuilder: (_, _) => const SizedBox(height: 16),
+      itemBuilder: (_, index) {
+        final m = partners[index];
+        final km = showDistance ? _distanceKm(provider, m) : null;
+        return PartnerCard(
+          merchant: m,
+          distanceKm: km,
+          onTap: () => context.push('/user/partners/${m.merchantId}', extra: m),
+        );
+      },
     );
   }
 }
 
-/// Beitragskarte – optisch identisch zur Discover-`_FeedCard`: weiße Karte,
-/// Radius 28, schlanker Merchant-Header, Bild-Hero mit Typ-Badge + Like +
-/// Titel/Untertitel-Overlay, ruhige Meta-Zeile (Distanz-Pille bei „Neben mir").
+// ── Beitragskarte (optisch identisch zur Discover-`_FeedCard`) ───────────────
+
 class _CategoryFeedCard extends StatelessWidget {
   const _CategoryFeedCard({required this.item});
 
@@ -581,7 +854,6 @@ class _CategoryFeedCard extends StatelessWidget {
         onTap: () async {
           provider.incrementOpen(post.postId);
           await context.push('/user/feed/${post.postId}', extra: post);
-          // Zurück im Feed → frische Daten, damit neue Bewertungen erscheinen.
           if (context.mounted) provider.refreshFresh();
         },
         child: Ink(
@@ -642,7 +914,6 @@ class _CategoryFeedCard extends StatelessWidget {
                           Container(color: AppColors.gray100),
                     ),
                   ),
-                  // Dunkler Verlauf unten, damit der Titel lesbar bleibt.
                   Positioned.fill(
                     child: IgnorePointer(
                       child: DecoratedBox(
@@ -665,7 +936,6 @@ class _CategoryFeedCard extends StatelessWidget {
                     left: 12,
                     child: _Badge(label: feedTypeLabel(post.type)),
                   ),
-                  // Titel + Untertitel unten links auf dem Bild.
                   Positioned(
                     left: 16,
                     right: 60,

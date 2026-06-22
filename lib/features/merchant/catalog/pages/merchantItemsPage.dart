@@ -59,6 +59,8 @@ class _MerchantItemsView extends StatelessWidget {
               _openItemSheet(context);
             },
           ),
+          const SizedBox(height: AppSpacing.sm),
+          _SeedButton(provider: provider),
           const SizedBox(height: AppSpacing.md),
           if (provider.isLoading)
             const MerchantLoadingCards()
@@ -720,6 +722,57 @@ class _OptionGroupsEditorState extends State<_OptionGroupsEditor> {
           borderSide: const BorderSide(color: MerchantPremiumColors.gold, width: 1.3),
         ),
       );
+}
+
+class _SeedButton extends StatelessWidget {
+  const _SeedButton({required this.provider});
+
+  final MerchantItemsProvider provider;
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton.icon(
+      style: OutlinedButton.styleFrom(
+        foregroundColor: MerchantPremiumColors.muted,
+        side: const BorderSide(color: MerchantPremiumColors.line),
+        minimumSize: const Size.fromHeight(48),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      ),
+      icon: const Icon(Icons.download_rounded, size: 18),
+      label: const Text('Voilà Standardartikel importieren'),
+      onPressed: provider.isSaving ? null : () => _confirmSeed(context),
+    );
+  }
+
+  Future<void> _confirmSeed(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Alle Artikel ersetzen?'),
+        content: const Text(
+          'Alle bestehenden Artikel und Kategorien werden unwiderruflich gelöscht '
+          'und durch die 193 Voilà-Standardartikel (17 Kategorien) ersetzt.\n\n'
+          'Dieser Vorgang kann nicht rückgängig gemacht werden.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Abbrechen'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: MerchantPremiumColors.danger,
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Jetzt importieren'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && context.mounted) {
+      await provider.seedCatalog();
+    }
+  }
 }
 
 Future<void> _openItemSheet(BuildContext context, {MerchantItemData? item}) async {

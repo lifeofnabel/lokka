@@ -8,7 +8,7 @@ import 'package:flutter/foundation.dart';
 import 'package:lokka/features/user/discover/models/publicMerchantUserModel.dart';
 import 'package:lokka/features/user/discover/services/userDiscoverService.dart';
 
-enum DiscoverSort { forYou, hottest, newest }
+enum DiscoverSort { forYou, hottest, newest, mostLiked }
 
 /// Oberer Feed-Umschalter: Für dich · Folge ich · Neben mir.
 enum DiscoverFeedMode { forYou, following, nearMe }
@@ -311,6 +311,9 @@ class UserDiscoverProvider extends ChangeNotifier {
         return items;
       case DiscoverSort.hottest:
         items.sort((a, b) => b.hotScore.compareTo(a.hotScore));
+        return items;
+      case DiscoverSort.mostLiked:
+        items.sort((a, b) => b.post.likesCount.compareTo(a.post.likesCount));
         return items;
       case DiscoverSort.forYou:
         return _forYouOrder(items);
