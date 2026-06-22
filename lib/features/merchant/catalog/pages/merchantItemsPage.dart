@@ -74,8 +74,6 @@ class _MerchantItemsViewState extends State<_MerchantItemsView> {
             },
           ),
           const SizedBox(height: AppSpacing.sm),
-          _SeedButton(provider: provider),
-          const SizedBox(height: AppSpacing.sm),
           _ItemSearchBar(controller: _searchController, provider: provider),
           const SizedBox(height: AppSpacing.md),
           if (provider.isLoading)
@@ -799,57 +797,6 @@ class _OptionGroupsEditorState extends State<_OptionGroupsEditor> {
       );
 }
 
-class _SeedButton extends StatelessWidget {
-  const _SeedButton({required this.provider});
-
-  final MerchantItemsProvider provider;
-
-  @override
-  Widget build(BuildContext context) {
-    return OutlinedButton.icon(
-      style: OutlinedButton.styleFrom(
-        foregroundColor: MerchantPremiumColors.muted,
-        side: const BorderSide(color: MerchantPremiumColors.line),
-        minimumSize: const Size.fromHeight(48),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      ),
-      icon: const Icon(Icons.download_rounded, size: 18),
-      label: const Text('Voilà Standardartikel importieren'),
-      onPressed: provider.isSaving ? null : () => _confirmSeed(context),
-    );
-  }
-
-  Future<void> _confirmSeed(BuildContext context) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Alle Artikel ersetzen?'),
-        content: const Text(
-          'Alle bestehenden Artikel und Kategorien werden unwiderruflich gelöscht '
-          'und durch die 193 Voilà-Standardartikel (17 Kategorien) ersetzt.\n\n'
-          'Dieser Vorgang kann nicht rückgängig gemacht werden.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Abbrechen'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: MerchantPremiumColors.danger,
-            ),
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Jetzt importieren'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed == true && context.mounted) {
-      await provider.seedCatalog();
-    }
-  }
-}
-
 Future<void> _openItemSheet(BuildContext context, {MerchantItemData? item}) async {
   final provider = context.read<MerchantItemsProvider>();
   final texts = context.read<LanguageService>();
@@ -983,15 +930,16 @@ Future<void> _openItemSheet(BuildContext context, {MerchantItemData? item}) asyn
                   showSelectedIcon: false,
                 ),
                 const SizedBox(height: AppSpacing.sm),
-                Consumer<MerchantItemsProvider>(
-                  builder: (context, prov, _) => Column(
+                ListenableBuilder(
+                  listenable: provider,
+                  builder: (context, _) => Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       OutlinedButton.icon(
-                        onPressed: prov.isSaving
+                        onPressed: provider.isSaving
                             ? null
                             : () async {
-                                final picked = await prov.uploadService.pickImageWithFilePicker();
+                                final picked = await provider.uploadService.pickImageWithFilePicker();
                                 if (picked == null || !context.mounted) return;
                                 final double ratio = imageRatio == 'wide' ? 16 / 9 : 1.0;
                                 final Uint8List? cropped = await showSquareImageCropSheet(
@@ -1000,7 +948,7 @@ Future<void> _openItemSheet(BuildContext context, {MerchantItemData? item}) asyn
                                   aspectRatio: ratio,
                                 );
                                 if (cropped == null || !context.mounted) return;
-                                final uploaded = await prov.uploadCroppedImage(
+                                final uploaded = await provider.uploadCroppedImage(
                                   bytes: cropped,
                                   fileName: picked.fileName,
                                   type: imageRatio == 'wide' ? UploadImageType.itemWide : UploadImageType.item,
@@ -1012,12 +960,12 @@ Future<void> _openItemSheet(BuildContext context, {MerchantItemData? item}) asyn
                         icon: const Icon(Icons.image_rounded),
                         label: Text(imageUrl.isEmpty ? texts.text('common.uploadImage') : texts.text('common.replaceImage')),
                       ),
-                      if (prov.isSaving) ...[
+                      if (provider.isSaving) ...[
                         const SizedBox(height: 6),
                         ClipRRect(
                           borderRadius: BorderRadius.circular(4),
                           child: LinearProgressIndicator(
-                            value: prov.uploadProgress,
+                            value: provider.uploadProgress,
                             minHeight: 3,
                           ),
                         ),
