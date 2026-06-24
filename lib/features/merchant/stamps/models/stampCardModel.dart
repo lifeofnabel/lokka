@@ -23,6 +23,69 @@ class StampRewardType {
 
   static const item = 'item';
   static const custom = 'custom';
+  static const discount = 'discount';
+  static const free = 'free';
+}
+
+/// A single reward milestone on a stamp card. A "simple" card (X stamps = 1
+/// reward) is just a single tier at `atStamp == requiredStamps`; a "tiered"
+/// card has several (e.g. 5 = discount, 10 = free). Modelling everything as a
+/// list keeps one code path — never two.
+class StampRewardTier {
+  const StampRewardTier({
+    required this.atStamp,
+    required this.type,
+    required this.label,
+    this.itemId = '',
+    this.itemName = '',
+  });
+
+  /// Stamp count at which this reward unlocks (1-based).
+  final int atStamp;
+
+  /// One of [StampRewardType] (item | custom | discount | free).
+  final String type;
+
+  /// Human-facing reward label, e.g. "Gratis-Falafel" or "20% Rabatt".
+  final String label;
+
+  /// Optional linked catalog item (for [StampRewardType.item]).
+  final String itemId;
+  final String itemName;
+
+  factory StampRewardTier.fromMap(Map<String, dynamic> map) {
+    return StampRewardTier(
+      atStamp: StampCardModel._readInt(map['atStamp'], fallback: 1),
+      type: (map['type'] ?? StampRewardType.custom).toString(),
+      label: (map['label'] ?? '').toString(),
+      itemId: (map['itemId'] ?? '').toString(),
+      itemName: (map['itemName'] ?? '').toString(),
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+        'atStamp': atStamp,
+        'type': type,
+        'label': label.trim(),
+        'itemId': itemId,
+        'itemName': itemName,
+      };
+
+  StampRewardTier copyWith({
+    int? atStamp,
+    String? type,
+    String? label,
+    String? itemId,
+    String? itemName,
+  }) {
+    return StampRewardTier(
+      atStamp: atStamp ?? this.atStamp,
+      type: type ?? this.type,
+      label: label ?? this.label,
+      itemId: itemId ?? this.itemId,
+      itemName: itemName ?? this.itemName,
+    );
+  }
 }
 
 class StampCardModel {
@@ -43,6 +106,10 @@ class StampCardModel {
     required this.rewardItemName,
     required this.rewardTitle,
     required this.rewardDescription,
+    this.rewardTiers = const [],
+    this.boundStickId = '',
+    this.stickType = '',
+    this.stickVerifiedAt,
     required this.backgroundColor,
     required this.gradientColor,
     required this.gradientEnabled,
@@ -82,6 +149,23 @@ class StampCardModel {
   final String rewardItemName;
   final String rewardTitle;
   final String rewardDescription;
+
+  /// Ordered reward milestones. Empty means "legacy single reward" — use
+  /// [effectiveRewardTiers] to always get a normalised list.
+  final List<StampRewardTier> rewardTiers;
+
+  /// ID of the physical stamp stick (NTAG 424 DNA / QR) bound to this card, or
+  /// empty when no stick is connected yet.
+  final String boundStickId;
+
+  /// Stick kind: 'static' (browser-written link) | 'ntag424' (pre-provisioned).
+  /// Server-managed mirror; the client only reads it.
+  final String stickType;
+
+  /// When the bound stick passed a Test-Tap. Null until verified — the
+  /// "Stift verbunden ✓" badge only shows once this is set. Server-managed.
+  final DateTime? stickVerifiedAt;
+
   final String backgroundColor;
   final String gradientColor;
   final bool gradientEnabled;
@@ -109,6 +193,40 @@ class StampCardModel {
   bool get isPaused => status == StampCardStatus.paused;
   bool get isArchivedCard => status == StampCardStatus.archived || isArchived;
 
+  bool get hasStick => boundStickId.isNotEmpty;
+
+  /// A stick is connected AND passed its Test-Tap → show "Stift verbunden ✓".
+  bool get stickVerified => stickVerifiedAt != null;
+
+  /// Normalised reward milestones, sorted ascending by [StampRewardTier.atStamp].
+  /// Falls back to a single tier synthesised from the legacy reward fields so
+  /// old cards keep working with the tiered code path.
+  List<StampRewardTier> get effectiveRewardTiers {
+    if (rewardTiers.isNotEmpty) {
+      final sorted = [...rewardTiers]
+        ..sort((a, b) => a.atStamp.compareTo(b.atStamp));
+      return sorted;
+    }
+    return [
+      StampRewardTier(
+        atStamp: requiredStamps,
+        type: rewardType,
+        label: rewardTitle.isNotEmpty
+            ? rewardTitle
+            : (rewardItemName.isNotEmpty ? rewardItemName : rewardDescription),
+        itemId: rewardItemId,
+        itemName: rewardItemName,
+      ),
+    ];
+  }
+
+  /// The final milestone count — how many stamps complete the whole card.
+  int get maxStamps {
+    final tiers = effectiveRewardTiers;
+    final tierMax = tiers.isEmpty ? 0 : tiers.last.atStamp;
+    return tierMax > requiredStamps ? tierMax : requiredStamps;
+  }
+
   factory StampCardModel.empty({required String merchantId}) {
     return StampCardModel(
       id: '',
@@ -127,6 +245,8 @@ class StampCardModel {
       rewardItemName: '',
       rewardTitle: '',
       rewardDescription: '',
+      rewardTiers: const [],
+      boundStickId: '',
       backgroundColor: '#171A18',
       gradientColor: '#45C9A4',
       gradientEnabled: false,
@@ -163,6 +283,14 @@ class StampCardModel {
       rewardItemName: (map['rewardItemName'] ?? '').toString(),
       rewardTitle: (map['rewardTitle'] ?? '').toString(),
       rewardDescription: (map['rewardDescription'] ?? '').toString(),
+      rewardTiers: (map['rewardTiers'] as List?)
+              ?.whereType<Map>()
+              .map((e) => StampRewardTier.fromMap(Map<String, dynamic>.from(e)))
+              .toList() ??
+          const [],
+      boundStickId: (map['boundStickId'] ?? '').toString(),
+      stickType: (map['stickType'] ?? '').toString(),
+      stickVerifiedAt: _readDateTime(map['stickVerifiedAt']),
       backgroundColor: (map['backgroundColor'] ?? '#171A18').toString(),
       gradientColor: (map['gradientColor'] ?? '#45C9A4').toString(),
       gradientEnabled: map['gradientEnabled'] as bool? ?? false,
@@ -206,6 +334,8 @@ class StampCardModel {
       'rewardItemName': rewardItemName,
       'rewardTitle': rewardTitle.trim(),
       'rewardDescription': rewardDescription.trim(),
+      'rewardTiers': rewardTiers.map((t) => t.toMap()).toList(),
+      'boundStickId': boundStickId,
       'backgroundColor': backgroundColor,
       'gradientColor': gradientColor,
       'gradientEnabled': gradientEnabled,
@@ -247,6 +377,10 @@ class StampCardModel {
     String? rewardItemName,
     String? rewardTitle,
     String? rewardDescription,
+    List<StampRewardTier>? rewardTiers,
+    String? boundStickId,
+    String? stickType,
+    DateTime? stickVerifiedAt,
     String? backgroundColor,
     String? gradientColor,
     bool? gradientEnabled,
@@ -286,6 +420,10 @@ class StampCardModel {
       rewardItemName: rewardItemName ?? this.rewardItemName,
       rewardTitle: rewardTitle ?? this.rewardTitle,
       rewardDescription: rewardDescription ?? this.rewardDescription,
+      rewardTiers: rewardTiers ?? this.rewardTiers,
+      boundStickId: boundStickId ?? this.boundStickId,
+      stickType: stickType ?? this.stickType,
+      stickVerifiedAt: stickVerifiedAt ?? this.stickVerifiedAt,
       backgroundColor: backgroundColor ?? this.backgroundColor,
       gradientColor: gradientColor ?? this.gradientColor,
       gradientEnabled: gradientEnabled ?? this.gradientEnabled,

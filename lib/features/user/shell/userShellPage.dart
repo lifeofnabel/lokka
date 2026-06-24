@@ -23,8 +23,6 @@ import 'package:lokka/features/user/wallet/services/userWalletService.dart';
 import 'package:lokka/features/user/notifications/providers/userNotificationProvider.dart';
 import 'package:lokka/features/user/notifications/services/userNotificationService.dart';
 import 'package:lokka/features/user/notifications/services/userPushService.dart';
-import 'package:lokka/features/user/gamification/providers/userGamificationProvider.dart';
-import 'package:lokka/features/user/gamification/services/userGamificationService.dart';
 
 class UserShellPage extends StatefulWidget {
   const UserShellPage({super.key, required this.initialIndex});
@@ -127,14 +125,6 @@ class _UserShellPageState extends State<UserShellPage> {
         ChangeNotifierProvider<UserNotificationProvider>(
           create: (_) => UserNotificationProvider(
             service: UserNotificationService(
-              firestoreService: firestoreService,
-              authService: authService,
-            ),
-          ),
-        ),
-        ChangeNotifierProvider<UserGamificationProvider>(
-          create: (_) => UserGamificationProvider(
-            service: UserGamificationService(
               firestoreService: firestoreService,
               authService: authService,
             ),

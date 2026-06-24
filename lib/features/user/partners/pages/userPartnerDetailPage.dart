@@ -9,12 +9,17 @@ import 'package:lokka/core/services/firestoreService.dart';
 import 'package:lokka/core/services/localCacheService.dart';
 import 'package:lokka/core/theme/appColors.dart';
 import 'package:lokka/core/theme/appSpacing.dart';
+import 'package:lokka/core/utils/shareUtils.dart';
 import 'package:lokka/features/user/discover/models/publicMerchantUserModel.dart';
 import 'package:lokka/features/user/feed/models/feedPostModel.dart';
+import 'package:lokka/features/user/feed/services/userFeedService.dart';
+import 'package:lokka/features/user/feed/widgets/commentsSheet.dart';
+import 'package:lokka/features/user/feed/widgets/postCard.dart';
+import 'package:lokka/features/user/feed/widgets/reportSheet.dart';
 import 'package:lokka/features/user/partners/pages/userMenuPage.dart';
 import 'package:lokka/features/user/partners/pages/userPartnerPointsPage.dart';
 import 'package:lokka/features/user/partners/pages/userPartnerStampsPage.dart';
-import 'package:lokka/features/user/partners/services/userLoyaltyService.dart';
+import 'package:lokka/features/user/shared/widgets/quickActionBar.dart';
 import 'package:lokka/features/user/wallet/services/userWalletService.dart';
 
 /// Partner-Detail im Instagram-Stil: großes Cover mit Floating-Buttons,
@@ -50,7 +55,7 @@ class _PartnerPost {
 class _UserPartnerDetailPageState extends State<UserPartnerDetailPage> {
   late final FirestoreService _firestore;
   late final UserWalletService _walletService;
-  late final UserLoyaltyService _loyaltyService;
+  late final UserFeedService _feedService;
 
   bool _isInWallet = false;
   bool _isCheckingWallet = true;
@@ -66,22 +71,49 @@ class _UserPartnerDetailPageState extends State<UserPartnerDetailPage> {
   _PartnerFeedSort _sort = _PartnerFeedSort.newest;
   bool _showExpired = false;
 
-  // Treue-Programme
-  LoyaltyInfo _loyalty = LoyaltyInfo.none;
+  // Treue-Verfügbarkeit aus der ECHTEN Datenquelle (nicht aus dem nie
+  // gepflegten `featuresPublic`-Flag): Stempel = ≥1 live Stempelkarte,
+  // Punkte = aktiviertes Feature. Wird in initState async geladen.
+  bool _stampsEnabled = false;
+  bool _pointsEnabled = false;
 
   @override
   void initState() {
     super.initState();
     _firestore = context.read<FirestoreService>();
+    final auth = context.read<AuthService>();
     _walletService = UserWalletService(
       firestoreService: _firestore,
-      authService: context.read<AuthService>(),
+      authService: auth,
       cacheService: context.read<LocalCacheService>(),
     );
-    _loyaltyService = UserLoyaltyService(firestoreService: _firestore);
+    _feedService =
+        UserFeedService(firestoreService: _firestore, authService: auth);
     _checkWallet();
     _loadPartnerFeed();
-    _loadLoyalty();
+    _loadLoyaltyAvailability();
+  }
+
+  /// Lädt die echte Treue-Verfügbarkeit: hat der Partner eine LIVE Stempelkarte
+  /// (merchants/{id}/stampCards, isLive) bzw. ein aktives Punkte-Feature
+  /// (featureConfigs). Ersetzt das früher genutzte, nie befüllte
+  /// `merchant.featuresPublic`, das die Kacheln fälschlich „Nicht verfügbar"
+  /// zeigte, obwohl eine öffentliche Karte existiert.
+  Future<void> _loadLoyaltyAvailability() async {
+    final mid = widget.merchant.merchantId;
+    try {
+      final results = await Future.wait([
+        _walletService.loadActiveStampCards(mid),
+        _walletService.loadPointsEnabled(mid),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _stampsEnabled = (results[0] as List).isNotEmpty;
+        _pointsEnabled = results[1] as bool;
+      });
+    } catch (_) {
+      // Bei Lesefehler bleiben die Kacheln deaktiviert (sicherer Default).
+    }
   }
 
   Future<void> _checkWallet() async {
@@ -91,6 +123,12 @@ class _UserPartnerDetailPageState extends State<UserPartnerDetailPage> {
         _isInWallet = inWallet;
         _isCheckingWallet = false;
       });
+    }
+    // Backfill the merchant-side follower record for users who already followed
+    // before this feature existed (the follow button is hidden for them, so
+    // addToWallet won't run again). Idempotent + non-fatal.
+    if (inWallet) {
+      await _walletService.ensureFollowerRecord(widget.merchant);
     }
   }
 
@@ -181,14 +219,6 @@ class _UserPartnerDetailPageState extends State<UserPartnerDetailPage> {
     } catch (_) {
       return _PartnerPost(post: post, avgRating: null, ratingCount: 0);
     }
-  }
-
-  Future<void> _loadLoyalty() async {
-    try {
-      final info =
-          await _loyaltyService.fetchLoyaltyInfo(widget.merchant.merchantId);
-      if (mounted) setState(() => _loyalty = info);
-    } catch (_) {}
   }
 
   List<_PartnerPost> get _visiblePosts {
@@ -464,20 +494,82 @@ class _UserPartnerDetailPageState extends State<UserPartnerDetailPage> {
     );
   }
 
-  List<_SwipeCardData> _swipeCards() {
+  /// Profil-Aktionsleiste (zentriert). Die vier Kern-Aktionen Route/Zeiten/
+  /// Anrufen/Social sind IMMER sichtbar und werden ausgegraut, wenn die Daten
+  /// fehlen. „Karte" (Speisekarte) erscheint nur, wenn der Partner eine hat.
+  List<QuickAction> _quickActions() {
     final m = widget.merchant;
+    final hasRoute = m.address.isNotEmpty || m.hasCoordinates;
+    final hasHours = m.openingHours != null && m.openingHours!.isNotEmpty;
+    final hasPhone = m.phone.trim().isNotEmpty;
+    final hasSocial = m.socialLinks.isNotEmpty;
     return [
-      if (m.address.isNotEmpty || m.hasCoordinates)
-        _SwipeCardData(Icons.near_me_rounded, 'Route', _openRoute),
-      if (m.openingHours != null && m.openingHours!.isNotEmpty)
-        _SwipeCardData(Icons.schedule_rounded, 'Zeiten', _openHours),
-      if (m.phone.isNotEmpty)
-        _SwipeCardData(Icons.call_rounded, 'Anrufen', _call),
+      QuickAction(
+        icon: Icons.near_me_rounded,
+        label: 'Route',
+        enabled: hasRoute,
+        onTap: hasRoute ? _openRoute : null,
+      ),
+      QuickAction(
+        icon: Icons.schedule_rounded,
+        label: 'Zeiten',
+        enabled: hasHours,
+        onTap: hasHours ? _openHours : null,
+      ),
+      QuickAction(
+        icon: Icons.call_rounded,
+        label: 'Anrufen',
+        enabled: hasPhone,
+        onTap: hasPhone ? _call : null,
+      ),
       if (m.hasMenu)
-        _SwipeCardData(Icons.restaurant_menu_rounded, 'Karte', _openMenu),
-      if (m.socialLinks.isNotEmpty)
-        _SwipeCardData(Icons.alternate_email_rounded, 'Social', _openSocial),
+        QuickAction(
+          icon: Icons.restaurant_menu_rounded,
+          label: 'Karte',
+          enabled: true,
+          onTap: _openMenu,
+        ),
+      QuickAction(
+        icon: Icons.alternate_email_rounded,
+        label: 'Social',
+        enabled: hasSocial,
+        onTap: hasSocial ? _openSocial : null,
+      ),
     ];
+  }
+
+  /// Treue-Kacheln. Beide werden IMMER gezeigt; aktiv/ausgegraut richtet sich
+  /// nach der echten Verfügbarkeit (live Stempelkarte / aktives Punkte-Feature,
+  /// async geladen in [_loadLoyaltyAvailability]). Tippt man auf eine
+  /// deaktivierte Kachel, erscheint eine klare Meldung statt Navigation.
+  Widget _loyaltyTiles() {
+    final pointsEnabled = _pointsEnabled;
+    final stampsEnabled = _stampsEnabled;
+    return Row(
+      children: [
+        Expanded(
+          child: _LoyaltyCard(
+            icon: Icons.stars_rounded,
+            title: 'Punkte sammeln',
+            enabled: pointsEnabled,
+            onTap: _openPoints,
+            onDisabledTap: () =>
+                _snack('Dieses Geschäft sammelt keine Punkte.'),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _LoyaltyCard(
+            icon: Icons.approval_rounded,
+            title: 'Stempelkarte',
+            enabled: stampsEnabled,
+            onTap: _openStamps,
+            onDisabledTap: () =>
+                _snack('Dieses Geschäft hat keine Stempelkarten hinterlegt.'),
+          ),
+        ),
+      ],
+    );
   }
 
   @override
@@ -511,32 +603,9 @@ class _UserPartnerDetailPageState extends State<UserPartnerDetailPage> {
                     onAdd: _addToWallet,
                   ),
                   const SizedBox(height: AppSpacing.lg),
-                  _SwipeCardsRow(cards: _swipeCards()),
-                  if (_loyalty.hasAny) ...[
-                    const SizedBox(height: AppSpacing.md),
-                    Row(
-                      children: [
-                        if (_loyalty.hasPoints)
-                          Expanded(
-                            child: _LoyaltyCard(
-                              icon: Icons.stars_rounded,
-                              title: 'Punkte sammeln',
-                              onTap: _openPoints,
-                            ),
-                          ),
-                        if (_loyalty.hasPoints && _loyalty.hasStamps)
-                          const SizedBox(width: 10),
-                        if (_loyalty.hasStamps)
-                          Expanded(
-                            child: _LoyaltyCard(
-                              icon: Icons.approval_rounded,
-                              title: 'Stempelkarte',
-                              onTap: _openStamps,
-                            ),
-                          ),
-                      ],
-                    ),
-                  ],
+                  QuickActionBar(actions: _quickActions()),
+                  const SizedBox(height: AppSpacing.md),
+                  _loyaltyTiles(),
                   const SizedBox(height: AppSpacing.xl),
                   _buildFeedSection(),
                   const SizedBox(height: AppSpacing.xxl),
@@ -619,9 +688,11 @@ class _UserPartnerDetailPageState extends State<UserPartnerDetailPage> {
           ...visible.map(
             (entry) => Padding(
               padding: const EdgeInsets.only(bottom: AppSpacing.md),
-              child: _PartnerPostCard(
-                entry: entry,
-                onTap: () => context.push(
+              child: _ProfilePostCard(
+                post: entry.post,
+                isExpired: entry.isExpired,
+                feedService: _feedService,
+                onOpen: () => context.push(
                   '/user/feed/${entry.post.postId}',
                   extra: entry.post,
                 ),
@@ -996,66 +1067,77 @@ class _LoyaltyCard extends StatelessWidget {
   const _LoyaltyCard({
     required this.icon,
     required this.title,
+    required this.enabled,
     required this.onTap,
+    required this.onDisabledTap,
   });
 
   final IconData icon;
   final String title;
+  final bool enabled;
   final VoidCallback onTap;
+  final VoidCallback onDisabledTap;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
+    // Disabled tiles stay visible but dimmed; tapping shows a clear message.
+    final bg = enabled
+        ? cs.secondaryContainer
+        : cs.surfaceContainerHighest.withValues(alpha: 0.5);
+    final fg = enabled ? cs.onSecondaryContainer : cs.onSurfaceVariant;
+    final iconColor = enabled ? cs.primary : cs.onSurfaceVariant;
     return Material(
-      color: cs.secondaryContainer,
+      color: bg,
       borderRadius: BorderRadius.circular(22),
       child: InkWell(
         borderRadius: BorderRadius.circular(22),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: cs.surface,
-                  shape: BoxShape.circle,
+        onTap: enabled ? onTap : onDisabledTap,
+        child: Opacity(
+          opacity: enabled ? 1 : 0.7,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration:
+                      BoxDecoration(color: cs.surface, shape: BoxShape.circle),
+                  child: Icon(enabled ? icon : Icons.lock_outline_rounded,
+                      size: 21, color: iconColor),
                 ),
-                child: Icon(icon, size: 21, color: cs.primary),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: tt.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: cs.onSecondaryContainer,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Row(
-                children: [
-                  Text(
-                    'Jetzt ansehen',
-                    style: tt.labelMedium?.copyWith(
-                      color: cs.onSecondaryContainer
-                          .withValues(alpha: 0.75),
-                      fontWeight: FontWeight.w500,
-                    ),
+                const SizedBox(height: 10),
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: tt.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: fg,
                   ),
-                  const SizedBox(width: 2),
-                  Icon(Icons.chevron_right_rounded,
-                      size: 16,
-                      color:
-                          cs.onSecondaryContainer.withValues(alpha: 0.75)),
-                ],
-              ),
-            ],
+                ),
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    Text(
+                      enabled ? 'Jetzt ansehen' : 'Nicht verfügbar',
+                      style: tt.labelMedium?.copyWith(
+                        color: fg.withValues(alpha: 0.75),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    if (enabled) ...[
+                      const SizedBox(width: 2),
+                      Icon(Icons.chevron_right_rounded,
+                          size: 16, color: fg.withValues(alpha: 0.75)),
+                    ],
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -1112,304 +1194,56 @@ class _SortPill extends StatelessWidget {
   }
 }
 
-// ── Partner-Feed-Karte (gleiche Bildsprache wie der Für-dich-Feed) ───────────
+// ── Partner-Feed-Karte = identische Feed-PostCard (ohne Profil-Navigation) ───
 
-class _PartnerPostCard extends StatelessWidget {
-  const _PartnerPostCard({required this.entry, required this.onTap});
+class _ProfilePostCard extends StatelessWidget {
+  const _ProfilePostCard({
+    required this.post,
+    required this.isExpired,
+    required this.feedService,
+    required this.onOpen,
+  });
 
-  final _PartnerPost entry;
-  final VoidCallback onTap;
-
-  static const _greyscale = ColorFilter.matrix(<double>[
-    0.2126, 0.7152, 0.0722, 0, 0,
-    0.2126, 0.7152, 0.0722, 0, 0,
-    0.2126, 0.7152, 0.0722, 0, 0,
-    0, 0, 0, 1, 0,
-  ]);
+  final FeedPostModel post;
+  final bool isExpired;
+  final UserFeedService feedService;
+  final VoidCallback onOpen;
 
   @override
   Widget build(BuildContext context) {
-    final post = entry.post;
-    final expired = entry.isExpired;
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-
-    Widget image = post.imageUrl.isNotEmpty
-        ? CachedNetworkImage(
-            imageUrl: post.imageUrl,
-            fit: BoxFit.cover,
-            placeholder: (_, _) => Container(color: AppColors.gray100),
-            errorWidget: (_, _, _) => Container(color: AppColors.gray100),
-          )
-        : Container(color: AppColors.gray100);
-    if (expired) {
-      image = ColorFiltered(colorFilter: _greyscale, child: image);
-    }
-
-    return Opacity(
-      opacity: expired ? 0.75 : 1,
-      child: Material(
-        color: cs.surface,
-        borderRadius: BorderRadius.circular(28),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: Ink(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(28),
-              border: Border.all(color: cs.outlineVariant),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Bild-Hero mit Titel-Overlay auf Scrim
-                Stack(
-                  children: [
-                    AspectRatio(aspectRatio: 1.1, child: image),
-                    Positioned.fill(
-                      child: IgnorePointer(
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                              colors: [
-                                Colors.transparent,
-                                Colors.black.withValues(alpha: 0.55),
-                              ],
-                              stops: const [0.5, 1],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      top: 12,
-                      left: 12,
-                      child: _TypeBadge(label: _feedTypeLabel(post.type)),
-                    ),
-                    if (expired)
-                      Positioned(
-                        top: 12,
-                        right: 12,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 5),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.65),
-                            borderRadius: BorderRadius.circular(100),
-                          ),
-                          child: Text(
-                            'Abgelaufen',
-                            style: tt.labelMedium?.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                      ),
-                    Positioned(
-                      left: 16,
-                      right: 16,
-                      bottom: 14,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            post.title,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: tt.titleLarge?.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: -0.2,
-                              height: 1.15,
-                            ),
-                          ),
-                          if (post.subtitle.isNotEmpty) ...[
-                            const SizedBox(height: 4),
-                            Text(
-                              post.subtitle,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: tt.bodyMedium?.copyWith(
-                                color:
-                                    Colors.white.withValues(alpha: 0.87),
-                                fontWeight: FontWeight.w500,
-                                height: 1.2,
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                // Ruhige Meta-Zeile
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
-                  child: Row(
-                    children: [
-                      if (entry.avgRating != null) ...[
-                        const Icon(Icons.star_rounded,
-                            size: 18, color: AppColors.googleYellow),
-                        const SizedBox(width: 4),
-                        Text(
-                          '${entry.avgRating!.toStringAsFixed(1)} (${entry.ratingCount})',
-                          style: tt.labelLarge
-                              ?.copyWith(fontWeight: FontWeight.w600),
-                        ),
-                      ] else
-                        Text('Neu',
-                            style: tt.labelMedium
-                                ?.copyWith(color: cs.onSurfaceVariant)),
-                      if (post.likesCount > 0) ...[
-                        const SizedBox(width: 14),
-                        Icon(Icons.favorite_rounded,
-                            size: 15, color: cs.primary),
-                        const SizedBox(width: 4),
-                        Text('${post.likesCount}',
-                            style: tt.labelMedium
-                                ?.copyWith(color: cs.onSurfaceVariant)),
-                      ],
-                      const Spacer(),
-                      Icon(Icons.chevron_right_rounded,
-                          color: cs.onSurfaceVariant, size: 22),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+    return StreamBuilder<bool>(
+      stream: feedService.likedStream(post.postId),
+      builder: (context, snapshot) {
+        final isLiked = snapshot.data ?? false;
+        return PostCard(
+          post: post,
+          isLiked: isLiked,
+          isExpired: isExpired,
+          commentCount: post.commentsCount,
+          // We are already on this merchant's profile → header is inert.
+          enableProfileNavigation: false,
+          onTap: onOpen,
+          onLikeTap: () async {
+            try {
+              await feedService.toggleLike(post.postId, isLiked);
+            } catch (_) {}
+          },
+          onCommentTap: () => showCommentsSheet(
+            context,
+            feedService: feedService,
+            postId: post.postId,
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _TypeBadge extends StatelessWidget {
-  const _TypeBadge({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    if (label.isEmpty) return const SizedBox.shrink();
-    final tt = Theme.of(context).textTheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.6),
-        borderRadius: BorderRadius.circular(100),
-      ),
-      child: Text(
-        label,
-        style: tt.labelMedium?.copyWith(
-          fontWeight: FontWeight.w700,
-          color: Colors.white,
-        ),
-      ),
-    );
-  }
-}
-
-String _feedTypeLabel(String type) {
-  const labels = {
-    'offer': 'Angebot',
-    'onePlusOneFree': '1+1 Gratis',
-    'buyOneGetOneFree': 'Kauf 1, bekomme 1',
-    'twoPlusOneFree': '2+1 Gratis',
-    'buyTwoGetOneFree': 'Kauf 2, bekomme 1',
-    'categoryDiscountPercent': 'Prozent-Rabatt',
-    'categoryDiscountFixed': 'Rabatt',
-    'happyHour': 'Happy Hour',
-    'quickSell': 'Schnell weg',
-    'rescueMe': 'Rette mich',
-    'news': 'Neuigkeit',
-    'newProduct': 'Neue Ware',
-    'info': 'Info',
-    'communityEvent': 'Event',
-    'hiring': 'Team gesucht',
-    'sponsoredSpot': 'Sponsored',
-  };
-  return labels[type] ?? type;
-}
-
-// ── Swipe-Mini-Cards ─────────────────────────────────────────────────────────
-
-class _SwipeCardData {
-  const _SwipeCardData(this.icon, this.label, this.onTap);
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-}
-
-class _SwipeCardsRow extends StatelessWidget {
-  const _SwipeCardsRow({required this.cards});
-
-  final List<_SwipeCardData> cards;
-
-  @override
-  Widget build(BuildContext context) {
-    if (cards.isEmpty) return const SizedBox.shrink();
-    return SizedBox(
-      height: 88,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        physics: const BouncingScrollPhysics(),
-        padding: EdgeInsets.zero,
-        itemCount: cards.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 10),
-        itemBuilder: (_, i) => _SwipeCard(data: cards[i]),
-      ),
-    );
-  }
-}
-
-class _SwipeCard extends StatelessWidget {
-  const _SwipeCard({required this.data});
-
-  final _SwipeCardData data;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-    return Material(
-      color: cs.surface,
-      borderRadius: BorderRadius.circular(20),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(20),
-        onTap: data.onTap,
-        child: Ink(
-          width: 86,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: cs.outlineVariant),
+          onShareTap: () => ShareUtils.shareFeedPost(
+            title: post.title,
+            merchantName: post.merchantName,
           ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: cs.secondaryContainer,
-                  borderRadius: BorderRadius.circular(13),
-                ),
-                child: Icon(data.icon,
-                    size: 21, color: cs.onSecondaryContainer),
-              ),
-              const SizedBox(height: 7),
-              Text(
-                data.label,
-                style: tt.labelMedium?.copyWith(fontWeight: FontWeight.w600),
-              ),
-            ],
+          onReport: () => showReportPostSheet(
+            context,
+            feedService: feedService,
+            post: post,
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }

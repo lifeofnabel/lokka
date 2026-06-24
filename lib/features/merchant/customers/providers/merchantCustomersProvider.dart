@@ -5,6 +5,7 @@ import '../services/merchantCustomersService.dart';
 
 enum MerchantCustomerFilter {
   all,
+  followers,
   stampCards,
   pointsSystems,
   coupons,
@@ -34,6 +35,8 @@ class MerchantCustomersProvider extends ChangeNotifier {
   void _recomputeVisible() {
     final result = switch (filter) {
       MerchantCustomerFilter.all => List.of(customers),
+      MerchantCustomerFilter.followers =>
+        customers.where((item) => item.isFollower).toList(),
       // lastVisited filtert Kunden ohne Besuchsdatum heraus (sonst säße der
       // Chip nur als Sortierung verkleidet als Filter da).
       MerchantCustomerFilter.lastVisited =>

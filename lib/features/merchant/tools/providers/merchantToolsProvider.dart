@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 
 import '../../../../core/services/uploadService.dart';
+import '../../stamps/models/stampCardModel.dart';
+import '../../stamps/services/merchantStampsService.dart';
 import '../services/merchantToolsService.dart';
 
 class MerchantCategoriesProvider extends ChangeNotifier {
@@ -435,14 +437,23 @@ class MerchantShopProvider extends ChangeNotifier {
 }
 
 class MerchantFeedManageProvider extends ChangeNotifier {
-  MerchantFeedManageProvider({required this.service});
+  MerchantFeedManageProvider({required this.service, this.stampsService});
 
   final MerchantToolsService service;
+
+  /// Optional — used to populate the per-post CTA "stamp card" picker. When null
+  /// the picker simply offers no cards (handled gracefully in the UI).
+  final MerchantStampsService? stampsService;
 
   bool isLoading = true;
   bool isSaving = false;
   String? error;
   List<MerchantFeedPostData> posts = [];
+
+  String get merchantId => service.merchantId;
+
+  /// The merchant's stamp cards available as a CTA target (non-archived).
+  List<StampCardModel> linkableCards = const [];
 
   Future<void> load() async {
     try {
@@ -450,6 +461,17 @@ class MerchantFeedManageProvider extends ChangeNotifier {
       error = null;
       notifyListeners();
       posts = await service.loadFeedPosts();
+      // Cards are a nice-to-have for the CTA picker; never fail the whole page
+      // if loading them errors.
+      if (stampsService != null) {
+        try {
+          final cards = await stampsService!.loadStampCards();
+          linkableCards =
+              cards.where((c) => !c.isArchivedCard).toList(growable: false);
+        } catch (_) {
+          linkableCards = const [];
+        }
+      }
     } catch (e) {
       error = e.toString();
     } finally {
@@ -464,6 +486,21 @@ class MerchantFeedManageProvider extends ChangeNotifier {
       error = null;
       notifyListeners();
       await service.updateFeedPost(postId, values);
+      await load();
+    } catch (e) {
+      error = e.toString();
+    } finally {
+      isSaving = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> deletePost(String postId) async {
+    try {
+      isSaving = true;
+      error = null;
+      notifyListeners();
+      await service.deleteFeedPost(postId);
       await load();
     } catch (e) {
       error = e.toString();

@@ -124,6 +124,7 @@ class MerchantFeedCreateService {
     String ctaLinkType = '',
     String ctaTargetId = '',
     String ctaUrl = '',
+    String linkedCardId = '',
     String targetAudience = 'all',
     Map<String, dynamic> rules = const {},
     DateTime? startsAt,
@@ -134,7 +135,8 @@ class MerchantFeedCreateService {
     final postId = firestoreService.collection(FirebasePaths.feed).doc().id;
     final now = DateTime.now();
     final isScheduled = startsAt != null && startsAt.isAfter(now);
-    final ctaRoute = _ctaRoute(
+    final ctaRoute = ctaRouteFor(
+      merchantId: merchantId,
       linkType: ctaLinkType,
       targetId: ctaTargetId,
     );
@@ -162,6 +164,7 @@ class MerchantFeedCreateService {
       'ctaTargetId': ctaTargetId.trim(),
       'ctaUrl': ctaUrl.trim(),
       'ctaRoute': ctaRoute,
+      'linkedCardId': linkedCardId.trim(),
       'targetAudience': targetAudience.trim().isEmpty ? 'all' : targetAudience.trim(),
       'rules': rules,
       'startDate': startsAt == null ? null : Timestamp.fromDate(startsAt),
@@ -185,14 +188,23 @@ class MerchantFeedCreateService {
     await batch.commit();
   }
 
-  String _ctaRoute({
+  /// Resolves the in-app deep link a CTA target maps to. Static + shared so the
+  /// per-post CTA editor and the create flow compute the route identically.
+  ///
+  /// Targets: 'profile' → merchant page, 'url' → external (no route), 'stampCard'
+  /// → that merchant's wallet cards. Legacy 'shop'/'catalog'/'feedPost' kept.
+  static String ctaRouteFor({
+    required String merchantId,
     required String linkType,
     required String targetId,
   }) {
     return switch (linkType) {
+      'profile' => '/user/partners/$merchantId',
+      'stampCard' => '/user/stamps/$merchantId',
       'shop' => '/shop/$merchantId',
       'catalog' => '/shop/$merchantId',
-      'feedPost' => targetId.trim().isEmpty ? '' : '/user/feed/${targetId.trim()}',
+      'feedPost' =>
+        targetId.trim().isEmpty ? '' : '/user/feed/${targetId.trim()}',
       _ => '',
     };
   }

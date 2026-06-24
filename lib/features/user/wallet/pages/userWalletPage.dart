@@ -6,10 +6,9 @@ import 'package:lokka/core/theme/appSpacing.dart';
 import 'package:lokka/core/widgets/appEmptyState.dart';
 import 'package:lokka/core/widgets/appErrorState.dart';
 import 'package:lokka/core/widgets/appLoadingState.dart';
-import 'package:lokka/features/user/wallet/models/walletCardModel.dart';
-import 'package:lokka/features/user/wallet/pages/userWalletDetailPage.dart';
 import 'package:lokka/features/user/wallet/providers/userWalletProvider.dart';
 import 'package:lokka/features/user/wallet/widgets/walletCard.dart';
+import 'package:lokka/features/user/wallet/widgets/walletCardStack.dart';
 
 class UserWalletPage extends StatelessWidget {
   const UserWalletPage({super.key});
@@ -18,6 +17,7 @@ class UserWalletPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
+    final uid = context.read<AuthService>().currentUser?.uid ?? '';
     return Consumer<UserWalletProvider>(
       builder: (context, provider, _) {
         final count = provider.cards.length;
@@ -102,7 +102,8 @@ class UserWalletPage extends StatelessWidget {
                   final card = provider.cards[i];
                   return WalletCard(
                     card: card,
-                    onTap: () => _openDetail(ctx, card),
+                    uid: uid,
+                    onTap: () => openWalletCardStack(ctx, card, uid),
                   );
                 },
               ),
@@ -111,16 +112,6 @@ class UserWalletPage extends StatelessWidget {
           ],
         );
       },
-    );
-  }
-
-  void _openDetail(BuildContext context, WalletCardModel card) {
-    final uid = context.read<AuthService>().currentUser?.uid ?? '';
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => UserWalletDetailPage(card: card, uid: uid),
-      ),
     );
   }
 }

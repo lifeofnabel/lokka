@@ -401,7 +401,8 @@ class _LocationButton extends StatelessWidget {
 }
 
 /// Süßes zentriertes Popup: Adresse tippen (Autocomplete, Hessen) · eigenen
-/// Standort verwenden · überspringen (→ Westendplatz 31). Keine Karte.
+/// Standort verwenden. Kein „Überspringen" mehr (kein Westendplatz-Default-
+/// Angebot); zum Abbrechen tippt man neben den Dialog. Keine Karte.
 class _LocationSheet extends StatefulWidget {
   const _LocationSheet({required this.provider});
 
@@ -449,11 +450,6 @@ class _LocationSheetState extends State<_LocationSheet> {
       lng: g.lng,
       label: g.formatted.isNotEmpty ? g.formatted : _ctrl.text.trim(),
     );
-    if (mounted) Navigator.pop(context);
-  }
-
-  Future<void> _skip() async {
-    await widget.provider.useDefaultLocation();
     if (mounted) Navigator.pop(context);
   }
 
@@ -561,11 +557,6 @@ class _LocationSheetState extends State<_LocationSheet> {
               onPressed: _gps,
               icon: const Icon(Icons.my_location_rounded, size: 18),
               label: const Text('Meinen Standort verwenden'),
-            ),
-            const SizedBox(height: 8),
-            TextButton(
-              onPressed: _skip,
-              child: const Text('Überspringen (Westendplatz 31)'),
             ),
           ],
         ),

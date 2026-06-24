@@ -99,6 +99,20 @@ class MerchantStampsProvider extends ChangeNotifier {
     await load();
   }
 
+  Future<void> duplicateCard(StampCardModel card) async {
+    await _savingVoid(() => service.duplicateCard(card));
+    await load();
+  }
+
+  /// Cards that count against the 3-card limit (everything except archived).
+  int get activeCount => cards.where((c) => !c.isArchivedCard).length;
+  static const int maxActiveCards = 3;
+  bool get atCap => activeCount >= maxActiveCards;
+
+  /// Live cards a physical stick can be bound to.
+  List<StampCardModel> get liveCards =>
+      cards.where((c) => c.isLive).toList(growable: false);
+
   Future<String?> _saving(Future<String> Function() action) async {
     try {
       isSaving = true;

@@ -5,9 +5,12 @@ import 'package:lokka/core/theme/appRadius.dart';
 import 'package:lokka/core/theme/appSpacing.dart';
 import 'package:lokka/core/widgets/appEmptyState.dart';
 import 'package:lokka/core/widgets/appErrorState.dart';
+import 'package:lokka/core/utils/shareUtils.dart';
 import 'package:lokka/features/user/feed/models/feedPostModel.dart';
 import 'package:lokka/features/user/feed/providers/userFeedProvider.dart';
-import 'package:lokka/features/user/feed/widgets/feedDealCard.dart';
+import 'package:lokka/features/user/feed/widgets/commentsSheet.dart';
+import 'package:lokka/features/user/feed/widgets/postCard.dart';
+import 'package:lokka/features/user/feed/widgets/reportSheet.dart';
 import 'package:lokka/features/user/feed/widgets/feedFilterBar.dart';
 import 'package:lokka/features/user/feed/pages/userFeedDetailPage.dart';
 import 'package:lokka/features/user/partners/pages/userPartnerDetailPage.dart';
@@ -165,15 +168,30 @@ class _FeedCardWithLike extends StatelessWidget {
       stream: provider.service.likedStream(post.postId),
       builder: (context, snapshot) {
         final isLiked = snapshot.data ?? false;
-        return FeedDealCard(
+        return PostCard(
           post: post,
           onTap: onTap,
           isLiked: isLiked,
+          commentCount: post.commentsCount,
           onLikeTap: () async {
             try {
               await provider.service.toggleLike(post.postId, isLiked);
             } catch (_) {}
           },
+          onCommentTap: () => showCommentsSheet(
+            context,
+            feedService: provider.service,
+            postId: post.postId,
+          ),
+          onShareTap: () => ShareUtils.shareFeedPost(
+            title: post.title,
+            merchantName: post.merchantName,
+          ),
+          onReport: () => showReportPostSheet(
+            context,
+            feedService: provider.service,
+            post: post,
+          ),
           onMerchantTap: onMerchantTap,
         );
       },

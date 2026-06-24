@@ -18,6 +18,7 @@ class FeedPostModel {
     required this.viewsCount,
     required this.opensCount,
     required this.clicksCount,
+    this.commentsCount = 0,
     this.oldPrice,
     this.newPrice,
     this.discountPercent,
@@ -30,6 +31,7 @@ class FeedPostModel {
     this.ctaTargetId,
     this.ctaUrl,
     this.ctaRoute,
+    this.linkedCardId,
     this.targetAudience,
     this.isScheduled = false,
     this.validFrom,
@@ -58,6 +60,7 @@ class FeedPostModel {
   final int viewsCount;
   final int opensCount;
   final int clicksCount;
+  final int commentsCount;
   final double? oldPrice;
   final double? newPrice;
   final int? discountPercent;
@@ -70,6 +73,10 @@ class FeedPostModel {
   final String? ctaTargetId;
   final String? ctaUrl;
   final String? ctaRoute;
+
+  /// For `type == 'stampAd'`: the advertised stamp card's id (informational;
+  /// the CTA itself routes via [ctaLinkType]/[ctaTargetId]).
+  final String? linkedCardId;
   final String? targetAudience;
   final bool isScheduled;
   final DateTime? validFrom;
@@ -100,6 +107,7 @@ class FeedPostModel {
       viewsCount: (map['viewsCount'] as num?)?.toInt() ?? 0,
       opensCount: (map['opensCount'] as num?)?.toInt() ?? 0,
       clicksCount: (map['clicksCount'] as num?)?.toInt() ?? 0,
+      commentsCount: (map['commentsCount'] as num?)?.toInt() ?? 0,
       oldPrice: (map['oldPrice'] as num?)?.toDouble(),
       newPrice: (map['newPrice'] as num?)?.toDouble(),
       discountPercent: (map['discountPercent'] as num?)?.toInt(),
@@ -112,6 +120,7 @@ class FeedPostModel {
       ctaTargetId: _optionalString(map['ctaTargetId']),
       ctaUrl: _optionalString(map['ctaUrl'] ?? map['buttonLink']),
       ctaRoute: _optionalString(map['ctaRoute']),
+      linkedCardId: _optionalString(map['linkedCardId']),
       targetAudience: _optionalString(map['targetAudience']),
       isScheduled: map['isScheduled'] as bool? ?? false,
       validFrom: _tsToDate(map['validFrom']),
@@ -143,6 +152,7 @@ class FeedPostModel {
       'viewsCount': viewsCount,
       'opensCount': opensCount,
       'clicksCount': clicksCount,
+      'commentsCount': commentsCount,
       'oldPrice': oldPrice,
       'newPrice': newPrice,
       'discountPercent': discountPercent,
@@ -155,6 +165,7 @@ class FeedPostModel {
       'ctaTargetId': ctaTargetId,
       'ctaUrl': ctaUrl,
       'ctaRoute': ctaRoute,
+      'linkedCardId': linkedCardId,
       'targetAudience': targetAudience,
       'isScheduled': isScheduled,
       'validFrom': validFrom?.toIso8601String(),

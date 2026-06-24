@@ -47,11 +47,17 @@ class FirebasePaths {
   static const availableRewards = 'availableRewards';
   static const stampProgress = 'stampProgress';
   static const pointsProgress = 'pointsProgress';
+  // Stempelkarten: physische Stempelstifte (NTAG 424 DNA + QR) und vom Server
+  // (Cloud Function) erzeugte verdiente Belohnungen. `sticks` ist top-level und
+  // ausschließlich serverseitig beschreibbar; `earnedRewards` liegt pro Nutzer.
+  static const sticks = 'sticks';
+  static const earnedRewards = 'earnedRewards';
 
   static const likes = 'likes';
   static const views = 'views';
   static const clicks = 'clicks';
   static const reviews = 'reviews';
+  static const comments = 'comments';
   static const messages = 'messages';
   static const accountDeletionRequests = 'accountDeletionRequests';
   static const contentReports = 'contentReports';
@@ -91,6 +97,9 @@ class FirebasePaths {
   static String userCoupons(String uid) => '${user(uid)}/$coupons';
   static String userAvailableRewards(String uid) =>
       '${user(uid)}/$availableRewards';
+  static String userEarnedRewards(String uid) => '${user(uid)}/$earnedRewards';
+  static String userEarnedReward(String uid, String rewardId) =>
+      '${userEarnedRewards(uid)}/$rewardId';
   static String userOrders(String uid) => '${user(uid)}/$orders';
   static String userNotifications(String uid) => '${user(uid)}/$notifications';
   static String userNotification(String uid, String id) =>
@@ -102,6 +111,8 @@ class FirebasePaths {
       '${merchantFeatureConfigs(merchantId)}/$module';
   static String merchantCustomers(String merchantId) =>
       '${merchant(merchantId)}/$customers';
+  static String merchantCustomer(String merchantId, String customerId) =>
+      '${merchantCustomers(merchantId)}/$customerId';
   static String merchantFeedPosts(String merchantId) =>
       '${merchant(merchantId)}/$feedPosts';
   static String merchantFeedPost(String merchantId, String postId) =>
@@ -110,6 +121,9 @@ class FirebasePaths {
       '${merchant(merchantId)}/$stampCards';
   static String merchantStampCard(String merchantId, String stampCardId) =>
       '${merchantStampCards(merchantId)}/$stampCardId';
+
+  // Stempelstifte (top-level; serverseitig verwaltet). Doc-ID == stickId.
+  static String stick(String stickId) => '$sticks/$stickId';
   static String merchantPointsSystems(String merchantId) =>
       '${merchant(merchantId)}/$pointsSystems';
   static String merchantPointsSystem(String merchantId, String pointsSystemId) =>
@@ -170,6 +184,9 @@ class FirebasePaths {
       '${merchantReviews(merchantId)}/$uid';
   static String merchantRating(String merchantId) =>
       '$merchantRatings/$merchantId';
+  static String feedComments(String postId) => '${feedPost(postId)}/$comments';
+  static String feedComment(String postId, String commentId) =>
+      '${feedComments(postId)}/$commentId';
   static String feedViews(String postId) => '${feedPost(postId)}/$views';
   static String feedClicks(String postId) => '${feedPost(postId)}/$clicks';
 

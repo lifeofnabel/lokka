@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:lokka/core/services/authService.dart';
@@ -11,6 +9,7 @@ import 'package:lokka/core/widgets/appEmptyState.dart';
 import 'package:lokka/core/widgets/appErrorState.dart';
 import 'package:lokka/core/widgets/appLoadingState.dart';
 import 'package:lokka/features/merchant/stamps/models/stampCardModel.dart';
+import 'package:lokka/features/stamps/widgets/stampCardVisual.dart';
 import 'package:lokka/features/user/discover/models/publicMerchantUserModel.dart';
 import 'package:lokka/features/user/partners/services/userLoyaltyService.dart';
 import 'package:lokka/features/user/wallet/services/userWalletService.dart';
@@ -52,6 +51,11 @@ class _UserPartnerStampsPageState extends State<UserPartnerStampsPage> {
   bool _isInWallet = false;
   bool _checkingWallet = true;
   bool _adding = false;
+
+  /// Stamp cards the user already added to their wallet (this is the ONLY place
+  /// cards can be added → the wallet only shows what was added here).
+  Set<String> _addedCardIds = {};
+  String? _addingCardId;
 
   @override
   void initState() {
@@ -104,14 +108,53 @@ class _UserPartnerStampsPageState extends State<UserPartnerStampsPage> {
     }
     try {
       final inWallet = await _walletService.isInWallet(widget.merchantId);
+      final added =
+          await _walletService.loadAddedStampCardIds(widget.merchantId);
       if (mounted) {
         setState(() {
           _isInWallet = inWallet;
+          _addedCardIds = added;
           _checkingWallet = false;
         });
       }
     } catch (_) {
       if (mounted) setState(() => _checkingWallet = false);
+    }
+  }
+
+  /// Add ONE stamp card to the wallet (client write — no Cloud Function). Also
+  /// follows the store so it appears in the wallet list.
+  Future<void> _addCard(StampCardModel card) async {
+    if (_addingCardId != null || _addedCardIds.contains(card.id)) return;
+    setState(() => _addingCardId = card.id);
+    try {
+      final merchant = widget.merchant;
+      if (merchant != null && !_isInWallet) {
+        await _walletService.addToWallet(merchant);
+        _isInWallet = true;
+      }
+      await _walletService.addStampCardToWallet(widget.merchantId, card.id);
+      if (mounted) {
+        setState(() => _addedCardIds = {..._addedCardIds, card.id});
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Karte zu deiner Wallet hinzugefügt'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Fehler beim Hinzufügen. Bitte erneut versuchen.'),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _addingCardId = null);
     }
   }
 
@@ -190,6 +233,9 @@ class _UserPartnerStampsPageState extends State<UserPartnerStampsPage> {
             itemBuilder: (_, i) => _CardPage(
               card: _cards[i],
               active: i == _page,
+              added: _addedCardIds.contains(_cards[i].id),
+              busy: _addingCardId == _cards[i].id,
+              onAdd: () => _addCard(_cards[i]),
             ),
           ),
         ),
@@ -337,10 +383,19 @@ class _UserPartnerStampsPageState extends State<UserPartnerStampsPage> {
 // ── Eine Seite im Karten-Pager ───────────────────────────────────────────────
 
 class _CardPage extends StatelessWidget {
-  const _CardPage({required this.card, required this.active});
+  const _CardPage({
+    required this.card,
+    required this.active,
+    required this.added,
+    required this.busy,
+    required this.onAdd,
+  });
 
   final StampCardModel card;
   final bool active;
+  final bool added;
+  final bool busy;
+  final VoidCallback onAdd;
 
   @override
   Widget build(BuildContext context) {
@@ -380,6 +435,48 @@ class _CardPage extends StatelessWidget {
                     ),
                   ],
                 ),
+                const SizedBox(height: AppSpacing.md),
+                SizedBox(
+                  width: double.infinity,
+                  child: added
+                      ? Container(
+                          height: 50,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: cs.secondaryContainer,
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.check_circle_rounded,
+                                  size: 18, color: cs.onSecondaryContainer),
+                              const SizedBox(width: 8),
+                              Text(
+                                'In deiner Wallet',
+                                style: tt.titleSmall?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  color: cs.onSecondaryContainer,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      : FilledButton.icon(
+                          onPressed: busy ? null : onAdd,
+                          icon: busy
+                              ? const SizedBox.shrink()
+                              : const Icon(Icons.add_rounded, size: 20),
+                          label: busy
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2, color: Colors.white),
+                                )
+                              : const Text('Zur Wallet hinzufügen'),
+                        ),
+                ),
               ],
             ),
           ),
@@ -414,268 +511,14 @@ String _conditionLabel(StampCardModel card) {
   }
 }
 
-// ── 1:1-Replikat der Merchant-Vorschau (MerchantStampPreview, nicht compact) ─
-//
-// Bewusst exakt vom Merchant-Rendering kopiert (Farben, Gradient, Form,
-// Icon-Raster), damit die Karte beim User genauso aussieht wie der Merchant
-// sie gestaltet hat. Schriftgewichte daher absichtlich wie im Original.
-
+// User-Sicht-Karte = exakt dieselbe Vorschau wie beim Merchant, jetzt über das
+// gemeinsame [StampCardVisual] (eine Quelle für Carousel, Builder, Wallet und
+// die Stempelkarten-Werbung) — keine kopierte Render-Logik mehr.
 class _StampCardCanvas extends StatelessWidget {
   const _StampCardCanvas({required this.card});
 
   final StampCardModel card;
 
   @override
-  Widget build(BuildContext context) {
-    final bg = _colorFromHex(card.backgroundColor, const Color(0xFF171A18));
-    final gradient = _colorFromHex(card.gradientColor, const Color(0xFF45C9A4));
-    final fg = _colorFromHex(card.textColor, const Color(0xFFFEFFFC));
-    final accent = _colorFromHex(card.accentColor, const Color(0xFF9CE8CF));
-    final slots = math.min(card.requiredStamps, 15);
-    final hasBackgroundImage =
-        card.imageUrl.isNotEmpty && card.imagePlacement == 'background';
-
-    return Container(
-      constraints: const BoxConstraints(minHeight: 220),
-      decoration: BoxDecoration(
-        color: bg,
-        gradient: card.gradientEnabled
-            ? LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [bg, gradient],
-              )
-            : null,
-        borderRadius: BorderRadius.circular(34),
-        image: hasBackgroundImage
-            ? DecorationImage(
-                image: NetworkImage(card.imageUrl),
-                fit: BoxFit.cover,
-                colorFilter: ColorFilter.mode(
-                  Colors.black.withValues(alpha: 0.42),
-                  BlendMode.darken,
-                ),
-              )
-            : null,
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (card.imageUrl.isNotEmpty && card.imagePlacement == 'top') ...[
-              ClipRRect(
-                borderRadius: BorderRadius.circular(22),
-                child: Image.network(
-                  card.imageUrl,
-                  width: double.infinity,
-                  height: 110,
-                  fit: BoxFit.cover,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.md),
-            ],
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        card.title.isEmpty ? 'Deine Stempelkarte' : card.title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: fg,
-                          fontSize: 29,
-                          height: 1.02,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                      if (card.subtitle.trim().isNotEmpty) ...[
-                        const SizedBox(height: 7),
-                        Text(
-                          card.subtitle,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: fg.withValues(alpha: 0.72),
-                            fontWeight: FontWeight.w800,
-                            height: 1.2,
-                          ),
-                        ),
-                      ],
-                      const SizedBox(height: 8),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: Text(
-                              'Belohnung: ${card.rewardTitle.isEmpty ? 'Belohnung nach voller Karte' : card.rewardTitle}',
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: fg.withValues(alpha: 0.82),
-                                fontWeight: FontWeight.w900,
-                                height: 1.25,
-                              ),
-                            ),
-                          ),
-                          if (card.description.trim().isNotEmpty)
-                            Tooltip(
-                              message: card.description,
-                              child: Icon(
-                                Icons.info_outline_rounded,
-                                color: fg.withValues(alpha: 0.78),
-                                size: 19,
-                              ),
-                            ),
-                        ],
-                      ),
-                      if (card.rewardDescription.trim().isNotEmpty) ...[
-                        const SizedBox(height: 6),
-                        Text(
-                          card.rewardDescription,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: fg.withValues(alpha: 0.62),
-                            fontWeight: FontWeight.w700,
-                            height: 1.25,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                if (card.imageUrl.isNotEmpty &&
-                    card.imagePlacement == 'side') ...[
-                  const SizedBox(width: 12),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(24),
-                    child: Image.network(
-                      card.imageUrl,
-                      width: 104,
-                      height: 104,
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                ...List.generate(
-                  slots,
-                  (index) => _StampSlot(
-                    accent: accent,
-                    fg: fg,
-                    shape: card.stampShape,
-                    iconValue: card.stampIconValue,
-                    iconType: card.stampIconType,
-                  ),
-                ),
-                if (slots < card.requiredStamps)
-                  Container(
-                    width: 40,
-                    height: 40,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: fg.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      '+${card.requiredStamps - slots}',
-                      style: TextStyle(color: fg, fontWeight: FontWeight.w900),
-                    ),
-                  ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _StampSlot extends StatelessWidget {
-  const _StampSlot({
-    required this.accent,
-    required this.fg,
-    required this.shape,
-    required this.iconValue,
-    required this.iconType,
-  });
-
-  final Color accent;
-  final Color fg;
-  final String shape;
-  final String iconValue;
-  final String iconType;
-
-  @override
-  Widget build(BuildContext context) {
-    final isSquare = shape == 'square';
-    final isSoftSquare = shape == 'softSquare';
-    final isDiamond = shape == 'diamond';
-    // Lesbare Glyphen-Farbe abhängig von der gewählten Stempelfarbe.
-    final onAccent = accent.computeLuminance() > 0.5
-        ? const Color(0xFF171A18)
-        : const Color(0xFFFEFFFC);
-    return Container(
-      width: 40,
-      height: 40,
-      transform: isDiamond ? (Matrix4.identity()..rotateZ(0.785398)) : null,
-      decoration: BoxDecoration(
-        color: accent,
-        borderRadius: BorderRadius.circular(
-            isSquare ? 8 : isSoftSquare || isDiamond ? 16 : 999),
-        border: Border.all(color: fg.withValues(alpha: 0.16)),
-      ),
-      child: Center(
-        child: Transform.rotate(
-          angle: isDiamond ? -0.785398 : 0,
-          child: iconType == 'char'
-              ? Text(
-                  _stampText(iconValue),
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: onAccent,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 18,
-                  ),
-                )
-              : Icon(_iconFor(iconValue), color: onAccent, size: 20),
-        ),
-      ),
-    );
-  }
-}
-
-Color _colorFromHex(String value, Color fallback) {
-  final clean = value.replaceAll('#', '');
-  if (clean.length != 6) return fallback;
-  final parsed = int.tryParse('FF$clean', radix: 16);
-  return parsed == null ? fallback : Color(parsed);
-}
-
-IconData _iconFor(String value) {
-  return switch (value) {
-    'coffee' => Icons.local_cafe_rounded,
-    'food' => Icons.fastfood_rounded,
-    'gift' => Icons.card_giftcard_rounded,
-    'heart' => Icons.favorite_rounded,
-    'local' => Icons.storefront_rounded,
-    _ => Icons.star_rounded,
-  };
-}
-
-String _stampText(String value) {
-  final trimmed = value.trim();
-  if (trimmed.isEmpty) return '*';
-  return String.fromCharCodes(trimmed.runes.take(2));
+  Widget build(BuildContext context) => StampCardVisual(card: card);
 }

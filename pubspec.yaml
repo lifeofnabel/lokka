@@ -33,6 +33,7 @@ dependencies:
 
   cached_network_image:
   cloud_firestore: ^6.5.0
+  cloud_functions:
   file_picker:
   firebase_auth:
   firebase_core: ^4.10.0

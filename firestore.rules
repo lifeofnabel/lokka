@@ -33,7 +33,7 @@ service cloud.firestore {
     // Erlaubt nur Änderungen an Zähler-/Timestamp-Feldern (Likes/Views/Klicks).
     function onlyCounters() {
       return incoming().diff(existing()).affectedKeys()
-        .hasOnly(['likesCount', 'viewsCount', 'opensCount', 'clicksCount', 'updatedAt']);
+        .hasOnly(['likesCount', 'viewsCount', 'opensCount', 'clicksCount', 'commentsCount', 'updatedAt']);
     }
     // Validierung einer NEUEN (öffentlich, ohne Login angelegten) Bestellung:
     // verhindert, dass ein Gast eine manipulierte/„bezahlte"/erledigte oder einem
@@ -67,8 +67,33 @@ service cloud.firestore {
       allow read: if isUser(uid);
       allow create, update: if isUser(uid);
       allow delete: if false;
+
+      // Loyalty-Zustand ist ausschließlich SERVERSEITIG (Cloud Functions /
+      // Admin SDK): Stempel, Punkte und verdiente Belohnungen darf der Client
+      // nur LESEN, nie schreiben → verhindert Selbst-Stempeln/Selbst-Einlösen.
+      // Schreiben läuft über die Callables redeemStampTap (NFC-Tap),
+      // merchantStampCustomer (Kassen-Scan), claimReward (Karte→Belohnung) und
+      // merchantRedeemReward (als verbraucht markieren).
+      match /stampProgress/{id}  { allow read: if isUser(uid); allow write: if false; }
+      match /pointsProgress/{id} { allow read: if isUser(uid); allow write: if false; }
+      match /earnedRewards/{id}  { allow read: if isUser(uid); allow write: if false; }
+
+      // Übrige private Unterdaten: vom Besitzer les- UND schreibbar. WICHTIG:
+      // NICHT rekursiv schreibbar machen — eine rekursive Schreib-Wildcard
+      // würde die obigen Server-only-Sperren aushebeln (Firestore-Regeln
+      // gewähren additiv: jede passende allow-Regel reicht). Neue beschreibbare
+      // Unter-Collections deshalb explizit hier ergänzen.
+      match /walletCards/{id}      { allow read, write: if isUser(uid); }
+      match /likedPosts/{id}       { allow read, write: if isUser(uid); }
+      match /postInteractions/{id} { allow read, write: if isUser(uid); }
+      match /coupons/{id}          { allow read, write: if isUser(uid); }
+      match /availableRewards/{id} { allow read, write: if isUser(uid); }
+      match /orders/{id}           { allow read, write: if isUser(uid); }
+      match /notifications/{id}    { allow read, write: if isUser(uid); }
+
+      // Lese-Fallback für alle übrigen eigenen Unterdaten (kein Schreibzugriff).
       match /{sub=**} {
-        allow read, write: if isUser(uid);
+        allow read: if isUser(uid);
       }
     }
 
@@ -118,7 +143,23 @@ service cloud.firestore {
         allow update, delete: if isMerchantOwner(mid);
       }
 
-      // Alles Übrige bleibt privat beim Merchant (customers, displayStudio
+      // Kunden-/Follower-Index: der Merchant liest/verwaltet seine eigenen
+      // Kunden. Zusätzlich darf ein eingeloggter Nutzer NUR seinen EIGENEN
+      // Eintrag (Doc-ID == eigene UID) anlegen/aktualisieren – so registriert
+      // sich ein Follower beim „Zur Wallet hinzufügen", ohne fremde Kunden zu
+      // sehen oder zu ändern. Das uid-Feld muss mit der Auth-UID übereinstimmen.
+      match /customers/{customerUid} {
+        allow read, write: if isMerchantOwner(mid);
+        // A signed-in user may read/create/update ONLY their own record
+        // (doc id == uid). Read of the own record lets the follow flow preserve
+        // the original "followedAt" date; write registers them as a follower.
+        allow read: if isSignedIn() && customerUid == request.auth.uid;
+        allow create, update: if isSignedIn()
+            && customerUid == request.auth.uid
+            && request.resource.data.uid == request.auth.uid;
+      }
+
+      // Alles Übrige bleibt privat beim Merchant (displayStudio
       // (+ Sub: layouts/devices/routines/logs), shifts, appointments,
       // campaigns …). Orders/featureConfigs/tables(+Areas) sind oben offen.
       match /{sub=**} {
@@ -146,6 +187,14 @@ service cloud.firestore {
       match /reviews/{uid} {
         allow read: if true;
         allow create, update, delete: if isUser(uid);
+      }
+      // Comments: öffentlich lesbar; jeder eingeloggte Nutzer darf eigene
+      // Kommentare anlegen/ändern/löschen (userId == auth.uid). Auto-ID-Docs,
+      // daher keine Doc-ID==uid-Bindung; Eigentum über das userId-Feld.
+      match /comments/{commentId} {
+        allow read: if true;
+        allow create: if isSignedIn() && incoming().userId == request.auth.uid;
+        allow update, delete: if isSignedIn() && existing().userId == request.auth.uid;
       }
       match /views/{id}  { allow read: if true; allow write: if isSignedIn(); }
       match /clicks/{id} { allow read: if true; allow write: if isSignedIn(); }
@@ -235,6 +284,13 @@ service cloud.firestore {
     // Im App-Code aktuell ungenutzt (nur Konstanten in firebasePaths) → komplett
     // gesperrt, bis ein echter Flow / eine Cloud Function sie braucht. Loyalty
     // läuft über users/{uid}/stampProgress|pointsProgress|walletCards.
+    // Stempelstifte (NTAG 424 DNA + QR). Enthalten serverseitige Schlüssel-
+    // Referenzen und den letzten Tap-Zähler → niemals für Clients les/schreibbar.
+    // Registrierung/Bindung/Tap laufen ausschließlich über Cloud Functions
+    // (Admin SDK umgeht diese Regeln). Die Bindungs-Info für die Merchant-UI
+    // steht in stampCards.boundStickId (öffentlich lesbar).
+    match /sticks/{stickId}     { allow read, write: if false; }
+
     match /stampClaims/{id}     { allow read, write: if false; }
     match /pointsEvents/{id}    { allow read, write: if false; }
     match /couponClaims/{id}    { allow read, write: if false; }

@@ -26,6 +26,7 @@ import '../features/merchant/dashboard/pages/merchantDashboardPage.dart';
 import '../features/merchant/features/pages/merchantFeaturesPage.dart';
 import '../features/merchant/feedManager/pages/merchantFeedCreatePage.dart';
 import '../features/merchant/feedManager/pages/merchantFeedManagePage.dart';
+import '../features/merchant/feedManager/pages/merchantStampAdCreatePage.dart';
 import '../features/invite/pages/merchantInvitePage.dart';
 import '../features/merchant/catalog/pages/merchantCategoriesPage.dart';
 import '../features/merchant/catalog/pages/merchantItemTagsPage.dart';
@@ -45,6 +46,7 @@ import '../features/merchant/shopSettings/pages/merchantMenuSettingsPage.dart';
 import '../features/merchant/shopSettings/pages/merchantShopSettingsPage.dart';
 import '../features/merchant/stamps/pages/merchantStampEditPage.dart';
 import '../features/merchant/stamps/pages/merchantStampsPage.dart';
+import '../features/stamps/pages/stampTapPage.dart';
 import '../features/merchant/tables/pages/merchantTablesPage.dart';
 import '../features/support/pages/merchantSupportPage.dart';
 import '../features/placeholder/pages/foundationPlaceholderPage.dart';
@@ -57,6 +59,7 @@ import '../features/user/feed/models/feedPostModel.dart';
 import '../features/user/feed/pages/userFeedDetailPage.dart';
 import '../features/user/feed/services/userFeedService.dart';
 import '../features/user/partners/pages/userPartnerDetailPage.dart';
+import '../features/user/partners/pages/userPartnerStampsPage.dart';
 import '../features/user/partners/services/userPartnersService.dart';
 import '../features/user/shell/userShellPage.dart';
 
@@ -284,6 +287,23 @@ class AppRouter {
           return _PartnerDetailLoader(
             merchantId: state.pathParameters['merchantId'] ?? '',
           );
+        },
+      ),
+      GoRoute(
+        // Deep link from a stamp-card ad / CTA: open this merchant's stamp
+        // cards (add-to-wallet). Accepts a preloaded merchant via state.extra.
+        path: '/user/stamps/:merchantId',
+        builder: (context, state) {
+          final merchant = state.extra;
+          final merchantId = state.pathParameters['merchantId'] ?? '';
+          if (merchant is PublicMerchantUserModel) {
+            return UserPartnerStampsPage(
+              merchantId: merchant.merchantId,
+              shopName: merchant.shopName,
+              merchant: merchant,
+            );
+          }
+          return _PartnerStampsLoader(merchantId: merchantId);
         },
       ),
       GoRoute(
@@ -538,6 +558,11 @@ class AppRouter {
             _merchantDark(const MerchantFeedManagePage()),
       ),
       GoRoute(
+        path: '/merchant/feed/stamp-ad',
+        builder: (context, state) =>
+            _merchantDark(const MerchantStampAdCreatePage()),
+      ),
+      GoRoute(
         path: '/merchant/tools/categories',
         builder: (context, state) =>
             _merchantDark(const MerchantCategoriesPage()),
@@ -570,6 +595,22 @@ class AppRouter {
       GoRoute(
         path: '/merchant/tools/tables',
         builder: (context, state) => _merchantDark(const MerchantTablesPage()),
+      ),
+      // NFC stamp tap (and QR fallback). The chip's SUN URL points here:
+      // /stamp?picc=…&cmac=…  → verified server-side by redeemStampTap.
+      GoRoute(
+        path: '/stamp',
+        builder: (context, state) => StampTapPage(
+          picc: state.uri.queryParameters['picc'] ?? '',
+          cmac: state.uri.queryParameters['cmac'] ?? '',
+        ),
+      ),
+      // /s/<token>  → Path A static stick, verified by redeemStaticStamp.
+      GoRoute(
+        path: '/s/:token',
+        builder: (context, state) => StampTapPage(
+          token: state.pathParameters['token'] ?? '',
+        ),
       ),
       GoRoute(
         path: '/claim/stamp',
@@ -631,6 +672,38 @@ class _PartnerDetailLoader extends StatelessWidget {
           );
         }
         return UserPartnerDetailPage(merchant: merchant);
+      },
+    );
+  }
+}
+
+class _PartnerStampsLoader extends StatelessWidget {
+  const _PartnerStampsLoader({required this.merchantId});
+
+  final String merchantId;
+
+  @override
+  Widget build(BuildContext context) {
+    final service = UserPartnersService(
+      firestoreService: context.read<FirestoreService>(),
+    );
+    return FutureBuilder<PublicMerchantUserModel?>(
+      future: service.fetchPartnerById(merchantId),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const _RouteLoader();
+        }
+        final merchant = snapshot.data;
+        if (merchant == null) {
+          return const FoundationPlaceholderPage(
+            titleKey: 'user.partner.detail.title',
+          );
+        }
+        return UserPartnerStampsPage(
+          merchantId: merchant.merchantId,
+          shopName: merchant.shopName,
+          merchant: merchant,
+        );
       },
     );
   }

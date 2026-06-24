@@ -11,8 +11,6 @@ import 'package:lokka/core/theme/appColors.dart';
 import 'package:lokka/core/theme/appRadius.dart';
 import 'package:lokka/core/theme/appSpacing.dart';
 import 'package:lokka/core/widgets/appLoadingState.dart';
-import 'package:lokka/features/user/gamification/pages/meineErfolgePage.dart';
-import 'package:lokka/features/user/gamification/providers/userGamificationProvider.dart';
 import 'package:lokka/features/user/gamification/widgets/celebration.dart';
 import 'package:lokka/features/user/onboarding/pages/onboardingSurveyPage.dart';
 import 'package:lokka/features/user/profile/pages/meineFavoritenPage.dart';
@@ -221,8 +219,6 @@ class _HeroState extends State<_Hero> {
                   ],
                 ],
               ),
-              const SizedBox(height: AppSpacing.md),
-              const _HeroGamification(),
             ],
           ),
         ),
@@ -270,74 +266,6 @@ class _HeroState extends State<_Hero> {
         style: tt.headlineMedium?.copyWith(
           fontWeight: FontWeight.w600,
           color: cs.onPrimary,
-        ),
-      ),
-    );
-  }
-}
-
-/// Antippbarer Gamification-Block → öffnet „Meine Erfolge".
-class _HeroGamification extends StatelessWidget {
-  const _HeroGamification();
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-    final onHero = cs.onPrimary;
-    final stats = context.watch<UserGamificationProvider>().stats;
-    return Material(
-      color: onHero.withValues(alpha: 0.14),
-      borderRadius: BorderRadius.circular(AppRadius.large),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const MeineErfolgePage()),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.md, vertical: AppSpacing.sm),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.military_tech_rounded, size: 16, color: onHero),
-                  const SizedBox(width: 5),
-                  Text('Level ${stats.level}',
-                      style: tt.labelLarge?.copyWith(
-                          fontWeight: FontWeight.w700, color: onHero)),
-                  if (stats.streakWeeks > 0) ...[
-                    const SizedBox(width: 10),
-                    const Icon(Icons.local_fire_department_rounded,
-                        size: 16, color: Color(0xFFFFD27A)),
-                    const SizedBox(width: 3),
-                    Text('${stats.streakWeeks} Wo.',
-                        style: tt.labelLarge?.copyWith(
-                            fontWeight: FontWeight.w600, color: onHero)),
-                  ],
-                  const SizedBox(width: 8),
-                  Icon(Icons.chevron_right_rounded,
-                      size: 18, color: onHero.withValues(alpha: 0.8)),
-                ],
-              ),
-              const SizedBox(height: 8),
-              SizedBox(
-                width: 200,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(999),
-                  child: LinearProgressIndicator(
-                    value: stats.levelProgress,
-                    minHeight: 6,
-                    backgroundColor: onHero.withValues(alpha: 0.22),
-                    valueColor: AlwaysStoppedAnimation<Color>(onHero),
-                  ),
-                ),
-              ),
-            ],
-          ),
         ),
       ),
     );

@@ -3,6 +3,7 @@ import 'package:lokka/core/constants/firebasePaths.dart';
 import 'package:lokka/core/services/authService.dart';
 import 'package:lokka/core/services/firestoreService.dart';
 import 'package:lokka/features/user/discover/models/publicMerchantUserModel.dart';
+import 'package:lokka/features/user/feed/models/commentModel.dart';
 import 'package:lokka/features/user/feed/models/feedPostModel.dart';
 import 'package:lokka/features/user/feed/models/reviewModel.dart';
 
@@ -63,6 +64,62 @@ class UserFeedService {
         .map((snap) => snap.docs
             .map((doc) => ReviewModel.fromMap({...doc.data(), 'reviewId': doc.id}))
             .toList());
+  }
+
+  // ── Kommentare ─────────────────────────────────────────────────────────────
+
+  /// Live-Strom aller Kommentare eines Beitrags (neueste zuletzt, damit der
+  /// Verlauf chronologisch wie in einem Chat liest).
+  Stream<List<CommentModel>> commentsStream(String postId) {
+    return firestoreService
+        .collection(FirebasePaths.feedComments(postId))
+        .orderBy('createdAt', descending: false)
+        .snapshots()
+        .map((snap) => snap.docs
+            .map((doc) =>
+                CommentModel.fromMap({...doc.data(), 'commentId': doc.id}))
+            .toList());
+  }
+
+  /// Legt einen Kommentar an und erhöht den denormalisierten Zähler atomar.
+  Future<void> addComment(String postId, String text) async {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return;
+    final uid = authService.currentUser?.uid;
+    if (uid == null) throw StateError('Bitte einloggen');
+    final user = authService.currentUser!;
+
+    final commentRef =
+        firestoreService.collection(FirebasePaths.feedComments(postId)).doc();
+    final postRef = firestoreService.document(FirebasePaths.feedPost(postId));
+
+    await firestoreService.runTransaction((tx) async {
+      tx.set(commentRef, {
+        'commentId': commentRef.id,
+        'postId': postId,
+        'userId': uid,
+        'userName': user.displayName ?? user.email ?? 'Anonym',
+        'text': trimmed,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      tx.update(postRef, {'commentsCount': FieldValue.increment(1)});
+    });
+  }
+
+  /// Löscht einen eigenen Kommentar und verringert den Zähler atomar.
+  Future<void> deleteComment(String postId, String commentId) async {
+    final uid = authService.currentUser?.uid;
+    if (uid == null) return;
+    final commentRef =
+        firestoreService.document(FirebasePaths.feedComment(postId, commentId));
+    final postRef = firestoreService.document(FirebasePaths.feedPost(postId));
+
+    await firestoreService.runTransaction((tx) async {
+      final snap = await tx.get(commentRef);
+      if (!snap.exists) return;
+      tx.delete(commentRef);
+      tx.update(postRef, {'commentsCount': FieldValue.increment(-1)});
+    });
   }
 
   Future<FeedPostModel?> fetchPostById(String postId) async {
@@ -160,6 +217,28 @@ class UserFeedService {
         .get();
     if (!doc.exists || doc.data() == null) return null;
     return PublicMerchantUserModel.fromMap({...doc.data()!, 'merchantId': doc.id});
+  }
+
+  /// Meldet einen Beitrag (schreibt nach `contentReports`, nur Admin/Console
+  /// liest). Gleiche Datenform wie `UserDiscoverService.reportPost`, hier als
+  /// schlanker Passthrough, damit Feed/Profil keinen zweiten Service brauchen.
+  Future<void> reportPost({
+    required String postId,
+    required String reason,
+    String? merchantId,
+  }) async {
+    final uid = authService.currentUser?.uid;
+    final ref =
+        firestoreService.collection(FirebasePaths.contentReports).doc();
+    await firestoreService.setDocument(FirebasePaths.contentReport(ref.id), {
+      'reportId': ref.id,
+      'postId': postId,
+      'merchantId': merchantId ?? '',
+      'userId': uid ?? '',
+      'reason': reason,
+      'status': 'open',
+      'createdAt': FieldValue.serverTimestamp(),
+    });
   }
 
   Future<void> incrementViews(String postId) async {

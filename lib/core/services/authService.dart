@@ -18,6 +18,16 @@ class AuthService {
 
   User? get currentUser => _firebaseAuth.currentUser;
 
+  /// Frictionless sign-in for the NFC stamp tap: if nobody is logged in, attach
+  /// the stamp to a fresh anonymous account (later linkable). Anonymous auth is
+  /// enabled in firebase.json.
+  Future<User?> ensureSignedIn() async {
+    final existing = _firebaseAuth.currentUser;
+    if (existing != null) return existing;
+    final cred = await _firebaseAuth.signInAnonymously();
+    return cred.user;
+  }
+
   Future<UserCredential> signInUserWithEmail({
     required String email,
     required String password,

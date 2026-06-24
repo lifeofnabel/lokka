@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
+import '../../../stamps/services/stampFunctionsService.dart';
 import 'package:lokka/core/constants/firebasePaths.dart';
 import 'package:lokka/core/services/authService.dart';
 import 'package:lokka/core/services/firestoreService.dart';
@@ -193,19 +195,18 @@ class _UserStampPageState extends State<UserStampPage> {
     if (uid == null) return;
     final cache = context.read<LocalCacheService>();
     try {
-      await _firestoreService.updateDocument(
-        FirebasePaths.userStampProgressEntry(uid, card.stampCardId),
-        {
-          'status': 'claimed',
-          'claimedAt': DateTime.now().toIso8601String(),
-        },
+      // Server-authored: converting a full card into an earned reward is done by
+      // the claimReward Cloud Function (clients can no longer write stampProgress).
+      await StampFunctionsService().claimReward(
+        merchantId: card.merchantId,
+        cardId: card.stampCardId,
       );
       if (mounted) {
         await Celebration.maybeShow(
           context,
           cache,
-          title: 'Belohnung eingelöst! 🎉',
-          subtitle: 'Viel Spaß damit!',
+          title: 'Belohnung gesichert! 🎉',
+          subtitle: 'Zeig sie an der Kasse vor.',
         );
       }
     } catch (_) {}

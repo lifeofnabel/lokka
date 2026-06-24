@@ -1,29 +1,32 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:lokka/core/services/externalLinkService.dart';
 import 'package:lokka/core/theme/appColors.dart';
 import 'package:lokka/core/theme/appRadius.dart';
 import 'package:lokka/core/theme/appSpacing.dart';
+import 'package:lokka/core/utils/shareUtils.dart';
+import 'package:lokka/features/user/discover/models/publicMerchantUserModel.dart';
 import 'package:lokka/features/user/feed/models/feedPostModel.dart';
-import 'package:lokka/features/user/feed/models/reviewModel.dart';
 import 'package:lokka/features/user/feed/services/userFeedService.dart';
+import 'package:lokka/features/user/feed/widgets/commentsSheet.dart';
 import 'package:lokka/features/user/partners/pages/userPartnerDetailPage.dart';
-import 'package:lokka/features/user/reviews/widgets/reviewWidgets.dart';
+import 'package:lokka/features/user/reviews/widgets/ratingSection.dart';
+import 'package:lokka/features/user/shared/widgets/quickActionBar.dart';
 
 /// Beitrag-Detail („post-detail") — User-Bereich, helles Material 3.
 ///
-/// Aufbau (oben → unten):
-/// 1. Bild-Hero (Back/Like/Zoom floating, Scrim mit Badge + Titel)
-/// 2. Deal-Block (Preise, Rabatt, Gültigkeit)
-/// 3. CTA-Button
-/// 4. Beschreibung
-/// 5. Händler-Zeile (→ Partnerseite)
-/// 6. Bewertungen kompakt (neueste + Popout, eine Rezension pro Nutzer)
-///
-/// Routen-/Konstruktor-Vertrag bleibt unverändert: Seite wird über
-/// `/user/feed/<id>` mit `extra: post` ODER direkt via
-/// `UserFeedDetailPage(post:, feedService:)` geöffnet.
+/// Aufbau (oben → unten), gem. Release-Vorgabe:
+/// 1. Bild-Hero (zentriert; Back/Zoom floating — KEIN Titel-Overlay mehr)
+/// 2. Titel + Untertitel (unter dem Bild, über der Beschreibung)
+/// 3. Like · Kommentar · Teilen (konsistent mit dem Feed)
+/// 4. Deal-Block (Preise/Rabatt/Gültigkeit)
+/// 5. Beschreibung
+/// 6. CTA-Button
+/// 7. QuickActionBar: Route starten · Anrufen · Social (grau wenn Daten fehlen)
+/// 8. Händler-Zeile (→ Partnerseite)
+/// 9. RatingSection (Ø + Rezensionen, eine pro Nutzer)
 class UserFeedDetailPage extends StatefulWidget {
   const UserFeedDetailPage({
     super.key,
@@ -39,10 +42,11 @@ class UserFeedDetailPage extends StatefulWidget {
 }
 
 class _UserFeedDetailPageState extends State<UserFeedDetailPage> {
-  ReviewModel? _myReview;
-
   /// Erster Like-Status vom Server — Basis für die optimistische Zähler-Anzeige.
   bool? _likedBaseline;
+
+  /// Händler für die QuickActionBar (Route/Anrufen/Social). Wird nachgeladen.
+  PublicMerchantUserModel? _merchant;
 
   FeedPostModel get _post => widget.post;
   UserFeedService get _service => widget.feedService;
@@ -51,7 +55,7 @@ class _UserFeedDetailPageState extends State<UserFeedDetailPage> {
   void initState() {
     super.initState();
     _trackView();
-    _loadMyReview();
+    _loadMerchant();
   }
 
   Future<void> _trackView() async {
@@ -60,10 +64,11 @@ class _UserFeedDetailPageState extends State<UserFeedDetailPage> {
     } catch (_) {}
   }
 
-  Future<void> _loadMyReview() async {
+  Future<void> _loadMerchant() async {
+    if (_post.merchantId.isEmpty) return;
     try {
-      final mine = await _service.myReview(_post.postId);
-      if (mounted) setState(() => _myReview = mine);
+      final m = await _service.fetchMerchantById(_post.merchantId);
+      if (mounted) setState(() => _merchant = m);
     } catch (_) {}
   }
 
@@ -80,6 +85,18 @@ class _UserFeedDetailPageState extends State<UserFeedDetailPage> {
     if (_likedBaseline == false && liked) count += 1;
     if (_likedBaseline == true && !liked) count -= 1;
     return count < 0 ? 0 : count;
+  }
+
+  void _openComments() {
+    showCommentsSheet(context,
+        feedService: _service, postId: _post.postId);
+  }
+
+  void _share() {
+    ShareUtils.shareFeedPost(
+      title: _post.title,
+      merchantName: _post.merchantName,
+    );
   }
 
   // ── Bild-Vollbild (Pinch-Zoom) ─────────────────────────────────────────────
@@ -104,15 +121,12 @@ class _UserFeedDetailPageState extends State<UserFeedDetailPage> {
                     fit: BoxFit.contain,
                     placeholder: (_, _) => const Center(
                       child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
+                          strokeWidth: 2, color: Colors.white),
                     ),
                     errorWidget: (_, _, _) => const Icon(
-                      Icons.broken_image_rounded,
-                      size: 48,
-                      color: Colors.white54,
-                    ),
+                        Icons.broken_image_rounded,
+                        size: 48,
+                        color: Colors.white54),
                   ),
                 ),
               ),
@@ -121,9 +135,7 @@ class _UserFeedDetailPageState extends State<UserFeedDetailPage> {
               top: MediaQuery.of(ctx).padding.top + 12,
               right: AppSpacing.md,
               child: _CircleIconButton(
-                icon: Icons.close_rounded,
-                onTap: () => Navigator.pop(ctx),
-              ),
+                  icon: Icons.close_rounded, onTap: () => Navigator.pop(ctx)),
             ),
           ],
         ),
@@ -131,11 +143,107 @@ class _UserFeedDetailPageState extends State<UserFeedDetailPage> {
     );
   }
 
+  // ── QuickActionBar-Aktionen (Route / Anrufen / Social) ─────────────────────
+
+  Future<void> _launchMaps() async {
+    final m = _merchant;
+    if (m == null) return;
+    final query = m.hasCoordinates
+        ? '${m.lat},${m.lng}'
+        : Uri.encodeComponent(
+            m.fullAddress.isNotEmpty ? m.fullAddress : m.address);
+    if (query.isEmpty) return;
+    final uri =
+        Uri.parse('https://www.google.com/maps/search/?api=1&query=$query');
+    try {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      _snack('Karten-App konnte nicht geöffnet werden');
+    }
+  }
+
+  Future<void> _call() async {
+    final phone = _merchant?.phone.trim() ?? '';
+    if (phone.isEmpty) return;
+    try {
+      await launchUrl(Uri.parse('tel:$phone'));
+    } catch (_) {
+      _snack('Anruf nicht möglich');
+    }
+  }
+
+  void _openSocial() {
+    final links = _merchant?.socialLinks ?? const <String, String>{};
+    if (links.isEmpty) return;
+    const meta = <(String, String, IconData)>[
+      ('website', 'Website', Icons.language_rounded),
+      ('instagram', 'Instagram', Icons.camera_alt_rounded),
+      ('tiktok', 'TikTok', Icons.music_note_rounded),
+      ('facebook', 'Facebook', Icons.facebook),
+    ];
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.surfaceBg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: AppSpacing.md),
+            for (final (key, label, icon) in meta)
+              if ((links[key] ?? '').isNotEmpty)
+                ListTile(
+                  leading: Icon(icon),
+                  title: Text(label),
+                  trailing: const Icon(Icons.open_in_new_rounded, size: 18),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _launchExternal(links[key]!);
+                  },
+                ),
+            const SizedBox(height: AppSpacing.sm),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _launchExternal(String url) async {
+    var u = url.trim();
+    if (u.isEmpty) return;
+    if (!u.startsWith('http')) u = 'https://$u';
+    final opened = await ExternalLinkService.openInNewTab(u);
+    if (!opened) {
+      try {
+        await launchUrl(Uri.parse(u), mode: LaunchMode.externalApplication);
+      } catch (_) {
+        _snack('Link konnte nicht geöffnet werden');
+      }
+    }
+  }
+
+  void _snack(String text) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(text)));
+  }
+
   // ── Händler öffnen ─────────────────────────────────────────────────────────
 
   Future<void> _openMerchant() async {
     final merchantId = _post.merchantId;
     if (merchantId.isEmpty) return;
+    // Bereits geladenen Händler direkt verwenden, sonst nachladen.
+    if (_merchant != null) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+            builder: (_) => UserPartnerDetailPage(merchant: _merchant!)),
+      );
+      return;
+    }
     showDialog<void>(
       context: context,
       barrierDismissible: false,
@@ -149,46 +257,14 @@ class _UserFeedDetailPageState extends State<UserFeedDetailPage> {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => UserPartnerDetailPage(merchant: merchant),
-          ),
+              builder: (_) => UserPartnerDetailPage(merchant: merchant)),
         );
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Partner konnte nicht geladen werden.')),
-        );
+        _snack('Partner konnte nicht geladen werden.');
       }
     } catch (_) {
       if (mounted) Navigator.pop(context);
     }
-  }
-
-  // ── Bewertung schreiben/bearbeiten (max. eine pro Nutzer) ─────────────────
-
-  Future<void> _writeOrEditReview() async {
-    // Frisch laden, damit nie eine zweite Rezension entsteht
-    // (Doc-ID = uid, submitReview überschreibt die eigene).
-    ReviewModel? mine = _myReview;
-    try {
-      mine = await _service.myReview(_post.postId);
-    } catch (_) {}
-    if (!mounted) return;
-    await showReviewWriteSheet(
-      context,
-      title: mine == null ? 'Bewertung schreiben' : 'Deine Bewertung bearbeiten',
-      initialRating: mine?.rating ?? 0,
-      initialText: mine?.text ?? '',
-      initialImageUrl: mine?.imageUrl ?? '',
-      onSubmit: ({required rating, required text, required imageUrl}) async {
-        await _service.submitReview(
-          postId: _post.postId,
-          merchantId: _post.merchantId,
-          rating: rating,
-          text: text,
-          imageUrl: imageUrl,
-        );
-      },
-    );
-    await _loadMyReview();
   }
 
   // ── Build ──────────────────────────────────────────────────────────────────
@@ -201,61 +277,69 @@ class _UserFeedDetailPageState extends State<UserFeedDetailPage> {
       body: ListView(
         padding: EdgeInsets.zero,
         children: [
-          // 1 — Bild-Hero
-          StreamBuilder<bool>(
-            stream: _service.likedStream(post.postId),
-            builder: (context, snapshot) {
-              final liked = snapshot.data ?? false;
-              if (snapshot.hasData) _likedBaseline ??= snapshot.data;
-              return _HeroImage(
-                post: post,
-                liked: liked,
-                likeCount: _likeCount(liked),
-                onBack: () => Navigator.pop(context),
-                onLike: () => _toggleLike(liked),
-                onZoom: post.imageUrl.isEmpty ? null : _openFullscreenImage,
-              );
-            },
+          // 1 — Bild-Hero (zentriert, ohne Overlay)
+          _HeroImage(
+            post: post,
+            onBack: () => Navigator.pop(context),
+            onZoom: post.imageUrl.isEmpty ? null : _openFullscreenImage,
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(
-              AppSpacing.md,
-              AppSpacing.md,
-              AppSpacing.md,
-              0,
-            ),
+                AppSpacing.md, AppSpacing.md, AppSpacing.md, 0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // 2 — Deal-Block (nur wenn Daten existieren)
+                // 2 — Titel + Untertitel
+                _TitleBlock(post: post),
+                const SizedBox(height: AppSpacing.sm),
+                // 3 — Like · Kommentar · Teilen
+                StreamBuilder<bool>(
+                  stream: _service.likedStream(post.postId),
+                  builder: (context, snapshot) {
+                    final liked = snapshot.data ?? false;
+                    if (snapshot.hasData) _likedBaseline ??= snapshot.data;
+                    return _SocialActionBar(
+                      liked: liked,
+                      likeCount: _likeCount(liked),
+                      commentCount: post.commentsCount,
+                      publishedAt: post.publishedAt ?? post.createdAt,
+                      onLike: () => _toggleLike(liked),
+                      onComment: _openComments,
+                      onShare: _share,
+                    );
+                  },
+                ),
+                const SizedBox(height: AppSpacing.md),
+                // 4 — Deal-Block
                 if (_DealCard.hasContent(post)) ...[
                   _DealCard(post: post),
                   const SizedBox(height: AppSpacing.md),
                 ],
-                // 3 — CTA
-                if (post.hasButton) ...[
-                  _CtaButton(post: post, feedService: _service),
-                  const SizedBox(height: AppSpacing.md),
-                ],
-                // 4 — Beschreibung
+                // 5 — Beschreibung
                 if (post.description.trim().isNotEmpty) ...[
                   _DescriptionCard(text: post.description.trim()),
                   const SizedBox(height: AppSpacing.md),
                 ],
-                // 5 — Händler
+                // 6 — CTA
+                if (post.hasButton) ...[
+                  _CtaButton(post: post, feedService: _service),
+                  const SizedBox(height: AppSpacing.md),
+                ],
+                // 7 — QuickActionBar (Route / Anrufen / Social)
+                _quickActions(),
+                const SizedBox(height: AppSpacing.md),
+                // 8 — Händler
                 _MerchantCard(post: post, onTap: _openMerchant),
                 const SizedBox(height: AppSpacing.lg),
-                // 6 — Bewertungen
-                _ReviewsSection(
-                  post: post,
+                // 9 — Bewertungen
+                RatingSection(
                   feedService: _service,
-                  myReview: _myReview,
-                  onWriteOrEdit: _writeOrEditReview,
+                  postId: post.postId,
+                  merchantId: post.merchantId,
                 ),
                 SizedBox(
-                  height:
-                      AppSpacing.xxl + MediaQuery.of(context).padding.bottom,
-                ),
+                    height:
+                        AppSpacing.xxl + MediaQuery.of(context).padding.bottom),
               ],
             ),
           ),
@@ -263,30 +347,49 @@ class _UserFeedDetailPageState extends State<UserFeedDetailPage> {
       ),
     );
   }
+
+  Widget _quickActions() {
+    final m = _merchant;
+    final hasRoute =
+        m != null && (m.address.isNotEmpty || m.hasCoordinates);
+    final hasPhone = (m?.phone.trim().isNotEmpty) ?? false;
+    final hasSocial = (m?.socialLinks.isNotEmpty) ?? false;
+    return QuickActionBar(
+      actions: [
+        QuickAction(
+          icon: Icons.near_me_rounded,
+          label: 'Route',
+          enabled: hasRoute,
+          onTap: hasRoute ? _launchMaps : null,
+        ),
+        QuickAction(
+          icon: Icons.call_rounded,
+          label: 'Anrufen',
+          enabled: hasPhone,
+          onTap: hasPhone ? _call : null,
+        ),
+        QuickAction(
+          icon: Icons.alternate_email_rounded,
+          label: 'Social',
+          enabled: hasSocial,
+          onTap: hasSocial ? _openSocial : null,
+        ),
+      ],
+    );
+  }
 }
 
-// ── 1 · Bild-Hero ─────────────────────────────────────────────────────────────
+// ── 1 · Bild-Hero (ohne Overlay) ──────────────────────────────────────────────
 
 class _HeroImage extends StatelessWidget {
-  const _HeroImage({
-    required this.post,
-    required this.liked,
-    required this.likeCount,
-    required this.onBack,
-    required this.onLike,
-    this.onZoom,
-  });
+  const _HeroImage({required this.post, required this.onBack, this.onZoom});
 
   final FeedPostModel post;
-  final bool liked;
-  final int likeCount;
   final VoidCallback onBack;
-  final VoidCallback onLike;
   final VoidCallback? onZoom;
 
   @override
   Widget build(BuildContext context) {
-    final tt = Theme.of(context).textTheme;
     final topPad = MediaQuery.of(context).padding.top;
     return ClipRRect(
       borderRadius:
@@ -299,113 +402,37 @@ class _HeroImage extends StatelessWidget {
                 ? CachedNetworkImage(
                     imageUrl: post.imageUrl,
                     fit: BoxFit.cover,
-                    placeholder: (_, _) =>
-                        Container(color: AppColors.gray100),
-                    errorWidget: (_, _, _) =>
-                        Container(color: AppColors.gray100),
+                    placeholder: (_, _) => Container(color: AppColors.gray100),
+                    errorWidget: (_, _, _) => Container(
+                      color: AppColors.gray100,
+                      child: const Center(
+                        child: Icon(Icons.broken_image_rounded,
+                            size: 48, color: AppColors.gray300),
+                      ),
+                    ),
                   )
                 : Container(
                     color: AppColors.greenTint,
                     child: const Center(
-                      child: Icon(
-                        Icons.storefront_rounded,
-                        size: 56,
-                        color: AppColors.mintStrong,
-                      ),
+                      child: Icon(Icons.storefront_rounded,
+                          size: 56, color: AppColors.mintStrong),
                     ),
                   ),
-          ),
-          // Scrim unten: Badge + Titel (+ Untertitel)
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.md,
-                56,
-                AppSpacing.md,
-                AppSpacing.md + 4,
-              ),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.transparent,
-                    Colors.black.withValues(alpha: 0.55),
-                    Colors.black.withValues(alpha: 0.75),
-                  ],
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      _ScrimPill(label: _typeLabel(post.type)),
-                      if (post.isForRegulars) ...[
-                        const SizedBox(width: 6),
-                        const _ScrimPill(label: 'Für Stammgäste'),
-                      ],
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    post.title,
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                    style: tt.headlineSmall?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                      height: 1.15,
-                      letterSpacing: -0.3,
-                    ),
-                  ),
-                  if (post.subtitle.trim().isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      post.subtitle.trim(),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: tt.titleSmall?.copyWith(
-                        color: Colors.white.withValues(alpha: 0.85),
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
           ),
           // Back (oben links)
           Positioned(
             top: topPad + 8,
             left: 12,
-            child: _CircleIconButton(
-              icon: Icons.arrow_back_rounded,
-              onTap: onBack,
-            ),
+            child:
+                _CircleIconButton(icon: Icons.arrow_back_rounded, onTap: onBack),
           ),
-          // Like (oben rechts)
-          Positioned(
-            top: topPad + 8,
-            right: 12,
-            child: _LikePill(
-              liked: liked,
-              count: likeCount,
-              onTap: onLike,
-            ),
-          ),
-          // Zoom (unter dem Like)
+          // Zoom (oben rechts)
           if (onZoom != null)
             Positioned(
-              top: topPad + 56,
+              top: topPad + 8,
               right: 12,
               child: _CircleIconButton(
-                icon: Icons.fullscreen_rounded,
-                onTap: onZoom!,
-              ),
+                  icon: Icons.fullscreen_rounded, onTap: onZoom!),
             ),
         ],
       ),
@@ -413,26 +440,74 @@ class _HeroImage extends StatelessWidget {
   }
 }
 
-class _ScrimPill extends StatelessWidget {
-  const _ScrimPill({required this.label});
+// ── 2 · Titel + Untertitel ────────────────────────────────────────────────────
+
+class _TitleBlock extends StatelessWidget {
+  const _TitleBlock({required this.post});
+
+  final FeedPostModel post;
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            _TypePill(label: _typeLabel(post.type)),
+            if (post.isForRegulars) ...[
+              const SizedBox(width: 6),
+              const _TypePill(label: 'Für Stammgäste'),
+            ],
+          ],
+        ),
+        const SizedBox(height: 10),
+        Text(
+          post.title,
+          style: tt.headlineSmall?.copyWith(
+            fontWeight: FontWeight.w700,
+            height: 1.15,
+            letterSpacing: -0.3,
+            color: AppColors.onSurfaceDark,
+          ),
+        ),
+        if (post.subtitle.trim().isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Text(
+            post.subtitle.trim(),
+            style: tt.titleSmall?.copyWith(
+              color: AppColors.onSurfaceMuted,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _TypePill extends StatelessWidget {
+  const _TypePill({required this.label});
 
   final String label;
 
   @override
   Widget build(BuildContext context) {
+    if (label.isEmpty) return const SizedBox.shrink();
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.18),
+        color: AppColors.greenTint,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.35)),
+        border: Border.all(color: AppColors.greenLine),
       ),
       child: Text(
         label,
         style: const TextStyle(
           fontSize: 11.5,
-          fontWeight: FontWeight.w600,
-          color: Colors.white,
+          fontWeight: FontWeight.w700,
+          color: AppColors.mintStrong,
           letterSpacing: 0.2,
         ),
       ),
@@ -440,46 +515,116 @@ class _ScrimPill extends StatelessWidget {
   }
 }
 
-class _LikePill extends StatelessWidget {
-  const _LikePill({
+// ── 3 · Like · Kommentar · Teilen ─────────────────────────────────────────────
+
+class _SocialActionBar extends StatelessWidget {
+  const _SocialActionBar({
     required this.liked,
-    required this.count,
-    required this.onTap,
+    required this.likeCount,
+    required this.commentCount,
+    required this.publishedAt,
+    required this.onLike,
+    required this.onComment,
+    required this.onShare,
   });
 
   final bool liked;
-  final int count;
-  final VoidCallback onTap;
+  final int likeCount;
+  final int commentCount;
+  final DateTime? publishedAt;
+  final VoidCallback onLike;
+  final VoidCallback onComment;
+  final VoidCallback onShare;
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.black.withValues(alpha: 0.35),
-      borderRadius: BorderRadius.circular(999),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-          child: Row(
+    return Row(
+      children: [
+        _BarButton(
+          icon: liked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+          color: liked ? AppColors.googleRed : AppColors.onSurfaceMuted,
+          label: likeCount > 0 ? '$likeCount' : null,
+          tooltip: liked ? 'Gefällt mir nicht mehr' : 'Gefällt mir',
+          onTap: onLike,
+        ),
+        _BarButton(
+          icon: Icons.mode_comment_outlined,
+          color: AppColors.onSurfaceMuted,
+          label: commentCount > 0 ? '$commentCount' : null,
+          tooltip: 'Kommentare',
+          onTap: onComment,
+        ),
+        _BarButton(
+          icon: Icons.share_outlined,
+          color: AppColors.onSurfaceMuted,
+          tooltip: 'Teilen',
+          onTap: onShare,
+        ),
+        const Spacer(),
+        // Veröffentlichungsdatum – passend rechts neben den Aktionen.
+        if (publishedAt != null)
+          Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                liked
-                    ? Icons.favorite_rounded
-                    : Icons.favorite_border_rounded,
-                size: 20,
-                color: liked ? AppColors.googleRed : Colors.white,
+              const Icon(
+                Icons.schedule_rounded,
+                size: 14,
+                color: AppColors.onSurfaceMuted,
               ),
-              const SizedBox(width: 6),
+              const SizedBox(width: 4),
               Text(
-                '$count',
+                _fmtDate(publishedAt!),
                 style: const TextStyle(
-                  fontSize: 13,
+                  color: AppColors.onSurfaceMuted,
+                  fontSize: 12,
                   fontWeight: FontWeight.w600,
-                  color: Colors.white,
                 ),
               ),
+            ],
+          ),
+      ],
+    );
+  }
+}
+
+class _BarButton extends StatelessWidget {
+  const _BarButton({
+    required this.icon,
+    required this.color,
+    required this.tooltip,
+    required this.onTap,
+    this.label,
+  });
+
+  final IconData icon;
+  final Color color;
+  final String tooltip;
+  final VoidCallback onTap;
+  final String? label;
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+          child: Row(
+            children: [
+              Icon(icon, size: 24, color: color),
+              if (label != null) ...[
+                const SizedBox(width: 6),
+                Text(
+                  label!,
+                  style: tt.labelLarge?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.onSurfaceMuted,
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -506,16 +651,14 @@ class _CircleIconButton extends StatelessWidget {
         child: SizedBox(
           width: 40,
           height: 40,
-          child: Center(
-            child: Icon(icon, size: 20, color: Colors.white),
-          ),
+          child: Center(child: Icon(icon, size: 20, color: Colors.white)),
         ),
       ),
     );
   }
 }
 
-// ── 2 · Deal-Block ────────────────────────────────────────────────────────────
+// ── 4 · Deal-Block ────────────────────────────────────────────────────────────
 
 class _DealCard extends StatelessWidget {
   const _DealCard({required this.post});
@@ -530,8 +673,7 @@ class _DealCard extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     final now = DateTime.now();
-    final expired =
-        post.validUntil != null && now.isAfter(post.validUntil!);
+    final expired = post.validUntil != null && now.isAfter(post.validUntil!);
     final validity = _validityText(now);
     final priceColor = expired ? AppColors.onSurfaceMuted : cs.primary;
 
@@ -541,8 +683,7 @@ class _DealCard extends StatelessWidget {
         color: expired ? AppColors.surfaceGray : AppColors.greenTint,
         borderRadius: BorderRadius.circular(AppRadius.large),
         border: Border.all(
-          color: expired ? AppColors.outlineGray : AppColors.greenLine,
-        ),
+            color: expired ? AppColors.outlineGray : AppColors.greenLine),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -554,10 +695,9 @@ class _DealCard extends StatelessWidget {
                 Text(
                   _euro(post.newPrice!),
                   style: tt.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: priceColor,
-                    letterSpacing: -0.5,
-                  ),
+                      fontWeight: FontWeight.w700,
+                      color: priceColor,
+                      letterSpacing: -0.5),
                 ),
                 if (post.oldPrice != null) ...[
                   const SizedBox(width: AppSpacing.sm),
@@ -566,18 +706,14 @@ class _DealCard extends StatelessWidget {
                     child: Text(
                       _euro(post.oldPrice!),
                       style: tt.titleMedium?.copyWith(
-                        color: AppColors.onSurfaceMuted,
-                        decoration: TextDecoration.lineThrough,
-                      ),
+                          color: AppColors.onSurfaceMuted,
+                          decoration: TextDecoration.lineThrough),
                     ),
                   ),
                 ],
                 const Spacer(),
                 if (post.hasDiscount)
-                  _DiscountPill(
-                    percent: post.discountPercent!,
-                    muted: expired,
-                  ),
+                  _DiscountPill(percent: post.discountPercent!, muted: expired),
               ],
             )
           else if (post.hasDiscount)
@@ -586,18 +722,14 @@ class _DealCard extends StatelessWidget {
                 Text(
                   '-${post.discountPercent}%',
                   style: tt.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: priceColor,
-                    letterSpacing: -0.5,
-                  ),
+                      fontWeight: FontWeight.w700,
+                      color: priceColor,
+                      letterSpacing: -0.5),
                 ),
                 const Spacer(),
-                Text(
-                  'Rabatt',
-                  style: tt.labelLarge?.copyWith(
-                    color: AppColors.onSurfaceMuted,
-                  ),
-                ),
+                Text('Rabatt',
+                    style: tt.labelLarge
+                        ?.copyWith(color: AppColors.onSurfaceMuted)),
               ],
             ),
           if (validity != null) ...[
@@ -609,9 +741,8 @@ class _DealCard extends StatelessWidget {
                       ? Icons.event_busy_rounded
                       : Icons.event_available_rounded,
                   size: 16,
-                  color: expired
-                      ? AppColors.googleRed
-                      : AppColors.onSurfaceMuted,
+                  color:
+                      expired ? AppColors.googleRed : AppColors.onSurfaceMuted,
                 ),
                 const SizedBox(width: 6),
                 Expanded(
@@ -677,7 +808,33 @@ class _DiscountPill extends StatelessWidget {
   }
 }
 
-// ── 3 · CTA ───────────────────────────────────────────────────────────────────
+// ── 5 · Beschreibung ──────────────────────────────────────────────────────────
+
+class _DescriptionCard extends StatelessWidget {
+  const _DescriptionCard({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.large),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Text(
+        text,
+        style: tt.bodyMedium?.copyWith(color: AppColors.gray700, height: 1.6),
+      ),
+    );
+  }
+}
+
+// ── 6 · CTA ───────────────────────────────────────────────────────────────────
 
 class _CtaButton extends StatelessWidget {
   const _CtaButton({required this.post, required this.feedService});
@@ -687,11 +844,16 @@ class _CtaButton extends StatelessWidget {
 
   IconData get _icon {
     switch (post.effectiveCtaType) {
+      case 'profile':
+        return Icons.storefront_rounded;
+      case 'stampCard':
+        return Icons.card_giftcard_rounded;
       case 'shop':
       case 'catalog':
         return Icons.storefront_rounded;
       case 'feedPost':
         return Icons.article_rounded;
+      case 'url':
       case 'external':
         return Icons.open_in_new_rounded;
       default:
@@ -701,6 +863,20 @@ class _CtaButton extends StatelessWidget {
 
   Future<void> _open(BuildContext context) async {
     final type = post.effectiveCtaType;
+    // Merchant's own Lokka page (profile).
+    if (type == 'profile') {
+      await _trackClick();
+      if (!context.mounted) return;
+      context.push('/user/partners/${post.merchantId}');
+      return;
+    }
+    // Deep link to the merchant's stamp cards → add to wallet.
+    if (type == 'stampCard') {
+      await _trackClick();
+      if (!context.mounted) return;
+      context.push('/user/stamps/${post.merchantId}');
+      return;
+    }
     if (type == 'shop' || type == 'catalog') {
       await _trackClick();
       if (!context.mounted) return;
@@ -713,7 +889,8 @@ class _CtaButton extends StatelessWidget {
       context.push('/user/feed/${post.ctaTargetId!.trim()}');
       return;
     }
-    if (type == 'external' && post.effectiveButtonUrl.isNotEmpty) {
+    if ((type == 'url' || type == 'external') &&
+        post.effectiveButtonUrl.isNotEmpty) {
       await _showExternalWarning(context);
       return;
     }
@@ -735,40 +912,27 @@ class _CtaButton extends StatelessWidget {
             BorderRadius.vertical(top: Radius.circular(AppRadius.large)),
       ),
       builder: (ctx) => Padding(
-        padding: EdgeInsets.fromLTRB(
-          AppSpacing.lg,
-          AppSpacing.lg,
-          AppSpacing.lg,
-          MediaQuery.of(ctx).padding.bottom + AppSpacing.lg,
-        ),
+        padding: EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.lg, AppSpacing.lg,
+            MediaQuery.of(ctx).padding.bottom + AppSpacing.lg),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Icon(
-              Icons.open_in_new_rounded,
-              size: 40,
-              color: AppColors.mintStrong,
-            ),
+            const Icon(Icons.open_in_new_rounded,
+                size: 40, color: AppColors.mintStrong),
             const SizedBox(height: AppSpacing.md),
-            const Text(
-              'Externen Link öffnen?',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-                color: AppColors.onSurfaceDark,
-              ),
-            ),
+            const Text('Externen Link öffnen?',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.onSurfaceDark)),
             const SizedBox(height: 8),
             const Text(
               'Du verlässt Lokka. Der Link wird im Browser geöffnet.',
               textAlign: TextAlign.center,
               style: TextStyle(
-                fontSize: 14,
-                color: AppColors.gray700,
-                height: 1.35,
-              ),
+                  fontSize: 14, color: AppColors.gray700, height: 1.35),
             ),
             const SizedBox(height: AppSpacing.lg),
             FilledButton.icon(
@@ -786,9 +950,8 @@ class _CtaButton extends StatelessWidget {
     );
     if (accepted != true) return;
     await _trackClick();
-    final opened = await ExternalLinkService.openInNewTab(
-      _safeExternalUrl(post.effectiveButtonUrl),
-    );
+    final opened =
+        await ExternalLinkService.openInNewTab(_safeExternalUrl(post.effectiveButtonUrl));
     if (!opened && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Link konnte nicht geöffnet werden.')),
@@ -805,20 +968,13 @@ class _CtaButton extends StatelessWidget {
             BorderRadius.vertical(top: Radius.circular(AppRadius.large)),
       ),
       builder: (ctx) => Padding(
-        padding: EdgeInsets.fromLTRB(
-          AppSpacing.lg,
-          AppSpacing.lg,
-          AppSpacing.lg,
-          MediaQuery.of(ctx).padding.bottom + AppSpacing.lg,
-        ),
+        padding: EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.lg, AppSpacing.lg,
+            MediaQuery.of(ctx).padding.bottom + AppSpacing.lg),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(
-              Icons.touch_app_rounded,
-              size: 40,
-              color: AppColors.mintStrong,
-            ),
+            const Icon(Icons.touch_app_rounded,
+                size: 40, color: AppColors.mintStrong),
             const SizedBox(height: AppSpacing.md),
             Text(
               post.effectiveButtonText.isEmpty
@@ -826,10 +982,9 @@ class _CtaButton extends StatelessWidget {
                   : post.effectiveButtonText,
               textAlign: TextAlign.center,
               style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-                color: AppColors.onSurfaceDark,
-              ),
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.onSurfaceDark),
             ),
             const SizedBox(height: 8),
             const Text(
@@ -857,50 +1012,17 @@ class _CtaButton extends StatelessWidget {
     return FilledButton.icon(
       onPressed: () => _open(context),
       icon: Icon(_icon, size: 18),
-      label: Text(
-        post.effectiveButtonText,
-        style: const TextStyle(fontWeight: FontWeight.w600),
-      ),
+      label: Text(post.effectiveButtonText,
+          style: const TextStyle(fontWeight: FontWeight.w600)),
       style: FilledButton.styleFrom(
         minimumSize: const Size.fromHeight(52),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(999),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
       ),
     );
   }
 }
 
-// ── 4 · Beschreibung ──────────────────────────────────────────────────────────
-
-class _DescriptionCard extends StatelessWidget {
-  const _DescriptionCard({required this.text});
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    final tt = Theme.of(context).textTheme;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(AppRadius.large),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Text(
-        text,
-        style: tt.bodyMedium?.copyWith(
-          color: AppColors.gray700,
-          height: 1.6,
-        ),
-      ),
-    );
-  }
-}
-
-// ── 5 · Händler-Zeile ─────────────────────────────────────────────────────────
+// ── 8 · Händler-Zeile ─────────────────────────────────────────────────────────
 
 class _MerchantCard extends StatelessWidget {
   const _MerchantCard({required this.post, required this.onTap});
@@ -939,17 +1061,10 @@ class _MerchantCard extends StatelessWidget {
                       ? CachedNetworkImage(
                           imageUrl: post.merchantLogoUrl,
                           fit: BoxFit.cover,
-                          errorWidget: (_, _, _) => Icon(
-                            Icons.store_rounded,
-                            size: 22,
-                            color: cs.primary,
-                          ),
+                          errorWidget: (_, _, _) => Icon(Icons.store_rounded,
+                              size: 22, color: cs.primary),
                         )
-                      : Icon(
-                          Icons.store_rounded,
-                          size: 22,
-                          color: cs.primary,
-                        ),
+                      : Icon(Icons.store_rounded, size: 22, color: cs.primary),
                 ),
                 const SizedBox(width: AppSpacing.sm + 4),
                 Expanded(
@@ -963,9 +1078,8 @@ class _MerchantCard extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: tt.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.onSurfaceDark,
-                        ),
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.onSurfaceDark),
                       ),
                       if (post.merchantCity.isNotEmpty) ...[
                         const SizedBox(height: 2),
@@ -973,218 +1087,17 @@ class _MerchantCard extends StatelessWidget {
                           post.merchantCity,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: tt.bodySmall?.copyWith(
-                            color: AppColors.onSurfaceMuted,
-                          ),
+                          style: tt.bodySmall
+                              ?.copyWith(color: AppColors.onSurfaceMuted),
                         ),
                       ],
                     ],
                   ),
                 ),
-                const Icon(
-                  Icons.chevron_right_rounded,
-                  color: AppColors.onSurfaceMuted,
-                ),
+                const Icon(Icons.chevron_right_rounded,
+                    color: AppColors.onSurfaceMuted),
               ],
             ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ── 6 · Bewertungen (kompakt + Popout) ────────────────────────────────────────
-
-class _ReviewsSection extends StatelessWidget {
-  const _ReviewsSection({
-    required this.post,
-    required this.feedService,
-    required this.myReview,
-    required this.onWriteOrEdit,
-  });
-
-  final FeedPostModel post;
-  final UserFeedService feedService;
-  final ReviewModel? myReview;
-  final VoidCallback onWriteOrEdit;
-
-  @override
-  Widget build(BuildContext context) {
-    final tt = Theme.of(context).textTheme;
-    final uid = feedService.authService.currentUser?.uid;
-    return StreamBuilder<List<ReviewModel>>(
-      stream: feedService.reviewsStream(post.postId),
-      builder: (context, snapshot) {
-        final waiting = snapshot.connectionState == ConnectionState.waiting;
-        final reviews = snapshot.data ?? const <ReviewModel>[];
-        final ratings = reviews
-            .map((r) => r.rating)
-            .where((r) => r >= 1 && r <= 5)
-            .toList();
-        final avg = ratings.isEmpty
-            ? null
-            : ratings.reduce((a, b) => a + b) / ratings.length;
-        final latest = reviews.isEmpty ? null : reviews.first;
-        final hasMine = myReview != null ||
-            (uid != null && reviews.any((r) => r.userId == uid));
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Text(
-                  'Bewertungen',
-                  style: tt.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.onSurfaceDark,
-                  ),
-                ),
-                const Spacer(),
-                if (avg != null) ReviewStars(rating: avg, count: reviews.length),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.sm + 4),
-            if (waiting)
-              const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(AppSpacing.md),
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-              )
-            else if (latest == null)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(AppSpacing.md),
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceGray,
-                  borderRadius: BorderRadius.circular(AppRadius.large),
-                ),
-                child: const Text(
-                  'Noch keine Bewertungen. Sei die oder der Erste!',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: AppColors.onSurfaceMuted,
-                  ),
-                ),
-              )
-            else ...[
-              ReviewTile(
-                review: latest,
-                isMine: uid != null && latest.userId == uid,
-              ),
-              if (reviews.length > 1)
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: TextButton(
-                    onPressed: () => _showAllReviews(context, reviews, avg),
-                    child: Text(
-                      'Alle ${reviews.length} anzeigen',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.mintStrong,
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-            const SizedBox(height: AppSpacing.sm),
-            OutlinedButton.icon(
-              onPressed: onWriteOrEdit,
-              icon: Icon(
-                hasMine ? Icons.edit_rounded : Icons.star_outline_rounded,
-                size: 18,
-              ),
-              label: Text(
-                hasMine ? 'Deine Bewertung bearbeiten' : 'Bewertung schreiben',
-              ),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.mintStrong,
-                side: const BorderSide(color: AppColors.mint),
-                padding: const EdgeInsets.symmetric(vertical: 13),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(999),
-                ),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  void _showAllReviews(
-    BuildContext context,
-    List<ReviewModel> reviews,
-    double? avg,
-  ) {
-    final uid = feedService.authService.currentUser?.uid;
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => DraggableScrollableSheet(
-        expand: false,
-        initialChildSize: 0.72,
-        minChildSize: 0.45,
-        maxChildSize: 0.95,
-        builder: (ctx, scrollController) => Container(
-          decoration: const BoxDecoration(
-            color: AppColors.surfaceBg,
-            borderRadius:
-                BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
-          ),
-          child: Column(
-            children: [
-              const SizedBox(height: AppSpacing.sm + 4),
-              Container(
-                width: 36,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppColors.outlineGray,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.lg,
-                  AppSpacing.md,
-                  AppSpacing.lg,
-                  AppSpacing.sm,
-                ),
-                child: Row(
-                  children: [
-                    Text(
-                      'Alle Bewertungen',
-                      style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.onSurfaceDark,
-                          ),
-                    ),
-                    const Spacer(),
-                    if (avg != null)
-                      ReviewStars(rating: avg, count: reviews.length),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: ListView.builder(
-                  controller: scrollController,
-                  padding: EdgeInsets.fromLTRB(
-                    AppSpacing.md,
-                    0,
-                    AppSpacing.md,
-                    MediaQuery.of(ctx).padding.bottom + AppSpacing.lg,
-                  ),
-                  itemCount: reviews.length,
-                  itemBuilder: (_, i) => ReviewTile(
-                    review: reviews[i],
-                    isMine: uid != null && reviews[i].userId == uid,
-                  ),
-                ),
-              ),
-            ],
           ),
         ),
       ),

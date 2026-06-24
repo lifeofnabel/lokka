@@ -152,6 +152,28 @@ class MerchantStampsService {
         .delete();
   }
 
+  /// Clones an existing card as a fresh DRAFT (new id, "(Kopie)" title, no stick
+  /// binding, reset timestamps) so a campaign/season variant is one tap away.
+  /// Draft status means the clone does not count against the active cap until
+  /// the merchant publishes it.
+  Future<String> duplicateCard(StampCardModel source) {
+    final copy = source.copyWith(
+      id: '',
+      title: '${source.title} (Kopie)',
+      status: StampCardStatus.draft,
+      isActive: false,
+      isArchived: false,
+      boundStickId: '',
+      createdAt: null,
+      updatedAt: null,
+      publishedAt: null,
+      activatedAt: null,
+      pausedAt: null,
+      archivedAt: null,
+    );
+    return saveCard(copy);
+  }
+
   int _sortCards(StampCardModel a, StampCardModel b) {
     final statusOrder = _statusRank(a.status).compareTo(_statusRank(b.status));
     if (statusOrder != 0) return statusOrder;

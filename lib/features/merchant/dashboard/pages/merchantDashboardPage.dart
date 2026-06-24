@@ -15,6 +15,7 @@ import '../../../../core/widgets/appLoadingState.dart';
 import '../../orders/services/merchantOrdersService.dart';
 import '../../orders/widgets/merchantScanOrderSheet.dart';
 import '../../shared/widgets/merchantPremiumUi.dart';
+import '../../../stamps/widgets/customerScanFlow.dart';
 import '../models/dashboardModules.dart';
 import '../providers/merchantDashboardProvider.dart';
 import '../services/merchantDashboardService.dart';
@@ -124,16 +125,7 @@ class _MerchantDashboardView extends StatelessWidget {
                       ),
                       const SizedBox(height: AppSpacing.lg),
                       ScannerCard(
-                        onTap: () {
-                          final ordersService = MerchantOrdersService(
-                            authService: context.read<AuthService>(),
-                            firestoreService: context.read<FirestoreService>(),
-                          );
-                          showOrderScanner(
-                            context,
-                            onConfirm: ordersService.confirmPendingByCode,
-                          );
-                        },
+                        onTap: () => _openScannerChooser(context),
                       ),
                       if (data.ordersEnabled) ...[
                         const SizedBox(height: AppSpacing.md),
@@ -177,6 +169,78 @@ class _MerchantDashboardView extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// The dashboard scanner serves two "scan the customer" jobs: stamping a stamp
+/// card and confirming a pre-paid order. A quick chooser keeps both one tap away
+/// without coupling the QR formats.
+Future<void> _openScannerChooser(BuildContext context) async {
+  final texts = context.read<LanguageService>();
+  final merchantId = context.read<AuthService>().currentUser?.uid;
+  final choice = await showModalBottomSheet<String>(
+    context: context,
+    showDragHandle: true,
+    backgroundColor: MerchantPremiumColors.surface,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+    ),
+    builder: (ctx) => SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              texts.text('merchant.dashboard.scanCustomer'),
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                  color: MerchantPremiumColors.ink,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            ListTile(
+              tileColor: MerchantPremiumColors.surfaceAlt,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              leading: const Icon(Icons.loyalty_rounded,
+                  color: MerchantPremiumColors.gold),
+              title: Text(texts.text('merchant.stampScan.chooseStamp'),
+                  style: const TextStyle(
+                      color: MerchantPremiumColors.ink,
+                      fontWeight: FontWeight.w800)),
+              onTap: () => Navigator.of(ctx).pop('stamp'),
+            ),
+            const SizedBox(height: 10),
+            ListTile(
+              tileColor: MerchantPremiumColors.surfaceAlt,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              leading: const Icon(Icons.receipt_long_rounded,
+                  color: MerchantPremiumColors.gold),
+              title: Text(texts.text('merchant.stampScan.chooseOrder'),
+                  style: const TextStyle(
+                      color: MerchantPremiumColors.ink,
+                      fontWeight: FontWeight.w800)),
+              onTap: () => Navigator.of(ctx).pop('order'),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+  if (choice == null || !context.mounted) return;
+
+  if (choice == 'stamp') {
+    if (merchantId == null) return;
+    await startStampCustomerScan(context, merchantId: merchantId);
+  } else {
+    final ordersService = MerchantOrdersService(
+      authService: context.read<AuthService>(),
+      firestoreService: context.read<FirestoreService>(),
+    );
+    await showOrderScanner(context, onConfirm: ordersService.confirmPendingByCode);
   }
 }
 

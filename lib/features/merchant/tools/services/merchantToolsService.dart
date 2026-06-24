@@ -406,6 +406,18 @@ class MerchantToolsService {
     }
   }
 
+  /// Hard-deletes a post from both the merchant-scoped and the global feed
+  /// collection. Used by the manage grid's "Delete" tile action.
+  Future<void> deleteFeedPost(String postId) async {
+    await firestoreService
+        .document(FirebasePaths.merchantFeedPost(merchantId, postId))
+        .delete();
+    final global = await firestoreService.readDocument(FirebasePaths.feedPost(postId));
+    if (global != null) {
+      await firestoreService.document(FirebasePaths.feedPost(postId)).delete();
+    }
+  }
+
   Future<List<TableAreaData>> loadTableAreas() async {
     final snapshot = await firestoreService
         .collection(FirebasePaths.merchantTableAreas(merchantId))
@@ -488,6 +500,10 @@ class MerchantToolsService {
   }
 }
 
+/// Display status derived from a post's flags. Single source for the grid badge
+/// so we never disagree with the action buttons (which read the same flags).
+enum MerchantPostStatus { archived, scheduled, paused, published }
+
 class MerchantFeedPostData {
   const MerchantFeedPostData({
     required this.postId,
@@ -501,6 +517,10 @@ class MerchantFeedPostData {
     required this.isArchived,
     required this.isPrivate,
     required this.isScheduled,
+    this.ctaLinkType = '',
+    this.ctaTargetId = '',
+    this.ctaUrl = '',
+    this.linkedCardId = '',
     this.viewsCount,
     this.clicksCount,
     this.redemptionsCount,
@@ -517,6 +537,19 @@ class MerchantFeedPostData {
   final String type;
   final String imageUrl;
   final String ctaLabel;
+
+  /// CTA target: 'profile' | 'url' | 'stampCard' (legacy: 'shop'/'catalog'/
+  /// 'feedPost'/'external'). Empty = no button.
+  final String ctaLinkType;
+
+  /// Target identifier — a stamp-card id for 'stampCard', or empty otherwise.
+  final String ctaTargetId;
+
+  /// External URL for the 'url' target.
+  final String ctaUrl;
+
+  /// For `type == 'stampAd'`: the advertised stamp card's id.
+  final String linkedCardId;
   final bool isActive;
   final bool isArchived;
   final bool isPrivate;
@@ -529,6 +562,16 @@ class MerchantFeedPostData {
   final DateTime? publishedAt;
   final DateTime? scheduledAt;
 
+  bool get isStampAd => type == 'stampAd';
+  bool get hasButton => ctaLabel.trim().isNotEmpty;
+
+  MerchantPostStatus get status {
+    if (isArchived) return MerchantPostStatus.archived;
+    if (isScheduled) return MerchantPostStatus.scheduled;
+    if (!isActive) return MerchantPostStatus.paused;
+    return MerchantPostStatus.published;
+  }
+
   factory MerchantFeedPostData.fromMap(Map<String, dynamic> map) {
     return MerchantFeedPostData(
       postId: map['postId'] as String? ?? map['id'] as String? ?? '',
@@ -538,6 +581,10 @@ class MerchantFeedPostData {
       type: map['type'] as String? ?? '',
       imageUrl: map['imageUrl'] as String? ?? '',
       ctaLabel: (map['ctaLabel'] ?? map['buttonText'] ?? '').toString(),
+      ctaLinkType: (map['ctaLinkType'] ?? map['buttonActionType'] ?? '').toString(),
+      ctaTargetId: (map['ctaTargetId'] ?? '').toString(),
+      ctaUrl: (map['ctaUrl'] ?? map['buttonLink'] ?? '').toString(),
+      linkedCardId: (map['linkedCardId'] ?? '').toString(),
       isActive: map['isActive'] as bool? ?? true,
       isArchived: map['isArchived'] as bool? ?? false,
       isPrivate: map['isPrivate'] as bool? ?? false,
