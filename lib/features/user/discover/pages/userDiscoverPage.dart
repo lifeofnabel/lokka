@@ -416,14 +416,48 @@ class _LocationSheetState extends State<_LocationSheet> {
   final _ctrl = TextEditingController();
   final _geo = GeoapifyService();
   List<GeoResult> _suggestions = [];
+  List<Map<String, dynamic>> _favorites = [];
   bool _loading = false;
   Timer? _debounce;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadFavorites();
+  }
+
+  Future<void> _loadFavorites() async {
+    try {
+      final favs = await widget.provider.loadFavoritePlaces();
+      if (mounted) setState(() => _favorites = favs);
+    } catch (_) {}
+  }
 
   @override
   void dispose() {
     _debounce?.cancel();
     _ctrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickFavorite(Map<String, dynamic> p) async {
+    await widget.provider.setManualLocation(
+      lat: (p['lat'] as num).toDouble(),
+      lng: (p['lng'] as num).toDouble(),
+      label: (p['label'] ?? '').toString().isNotEmpty
+          ? p['label'].toString()
+          : _shortPlace(p),
+    );
+    if (mounted) Navigator.pop(context);
+  }
+
+  String _shortPlace(Map<String, dynamic> p) {
+    final street = (p['street'] ?? '').toString().trim();
+    final city = (p['city'] ?? '').toString().trim();
+    if (street.isNotEmpty && city.isNotEmpty) return '$street, $city';
+    if (street.isNotEmpty) return street;
+    if (city.isNotEmpty) return city;
+    return (p['label'] ?? 'Ort').toString();
   }
 
   void _onChanged(String text) {
@@ -558,6 +592,42 @@ class _LocationSheetState extends State<_LocationSheet> {
               icon: const Icon(Icons.my_location_rounded, size: 18),
               label: const Text('Meinen Standort verwenden'),
             ),
+            // Saved addresses — quiet quick picks, only if the user has any.
+            if (_favorites.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Oder ein gespeicherter Ort',
+                  style: tt.labelMedium?.copyWith(color: cs.onSurfaceVariant),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final p in _favorites)
+                    ActionChip(
+                      visualDensity: VisualDensity.compact,
+                      avatar: Icon(
+                        p['isDefault'] == true
+                            ? Icons.star_rounded
+                            : Icons.place_outlined,
+                        size: 16,
+                        color: p['isDefault'] == true
+                            ? AppColors.googleYellow
+                            : cs.onSurfaceVariant,
+                      ),
+                      label: Text(
+                        _shortPlace(p),
+                        style: tt.bodySmall,
+                      ),
+                      onPressed: () => _pickFavorite(p),
+                    ),
+                ],
+              ),
+            ],
           ],
         ),
       ),

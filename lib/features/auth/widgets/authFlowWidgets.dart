@@ -221,6 +221,80 @@ class AuthTextField extends StatelessWidget {
   }
 }
 
+/// Theme-bewusste Abschnitts-Überschrift für Auth-Formulare (Struktur statt
+/// langer, flacher Feldliste). Muted Label + dünne Trennlinie.
+class AuthSectionLabel extends StatelessWidget {
+  const AuthSectionLabel({super.key, required this.labelKey, this.topGap = 6});
+
+  final String labelKey;
+  final double topGap;
+
+  @override
+  Widget build(BuildContext context) {
+    final texts = context.watch<LanguageService>();
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final color =
+        isDark ? MerchantPremiumColors.muted : theme.colorScheme.onSurfaceVariant;
+    return Padding(
+      padding: EdgeInsets.only(top: topGap, bottom: 12),
+      child: Row(
+        children: [
+          Text(
+            texts.text(labelKey).toUpperCase(),
+            style: TextStyle(
+              color: color,
+              fontSize: 11.5,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.6,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Divider(color: color.withValues(alpha: 0.22), height: 1),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Zwei Auth-Felder nebeneinander (ab 360px Breite), sonst untereinander.
+/// Für kompakte, strukturierte Formulare (Name, Adresse).
+class AuthFieldRow extends StatelessWidget {
+  const AuthFieldRow({
+    super.key,
+    required this.first,
+    required this.second,
+    this.firstFlex = 1,
+    this.secondFlex = 1,
+  });
+
+  final Widget first;
+  final Widget second;
+  final int firstFlex;
+  final int secondFlex;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 360) {
+          return Column(children: [first, second]);
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(flex: firstFlex, child: first),
+            const SizedBox(width: 12),
+            Expanded(flex: secondFlex, child: second),
+          ],
+        );
+      },
+    );
+  }
+}
+
 /// Pflicht-Einwilligung mit antippbarem Rechts-Link (AGB / Datenschutz).
 class AuthConsentCheck extends StatelessWidget {
   const AuthConsentCheck({

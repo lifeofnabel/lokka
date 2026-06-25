@@ -104,13 +104,19 @@ class _StatusCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final texts = context.watch<LanguageService>();
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final tt = theme.textTheme;
     final content = _content(status, texts);
+    // Theme-bewusster Fill: im Merchant-Dark-Theme ein dunkles Feld (vorher fix
+    // hellgrau → weißer Kasten MIT hellem Text = unleserlich), hell im User-Theme.
+    final fill = theme.brightness == Brightness.dark
+        ? cs.surfaceContainerHigh
+        : AppColors.surfaceGray;
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppColors.surfaceGray,
+        color: fill,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: cs.outlineVariant),
       ),

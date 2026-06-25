@@ -38,6 +38,23 @@ class UserPartnersService {
     return PublicMerchantUserModel.fromMap({...data, 'merchantId': doc.id});
   }
 
+  /// Resolves a public profile by its custom [handle] (slug). Single-field
+  /// equality query → auto-indexed, no composite index needed.
+  Future<PublicMerchantUserModel?> fetchPartnerByHandle(String handle) async {
+    final slug = handle.trim().toLowerCase();
+    if (slug.isEmpty) return null;
+    final snap = await firestoreService
+        .collection(FirebasePaths.publicMerchants)
+        .where('handle', isEqualTo: slug)
+        .limit(1)
+        .get();
+    if (snap.docs.isEmpty) return null;
+    final doc = snap.docs.first;
+    final data = doc.data();
+    if (data['isActive'] != true || data['isPublic'] != true) return null;
+    return PublicMerchantUserModel.fromMap({...data, 'merchantId': doc.id});
+  }
+
   /// Loads feed posts and counts (postCount + totalLikes) per merchant.
   /// Returns a map of merchantId → beliebt score.
   Future<Map<String, int>> fetchBeliebtScores() async {

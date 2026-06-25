@@ -15,6 +15,8 @@ class WalletCardModel {
     required this.hasPoints,
     required this.hasCoupons,
     this.addedStampCardIds = const [],
+    this.merchantLat,
+    this.merchantLng,
     this.joinedAt,
     this.lastActivityAt,
   });
@@ -42,6 +44,10 @@ class WalletCardModel {
   /// IDs of the stamp cards the user explicitly added to their wallet (only
   /// these are shown in the wallet — adding happens on the merchant page).
   final List<String> addedStampCardIds;
+
+  /// Merchant coordinates (denormalised) — used to sort the wallet by distance.
+  final double? merchantLat;
+  final double? merchantLng;
   final DateTime? joinedAt;
   final DateTime? lastActivityAt;
 
@@ -67,6 +73,8 @@ class WalletCardModel {
               .where((e) => e.isNotEmpty)
               .toList() ??
           const [],
+      merchantLat: (map['merchantLat'] as num?)?.toDouble(),
+      merchantLng: (map['merchantLng'] as num?)?.toDouble(),
       joinedAt: _tsToDate(map['joinedAt']),
       lastActivityAt: _tsToDate(map['lastActivityAt']),
     );
@@ -89,6 +97,8 @@ class WalletCardModel {
       'hasPoints': hasPoints,
       'hasCoupons': hasCoupons,
       'addedStampCardIds': addedStampCardIds,
+      'merchantLat': merchantLat,
+      'merchantLng': merchantLng,
       'joinedAt': joinedAt?.toIso8601String(),
       'lastActivityAt': lastActivityAt?.toIso8601String(),
     };

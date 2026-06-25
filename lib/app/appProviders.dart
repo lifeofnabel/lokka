@@ -33,7 +33,7 @@ class AppProviders extends StatelessWidget {
         Provider<FirestoreService>(create: (_) => FirestoreService()),
         Provider<LocalCacheService>(create: (_) => LocalCacheService()),
         ProxyProvider3<AuthService, FirestoreService, LocalCacheService, SessionService>(
-          update: (_, authService, firestoreService, cacheService, __) =>
+          update: (_, authService, firestoreService, cacheService, _) =>
               SessionService(
             authService: authService,
             firestoreService: firestoreService,
@@ -59,7 +59,7 @@ class AppProviders extends StatelessWidget {
         Provider<QrService>(create: (_) => const QrService()),
         Provider<ScannerService>(create: (_) => const ScannerService()),
         ProxyProvider<StorageService, UploadService>(
-          update: (_, storageService, __) =>
+          update: (_, storageService, _) =>
               UploadService(storageService: storageService),
         ),
       ],

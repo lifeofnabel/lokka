@@ -24,8 +24,8 @@ import '../features/merchant/coupons/pages/merchantCouponsPage.dart';
 import '../features/merchant/customers/pages/merchantCustomersPage.dart';
 import '../features/merchant/dashboard/pages/merchantDashboardPage.dart';
 import '../features/merchant/features/pages/merchantFeaturesPage.dart';
-import '../features/merchant/feedManager/pages/merchantFeedCreatePage.dart';
 import '../features/merchant/feedManager/pages/merchantFeedManagePage.dart';
+import '../features/merchant/feedManager/pages/merchantPostComposePage.dart';
 import '../features/merchant/feedManager/pages/merchantStampAdCreatePage.dart';
 import '../features/invite/pages/merchantInvitePage.dart';
 import '../features/merchant/catalog/pages/merchantCategoriesPage.dart';
@@ -162,16 +162,33 @@ class AppRouter {
       final user = authService.currentUser;
       final loc = state.matchedLocation;
 
-      // Landing → Rollen-Weiche (wie bisher).
-      if (loc == '/' && user != null) {
+      // Ein anonymer Account (z. B. aus dem NFC-/QR-Stempel-Flow via
+      // signInAnonymously) zählt NICHT als „eingeloggt" für geschützte Bereiche.
+      final isRealUser = user != null && !user.isAnonymous;
+
+      // Landing → Rollen-Weiche (nur für echte Accounts).
+      if (loc == '/' && isRealUser) {
         return '/auth/roleGate';
+      }
+
+      // Guard: /user/* nur für echte, eingeloggte Nutzer. AUSNAHME: teilbare
+      // Inhalts-Deep-Links — ein Beitrag, ein Merchant-Profil und die
+      // Merchant-Stempelseite — bleiben ohne Login sichtbar.
+      if (loc.startsWith('/user/') && !isRealUser) {
+        const publicUserPrefixes = [
+          '/user/feed/', // einzelner Beitrag
+          '/user/partners/', // Merchant-Profil
+          '/user/stamps/', // Merchant-Stempelseite (aus Werbe-Deep-Link)
+        ];
+        final isPublic = publicUserPrefixes.any((p) => loc.startsWith(p));
+        if (!isPublic) return '/auth/userLogin';
       }
 
       // Guard: /merchant/* nur für eingeloggte, freigegebene Merchants.
       // (Merchant-Auth-Routen liegen unter /auth/merchant* und sind NICHT
       // betroffen, damit Login/Registrierung erreichbar bleiben.)
       if (loc.startsWith('/merchant')) {
-        if (user == null) return '/auth/merchantLogin';
+        if (!isRealUser) return '/auth/merchantLogin';
         final access = await _resolveMerchantAccess(context, user.uid);
         if (access.role != 'merchant') {
           // Eingeloggt, aber kein Merchant → an die richtige Stelle leiten.
@@ -545,10 +562,8 @@ class AppRouter {
       GoRoute(
         path: '/merchant/feed/create',
         builder: (context, state) => _merchantDark(
-          MerchantFeedCreatePage(
-            kind: state.uri.queryParameters['kind'] == 'action'
-                ? FeedCreateKind.action
-                : FeedCreateKind.post,
+          MerchantPostComposePage(
+            initialType: state.uri.queryParameters['type'],
           ),
         ),
       ),
@@ -645,6 +660,14 @@ class AppRouter {
         name: devFoundation,
         builder: (context, state) => const DevFoundationPage(),
       ),
+      // MUST stay last: a top-level custom merchant handle (Insta-style link
+      // <origin>/<handle>). Single-segment paths that match no route above land
+      // here and resolve to that merchant's public profile.
+      GoRoute(
+        path: '/:handle',
+        builder: (context, state) =>
+            _HandleLoader(handle: state.pathParameters['handle'] ?? ''),
+      ),
     ],
   );
 }
@@ -733,6 +756,35 @@ class _FeedDetailLoader extends StatelessWidget {
           );
         }
         return UserFeedDetailPage(post: post, feedService: service);
+      },
+    );
+  }
+}
+
+/// Resolves a custom merchant handle (slug) → that merchant's public profile.
+class _HandleLoader extends StatelessWidget {
+  const _HandleLoader({required this.handle});
+
+  final String handle;
+
+  @override
+  Widget build(BuildContext context) {
+    final service = UserPartnersService(
+      firestoreService: context.read<FirestoreService>(),
+    );
+    return FutureBuilder<PublicMerchantUserModel?>(
+      future: service.fetchPartnerByHandle(handle),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const _RouteLoader();
+        }
+        final merchant = snapshot.data;
+        if (merchant == null) {
+          return const FoundationPlaceholderPage(
+            titleKey: 'user.partner.detail.title',
+          );
+        }
+        return UserPartnerDetailPage(merchant: merchant);
       },
     );
   }

@@ -187,6 +187,14 @@ class UserFeedService {
     });
   }
 
+  /// Delete the signed-in user's own review for a post (doc id == uid, so the
+  /// rules allow it). No-op when not signed in.
+  Future<void> deleteReview(String postId) async {
+    final uid = authService.currentUser?.uid;
+    if (uid == null) return;
+    await firestoreService.document(FirebasePaths.feedReview(postId, uid)).delete();
+  }
+
   Future<ReviewModel?> myReview(String postId) async {
     final uid = authService.currentUser?.uid;
     if (uid == null) return null;
@@ -255,9 +263,10 @@ class UserFeedService {
     );
   }
 
-  /// Lädt gelikte Beiträge in 10er-Blöcken (whereIn) statt N Einzelabfragen.
-  /// Reihenfolge entspricht der likedAt-Sortierung (neueste zuerst).
-  Future<List<FeedPostModel>> fetchLikedPosts() async {
+  /// Loads liked posts (in 10-id `whereIn` chunks, not N reads) together with
+  /// each post's `likedAt` timestamp, so the UI can filter by when it was liked
+  /// (today / yesterday / last 7 days / month). Newest first.
+  Future<List<LikedFeedPost>> fetchLikedEntries() async {
     final uid = authService.currentUser?.uid;
     if (uid == null) return [];
 
@@ -267,6 +276,11 @@ class UserFeedService {
         .get();
     final orderedIds = likedSnap.docs.map((doc) => doc.id).toList();
     if (orderedIds.isEmpty) return [];
+
+    final likedAtById = <String, DateTime?>{
+      for (final doc in likedSnap.docs)
+        doc.id: _likedTs(doc.data()['likedAt']),
+    };
 
     final byId = <String, FeedPostModel>{};
     for (var i = 0; i < orderedIds.length; i += 10) {
@@ -283,7 +297,8 @@ class UserFeedService {
 
     return [
       for (final id in orderedIds)
-        if (byId[id] != null) byId[id]!,
+        if (byId[id] != null)
+          LikedFeedPost(post: byId[id]!, likedAt: likedAtById[id]),
     ];
   }
 
@@ -305,4 +320,18 @@ class UserFeedService {
     if (!post.isForRegulars) return true;
     return subscribedMerchantIds.contains(post.merchantId);
   }
+}
+
+DateTime? _likedTs(dynamic value) {
+  if (value is Timestamp) return value.toDate();
+  if (value is DateTime) return value;
+  return null;
+}
+
+/// A liked feed post together with the moment the user liked it.
+class LikedFeedPost {
+  const LikedFeedPost({required this.post, required this.likedAt});
+
+  final FeedPostModel post;
+  final DateTime? likedAt;
 }

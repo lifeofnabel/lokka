@@ -34,7 +34,18 @@ class App extends StatelessWidget {
               if (startupError != null) {
                 return _StartupErrorView(error: startupError);
               }
-              return child ?? const SizedBox.shrink();
+              // Text-Skalierung sanft begrenzen: respektiert die System-/
+              // Barrierefreiheit-Einstellung bis 1.3×, verhindert aber, dass
+              // extreme Schriftgrößen die vielen fix dimensionierten Elemente
+              // (Pillen, Buttons) zerbrechen. App-weiter Robustheits-Schutz.
+              final mq = MediaQuery.of(context);
+              return MediaQuery(
+                data: mq.copyWith(
+                  textScaler: mq.textScaler
+                      .clamp(minScaleFactor: 1.0, maxScaleFactor: 1.3),
+                ),
+                child: child ?? const SizedBox.shrink(),
+              );
             },
           ),
         );

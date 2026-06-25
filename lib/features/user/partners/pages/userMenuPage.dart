@@ -20,15 +20,11 @@ class UserMenuPage extends StatefulWidget {
     super.key,
     required this.merchantId,
     required this.shopName,
-    this.tablesEnabled = false,
     this.style = const MenuDesign(),
   });
 
   final String merchantId;
   final String shopName;
-
-  /// „Tisch wählen"-Stub einblenden (nur wenn der Merchant Tische pflegt).
-  final bool tablesEnabled;
 
   /// Vom Merchant gewählte Gestaltung der Kundenkarte.
   final MenuDesign style;
@@ -173,107 +169,8 @@ class _UserMenuPageState extends State<UserMenuPage> {
                     ),
                   ],
                 ),
-                if (widget.tablesEnabled && !_loading && _error == null) ...[
-                  const SizedBox(height: AppSpacing.sm),
-                  _TableSelectButton(
-                    onTap: () => _showTableStub(context),
-                  ),
-                ],
               ],
             ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-void _showTableStub(BuildContext context) {
-  showModalBottomSheet<void>(
-    context: context,
-    backgroundColor: Theme.of(context).colorScheme.surface,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-    ),
-    builder: (ctx) {
-      final cs = Theme.of(ctx).colorScheme;
-      final tt = Theme.of(ctx).textTheme;
-      return SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.lg),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 42,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: cs.outlineVariant,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              Container(
-                width: 64,
-                height: 64,
-                decoration: BoxDecoration(
-                  color: cs.secondaryContainer,
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                child: Icon(Icons.event_seat_rounded,
-                    color: cs.onSecondaryContainer, size: 32),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              Text(
-                'Tisch wählen',
-                style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              Text(
-                'Tischauswahl direkt aus der Speisekarte kommt in Kürze. '
-                'Bald kannst du hier deinen Tisch reservieren.',
-                textAlign: TextAlign.center,
-                style: tt.bodyMedium
-                    ?.copyWith(color: cs.onSurfaceVariant, height: 1.5),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-            ],
-          ),
-        ),
-      );
-    },
-  );
-}
-
-class _TableSelectButton extends StatelessWidget {
-  const _TableSelectButton({required this.onTap});
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white.withValues(alpha: 0.18),
-      borderRadius: BorderRadius.circular(999),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(999),
-        onTap: onTap,
-        child: const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 11),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.event_seat_rounded, color: Colors.white, size: 18),
-              SizedBox(width: 8),
-              Text(
-                'Tisch wählen',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 13.5,
-                ),
-              ),
-            ],
           ),
         ),
       ),

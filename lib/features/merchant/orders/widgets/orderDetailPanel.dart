@@ -6,6 +6,7 @@ import '../../../../core/theme/appSpacing.dart';
 import '../../shared/widgets/merchantPremiumUi.dart';
 import '../../tools/widgets/merchantToolUi.dart';
 import '../models/orderModel.dart';
+import 'orderStatusStyle.dart';
 
 /// Detailansicht einer Bestellung (Header, Artikel, Status-Aktionen).
 /// Wird sowohl von der Detailseite als auch vom Split-View (Detail rechts)
@@ -119,7 +120,9 @@ class _OrderHeader extends StatelessWidget {
             spacing: 8,
             runSpacing: 8,
             children: [
-              _LightPill(label: _statusLabel(texts, order.status)),
+              // Farb-kodierte Status-Pille (Neu/In Arbeit/Fertig/Storniert) →
+              // an der Kasse sofort erkennbar statt einheitlich gold.
+              OrderStatusPill.forStatus(texts, order.status),
               _LightPill(
                 label: order.isTakeaway
                     ? texts.text('public.shop.takeaway')
@@ -354,7 +357,9 @@ class _StatusActions extends StatelessWidget {
             label: Text(texts.text('merchant.orders.cancelOrder')),
             style: OutlinedButton.styleFrom(
               minimumSize: const Size.fromHeight(54),
-              foregroundColor: Colors.red.shade700,
+              foregroundColor: MerchantPremiumColors.danger,
+              side: BorderSide(
+                  color: MerchantPremiumColors.danger.withValues(alpha: 0.5)),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(999),
               ),
@@ -390,15 +395,6 @@ class _LightPill extends StatelessWidget {
       ),
     );
   }
-}
-
-String _statusLabel(LanguageService texts, String status) {
-  return switch (status) {
-    'preparing' => texts.text('merchant.orders.status.preparing'),
-    'done' => texts.text('merchant.orders.status.done'),
-    'cancelled' => texts.text('merchant.orders.status.cancelled'),
-    _ => texts.text('merchant.orders.status.new'),
-  };
 }
 
 String _price(num value, LanguageService texts) {

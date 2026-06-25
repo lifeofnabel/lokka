@@ -147,9 +147,16 @@ class _MerchantRegisterPageState extends State<MerchantRegisterPage> {
             icon: Icons.storefront_rounded,
             children: [
               AuthErrorBox(message: _localError ?? provider.error),
+              const AuthSectionLabel(labelKey: 'auth.section.shopOwner', topGap: 0),
               AuthTextField(controller: _shopName, labelKey: 'auth.shopName'),
-              AuthTextField(controller: _firstName, labelKey: 'auth.ownerFirstName'),
-              AuthTextField(controller: _lastName, labelKey: 'auth.ownerLastName'),
+              AuthFieldRow(
+                first: AuthTextField(
+                    controller: _firstName, labelKey: 'auth.ownerFirstName'),
+                second: AuthTextField(
+                    controller: _lastName, labelKey: 'auth.ownerLastName'),
+              ),
+              AuthTextField(controller: _phone, labelKey: 'auth.phone'),
+              const AuthSectionLabel(labelKey: 'auth.section.access'),
               AuthTextField(
                 controller: _email,
                 labelKey: 'auth.email',
@@ -161,13 +168,23 @@ class _MerchantRegisterPageState extends State<MerchantRegisterPage> {
                   labelKey: 'auth.password',
                   obscureText: true,
                 ),
-              AuthTextField(controller: _phone, labelKey: 'auth.phone'),
-              _AddressCard(
-                street: _street,
-                houseNumber: _houseNumber,
-                postalCode: _postalCode,
-                city: _city,
+              const AuthSectionLabel(labelKey: 'auth.section.address'),
+              AuthFieldRow(
+                firstFlex: 3,
+                secondFlex: 1,
+                first:
+                    AuthTextField(controller: _street, labelKey: 'auth.street'),
+                second: AuthTextField(
+                    controller: _houseNumber, labelKey: 'auth.houseNumber'),
               ),
+              AuthFieldRow(
+                firstFlex: 2,
+                secondFlex: 3,
+                first: AuthTextField(
+                    controller: _postalCode, labelKey: 'auth.postalCode'),
+                second: AuthTextField(controller: _city, labelKey: 'auth.city'),
+              ),
+              const AuthSectionLabel(labelKey: 'auth.section.category'),
               FutureBuilder<_ChooserData>(
                 future: _chooserFuture,
                 builder: (context, snapshot) {
@@ -175,15 +192,11 @@ class _MerchantRegisterPageState extends State<MerchantRegisterPage> {
                   return Column(
                     children: [
                       if (data.shopTypes.isNotEmpty)
-                        DropdownButtonFormField<String>(
-                          initialValue: _shopType,
-                          decoration: _authDropdownDecoration(
-                            context.watch<LanguageService>().text('auth.shopType'),
-                          ),
-                          items: data.shopTypes
-                              .map((type) => DropdownMenuItem(value: type, child: Text(type)))
-                              .toList(),
-                          onChanged: (value) => setState(() => _shopType = value),
+                        _ShopTypeDropdown(
+                          value: _shopType,
+                          shopTypes: data.shopTypes,
+                          onChanged: (value) =>
+                              setState(() => _shopType = value),
                         )
                       else
                         AuthTextField(
@@ -191,7 +204,7 @@ class _MerchantRegisterPageState extends State<MerchantRegisterPage> {
                           labelKey: 'auth.shopType',
                         ),
                       if (data.shopTypes.isNotEmpty) ...[
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 12),
                         AuthTextField(
                           controller: _customShopType,
                           labelKey: 'auth.customShopType',
@@ -201,6 +214,7 @@ class _MerchantRegisterPageState extends State<MerchantRegisterPage> {
                   );
                 },
               ),
+              const SizedBox(height: 8),
               AuthCheck(
                 value: _terms,
                 onChanged: (value) => setState(() => _terms = value),
@@ -234,77 +248,58 @@ class _ChooserData {
   final List<String> shopTypes;
 }
 
-class _AddressCard extends StatelessWidget {
-  const _AddressCard({
-    required this.street,
-    required this.houseNumber,
-    required this.postalCode,
-    required this.city,
+/// Theme-bewusstes Kategorie-Dropdown im Stil von [AuthTextField]: dunkler
+/// Fill + dunkles Menü im Merchant-Dark-Theme (vorher fix hellgrau → „weißer
+/// Kasten"), heller Fill im User-Theme.
+class _ShopTypeDropdown extends StatelessWidget {
+  const _ShopTypeDropdown({
+    required this.value,
+    required this.shopTypes,
+    required this.onChanged,
   });
 
-  final TextEditingController street;
-  final TextEditingController houseNumber;
-  final TextEditingController postalCode;
-  final TextEditingController city;
+  final String? value;
+  final List<String> shopTypes;
+  final ValueChanged<String?> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final twoColumns = constraints.maxWidth > 360;
-        final streetField = AuthTextField(controller: street, labelKey: 'auth.street');
-        final houseField = AuthTextField(controller: houseNumber, labelKey: 'auth.houseNumber');
-        final postalField = AuthTextField(controller: postalCode, labelKey: 'auth.postalCode');
-        final cityField = AuthTextField(controller: city, labelKey: 'auth.city');
-
-        Widget pair(Widget first, Widget second, {int firstFlex = 2}) {
-          if (!twoColumns) {
-            return Column(children: [first, second]);
-          }
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(flex: firstFlex, child: first),
-              const SizedBox(width: 12),
-              Expanded(child: second),
-            ],
-          );
-        }
-
-        final cs = Theme.of(context).colorScheme;
-        return Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.fromLTRB(14, 14, 14, 2),
-          decoration: BoxDecoration(
-            color: AppColors.surfaceGray,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: cs.outlineVariant),
+    final texts = context.watch<LanguageService>();
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final fill = isDark
+        ? theme.colorScheme.surfaceContainerHigh
+        : AppColors.surfaceGray;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: DropdownButtonFormField<String>(
+        initialValue: value,
+        isExpanded: true,
+        borderRadius: BorderRadius.circular(16),
+        dropdownColor: fill,
+        iconEnabledColor: theme.colorScheme.onSurfaceVariant,
+        style: theme.textTheme.bodyLarge?.copyWith(
+          color: theme.colorScheme.onSurface,
+          fontWeight: FontWeight.w600,
+        ),
+        decoration: InputDecoration(
+          labelText: texts.text('auth.shopType'),
+          filled: true,
+          fillColor: fill,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide.none,
           ),
-          child: Column(
-            children: [
-              pair(streetField, houseField, firstFlex: 3),
-              pair(postalField, cityField),
-            ],
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide.none,
           ),
-        );
-      },
+        ),
+        items: shopTypes
+            .map((type) => DropdownMenuItem(value: type, child: Text(type)))
+            .toList(),
+        onChanged: onChanged,
+      ),
     );
   }
-}
-
-/// Filled M3 decoration matching [AuthTextField] for inline dropdowns.
-InputDecoration _authDropdownDecoration(String label) {
-  return InputDecoration(
-    labelText: label,
-    filled: true,
-    fillColor: AppColors.surfaceGray,
-    border: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(14),
-      borderSide: BorderSide.none,
-    ),
-    enabledBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(14),
-      borderSide: BorderSide.none,
-    ),
-  );
 }

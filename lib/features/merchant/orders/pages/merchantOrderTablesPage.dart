@@ -13,6 +13,7 @@ import '../providers/merchantOrdersProvider.dart';
 import '../services/merchantOrdersService.dart';
 import '../widgets/orderCard.dart';
 import '../widgets/orderDetailPanel.dart';
+import '../widgets/orderStatusStyle.dart';
 import 'merchantOrdersPage.dart' show kOrdersSplitWidth;
 
 MerchantOrdersProvider _ordersProvider(BuildContext context) =>
@@ -155,7 +156,7 @@ class _TableTile extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    _StatusPill(
+                    OrderStatusPill(
                       label: isOpen
                           ? texts.text('merchant.orders.tableStatusOpen')
                           : texts.text('merchant.orders.tableStatusClosed'),
@@ -183,30 +184,6 @@ class _TableTile extends StatelessWidget {
           const Icon(Icons.arrow_forward_ios_rounded,
               size: 16, color: MerchantPremiumColors.muted),
         ],
-      ),
-    );
-  }
-}
-
-/// Kleine Status-Pille (Offen/Beendet) für die Tisch-Kachel.
-class _StatusPill extends StatelessWidget {
-  const _StatusPill({required this.label, required this.color});
-
-  final String label;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withValues(alpha: 0.30)),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w900),
       ),
     );
   }

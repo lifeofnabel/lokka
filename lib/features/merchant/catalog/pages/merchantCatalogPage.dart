@@ -213,10 +213,12 @@ class _CatalogPreviewHero extends StatelessWidget {
         width: double.infinity,
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
+          // Marken-Grün-Verlauf (vorher off-brand Indigo). Dunkel genug, dass
+          // weiße Schrift/Icons AA-lesbar bleiben.
           gradient: const LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0xFF5A67E6), Color(0xFF2B2F66)],
+            colors: [Color(0xFF1E8E6B), Color(0xFF0E3A2C)],
           ),
           borderRadius: BorderRadius.circular(34),
           border: Border.all(color: Colors.white.withValues(alpha: 0.12)),

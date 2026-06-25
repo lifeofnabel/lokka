@@ -73,7 +73,18 @@ class UserWalletService {
         ? existingCode
         : await _uniqueCode(uid, merchant.merchantId);
 
-    final features = merchant.featuresPublic;
+    // Treue-Verfügbarkeit aus der ECHTEN Quelle ableiten: das früher genutzte
+    // `merchant.featuresPublic` wird nie gepflegt (immer leer) → hätte die
+    // Wallet-Karte fälschlich ohne Stempel/Punkte/Coupons markiert. Stattdessen
+    // live Stempelkarten + aktive Feature-Configs lesen.
+    final loyalty = await Future.wait([
+      loadActiveStampCards(merchant.merchantId),
+      loadPointsEnabled(merchant.merchantId),
+      _isFeatureEnabled(merchant.merchantId, 'coupons'),
+    ]);
+    final hasStampCards = (loyalty[0] as List).isNotEmpty;
+    final hasPoints = loyalty[1] as bool;
+    final hasCoupons = loyalty[2] as bool;
     await firestoreService.setDocument(
       FirebasePaths.userWalletCard(uid, merchant.merchantId),
       {
@@ -84,24 +95,27 @@ class UserWalletService {
         'merchantCity': merchant.displayCity,
         'merchantShopType': merchant.shopType,
         'merchantOrigin': merchant.origins.isNotEmpty ? merchant.origins.first : '',
+        'merchantLat': merchant.lat,
+        'merchantLng': merchant.lng,
         'walletCode': code,
         'walletNumber': code,
         'prefix': code.isNotEmpty ? code.substring(0, 1) : '',
         'joinedAt': existing?['joinedAt'] ?? FieldValue.serverTimestamp(),
         'status': 'active',
-        'hasStampCards': features.contains('stampCards'),
-        'hasPoints': features.contains('pointsSystems'),
-        'hasCoupons': features.contains('coupons'),
+        'hasStampCards': hasStampCards,
+        'hasPoints': hasPoints,
+        'hasCoupons': hasCoupons,
         'lastActivityAt': FieldValue.serverTimestamp(),
       },
       merge: true,
     );
 
     // Denormalise a follower record into the merchant's customer index so the
-    // merchant can see who follows them (+ a bit of profile info). The user
-    // writes only their OWN record (doc id == uid). Non-fatal: following must
-    // still work even if this write is denied (e.g. rules not yet deployed).
-    await _registerFollower(uid, merchant);
+    // merchant can see who follows them (+ a bit of profile info) AND resolve a
+    // typed wallet code → uid at the counter. The user writes only their OWN
+    // record (doc id == uid). Non-fatal: following must still work even if this
+    // write is denied (e.g. rules not yet deployed).
+    await _registerFollower(uid, merchant, walletCode: code);
   }
 
   /// Backfills the merchant-side follower record for a merchant the user
@@ -126,7 +140,8 @@ class UserWalletService {
   /// `merchants/{mid}/customers/{uid}` with the basic profile info the user
   /// chooses to share by following (name, photo, postal code, interests).
   Future<void> _registerFollower(
-      String uid, PublicMerchantUserModel merchant) async {
+      String uid, PublicMerchantUserModel merchant,
+      {String walletCode = ''}) async {
     try {
       final profile =
           await firestoreService.readDocument(FirebasePaths.user(uid)) ??
@@ -163,6 +178,9 @@ class UserWalletService {
           'interestCategories': stringList(profile['interestCategories']),
           'isFollower': true,
           'usedSystems': FieldValue.arrayUnion(['follower']),
+          // Lets the merchant scanner resolve a typed code → this uid. Only
+          // written when known (the backfill path leaves the existing value).
+          if (walletCode.isNotEmpty) 'walletCode': walletCode,
           'followedAt': existingFollowedAt ?? FieldValue.serverTimestamp(),
           'updatedAt': FieldValue.serverTimestamp(),
         },
@@ -198,6 +216,23 @@ class UserWalletService {
       {
         'addedStampCardIds': FieldValue.arrayUnion([cardId]),
         'hasStampCards': true,
+        'lastActivityAt': FieldValue.serverTimestamp(),
+      },
+      merge: true,
+    );
+  }
+
+  /// Remove ONE stamp card from the user's wallet (client write to the
+  /// user-owned walletCards doc). The server-authored progress doc is kept, so
+  /// re-adding the card later restores the collected stamps.
+  Future<void> removeStampCardFromWallet(
+      String merchantId, String cardId) async {
+    final uid = _uid;
+    if (uid == null) return;
+    await firestoreService.setDocument(
+      FirebasePaths.userWalletCard(uid, merchantId),
+      {
+        'addedStampCardIds': FieldValue.arrayRemove([cardId]),
         'lastActivityAt': FieldValue.serverTimestamp(),
       },
       merge: true,
@@ -264,7 +299,11 @@ class UserWalletService {
   /// (uid, merchantId); on the rare collision with another of the user's cards
   /// it regenerates with an increasing salt (edge case #8).
   Future<String> _uniqueCode(String uid, String merchantId) async {
-    final seed = '$uid|$merchantId';
+    // A fresh nonce per generation → the code is RE-rolled on every (re)follow
+    // (a deterministic uid|merchantId seed would hand back the same code after
+    // an unfollow). Stable while followed because addToWallet reuses the stored
+    // code; only a fresh follow (no stored card) reaches here.
+    final seed = '$uid|$merchantId|${DateTime.now().microsecondsSinceEpoch}';
     final taken = await _existingCodes(uid, except: merchantId);
     for (var salt = 0; salt < 64; salt++) {
       final code = WalletCode.generate(seed, salt: salt);

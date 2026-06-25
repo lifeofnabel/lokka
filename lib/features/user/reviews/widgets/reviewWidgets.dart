@@ -124,17 +124,7 @@ class ReviewTile extends StatelessWidget {
           ],
           if (review.imageUrl.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.sm),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(AppRadius.medium),
-              child: CachedNetworkImage(
-                imageUrl: review.imageUrl,
-                height: 160,
-                width: double.infinity,
-                fit: BoxFit.cover,
-                errorWidget: (context, url, error) =>
-                    const SizedBox.shrink(),
-              ),
-            ),
+            _ReviewImage(imageUrl: review.imageUrl),
           ],
           if (review.createdAt != null) ...[
             const SizedBox(height: 6),
@@ -147,6 +137,89 @@ class ReviewTile extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Review photo with a tap-to-enlarge affordance (mini zoom badge). Tapping
+/// opens a fullscreen, pinch-zoomable viewer.
+class _ReviewImage extends StatelessWidget {
+  const _ReviewImage({required this.imageUrl});
+
+  final String imageUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => _openReviewImageFullscreen(context, imageUrl),
+      child: Stack(
+        alignment: Alignment.bottomRight,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(AppRadius.medium),
+            child: CachedNetworkImage(
+              imageUrl: imageUrl,
+              height: 160,
+              width: double.infinity,
+              fit: BoxFit.cover,
+              errorWidget: (context, url, error) => const SizedBox.shrink(),
+            ),
+          ),
+          // Mini zoom badge → signals the photo can be enlarged.
+          Container(
+            margin: const EdgeInsets.all(8),
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.55),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.zoom_out_map_rounded,
+                size: 16, color: Colors.white),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+void _openReviewImageFullscreen(BuildContext context, String imageUrl) {
+  showGeneralDialog<void>(
+    context: context,
+    barrierColor: Colors.black.withValues(alpha: 0.95),
+    barrierDismissible: true,
+    barrierLabel: 'Foto',
+    pageBuilder: (ctx, animation, secondaryAnimation) {
+      return Stack(
+        children: [
+          GestureDetector(
+            onTap: () => Navigator.pop(ctx),
+            child: Center(
+              child: InteractiveViewer(
+                minScale: 1,
+                maxScale: 4,
+                child: CachedNetworkImage(
+                  imageUrl: imageUrl,
+                  fit: BoxFit.contain,
+                  errorWidget: (context, url, error) =>
+                      const Icon(Icons.broken_image_outlined,
+                          color: Colors.white54, size: 48),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            top: MediaQuery.of(ctx).padding.top + 8,
+            right: 8,
+            child: IconButton(
+              onPressed: () => Navigator.pop(ctx),
+              icon: const Icon(Icons.close_rounded, color: Colors.white),
+              style: IconButton.styleFrom(
+                backgroundColor: Colors.white.withValues(alpha: 0.16),
+              ),
+            ),
+          ),
+        ],
+      );
+    },
+  );
 }
 
 /// Öffnet das Bottom-Sheet zum Schreiben/Bearbeiten einer Rezension.

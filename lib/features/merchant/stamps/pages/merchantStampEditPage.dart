@@ -64,6 +64,9 @@ class _MerchantStampEditViewState extends State<_MerchantStampEditView> {
   MerchantStampsProvider? _stampsProvider;
   bool _showAdvancedDesign = false;
   int _requiredStamps = 10;
+  // Dead time between two stamps for the same customer (seconds). 0 = none, for
+  // shops that hand out several stamps per purchase. Stored in claimLimits.
+  int _cooldownSeconds = 120;
   String _conditionType = StampConditionType.visit;
   String _requiredItemId = '';
   String _requiredItemName = '';
@@ -239,11 +242,13 @@ class _MerchantStampEditViewState extends State<_MerchantStampEditView> {
         ),
       2 => _StampsStep(
           requiredStamps: _requiredStamps,
+          cooldownSeconds: _cooldownSeconds,
           onCount: (value) => setState(() => _requiredStamps = value),
           onCustom: () async {
             final custom = await _askCustomStampCount(context, _requiredStamps);
             if (custom != null) setState(() => _requiredStamps = custom);
           },
+          onCooldown: (value) => setState(() => _cooldownSeconds = value),
         ),
       3 => Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -374,6 +379,10 @@ class _MerchantStampEditViewState extends State<_MerchantStampEditView> {
     _rewardDescription.text = card.rewardDescription;
     _stampContent.text = card.stampIconType == 'char' ? card.stampIconValue : '';
     _requiredStamps = card.requiredStamps;
+    final rawCooldown = card.claimLimits['cooldownSeconds'];
+    _cooldownSeconds = rawCooldown is num
+        ? rawCooldown.round()
+        : int.tryParse('${rawCooldown ?? ''}') ?? 120;
     _conditionType = card.conditionType;
     _requiredItemId = card.requiredItemId;
     _requiredItemName = card.requiredItemName;
@@ -441,7 +450,7 @@ class _MerchantStampEditViewState extends State<_MerchantStampEditView> {
           : _stampIconValue,
       imageUrl: _imageUrl,
       imagePlacement: _imagePlacement,
-      claimLimits: existing.claimLimits,
+      claimLimits: {...existing.claimLimits, 'cooldownSeconds': _cooldownSeconds},
       status: status,
       isActive: status == StampCardStatus.active,
       isArchived: status == StampCardStatus.archived,
@@ -640,34 +649,77 @@ class _ConditionStep extends StatelessWidget {
 class _StampsStep extends StatelessWidget {
   const _StampsStep({
     required this.requiredStamps,
+    required this.cooldownSeconds,
     required this.onCount,
     required this.onCustom,
+    required this.onCooldown,
   });
 
   final int requiredStamps;
+  final int cooldownSeconds;
   final ValueChanged<int> onCount;
   final VoidCallback onCustom;
+  final ValueChanged<int> onCooldown;
+
+  static const _cooldownPresets = [0, 60, 120, 300];
 
   @override
   Widget build(BuildContext context) {
     final texts = context.watch<LanguageService>();
     const presets = [5, 8, 10, 12, 15];
+    // Snap an arbitrary stored value to the nearest preset for selection display.
+    final selectedCooldown = _cooldownPresets.contains(cooldownSeconds)
+        ? cooldownSeconds
+        : (cooldownSeconds <= 0
+            ? 0
+            : _cooldownPresets.reduce((a, b) =>
+                (cooldownSeconds - a).abs() <= (cooldownSeconds - b).abs() ? a : b));
     return MerchantFormSection(
       title: texts.text('merchant.stamps.section.stamps'),
       tooltip: texts.text('merchant.stamps.section.stampsTip'),
-      child: _ChipWrap(
-        options: [
-          ...presets.map((count) => _ChipOption(count.toString(), count.toString())),
-          _ChipOption('custom', texts.text('merchant.stamps.custom')),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _ChipWrap(
+            options: [
+              ...presets.map((count) => _ChipOption(count.toString(), count.toString())),
+              _ChipOption('custom', texts.text('merchant.stamps.custom')),
+            ],
+            selected: presets.contains(requiredStamps) ? requiredStamps.toString() : 'custom',
+            onSelected: (value) {
+              if (value == 'custom') {
+                onCustom();
+              } else {
+                onCount(int.parse(value));
+              }
+            },
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Text(
+            texts.text('merchant.stamps.cooldownTitle'),
+            style: const TextStyle(
+                color: MerchantPremiumColors.ink,
+                fontWeight: FontWeight.w900,
+                fontSize: 15),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            texts.text('merchant.stamps.cooldownHint'),
+            style: const TextStyle(
+                color: MerchantPremiumColors.muted, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          _ChipWrap(
+            options: [
+              _ChipOption('0', texts.text('merchant.stamps.cooldown.none')),
+              _ChipOption('60', texts.text('merchant.stamps.cooldown.1min')),
+              _ChipOption('120', texts.text('merchant.stamps.cooldown.2min')),
+              _ChipOption('300', texts.text('merchant.stamps.cooldown.5min')),
+            ],
+            selected: selectedCooldown.toString(),
+            onSelected: (value) => onCooldown(int.parse(value)),
+          ),
         ],
-        selected: presets.contains(requiredStamps) ? requiredStamps.toString() : 'custom',
-        onSelected: (value) {
-          if (value == 'custom') {
-            onCustom();
-          } else {
-            onCount(int.parse(value));
-          }
-        },
       ),
     );
   }

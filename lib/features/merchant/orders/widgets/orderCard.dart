@@ -5,6 +5,7 @@ import '../../../../core/services/languageService.dart';
 import '../../../../core/theme/appSpacing.dart';
 import '../../shared/widgets/merchantPremiumUi.dart';
 import '../models/orderModel.dart';
+import 'orderStatusStyle.dart';
 
 /// Bestellkarte (Qoucher-Struktur im lokka-Premium-Dark-Theme):
 /// Status-Icon, Code + Zeit, Status-Pille, Tisch-Tag, Ort + Summe,
@@ -30,7 +31,7 @@ class OrderCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final texts = context.watch<LanguageService>();
-    final statusColor = _statusColor(order.status);
+    final statusColor = OrderStatusStyle.colorOf(order.status);
     final highlight = order.status == 'new';
 
     return MerchantPremiumCard(
@@ -87,7 +88,7 @@ class OrderCard extends StatelessWidget {
                   ],
                 ),
               ),
-              _StatusPill(label: _statusLabel(texts, order.status), color: statusColor),
+              OrderStatusPill(label: OrderStatusStyle.labelOf(texts, order.status), color: statusColor),
             ],
           ),
           if (order.isTableOrder || runnerName.isNotEmpty) ...[
@@ -202,33 +203,6 @@ class OrderCard extends StatelessWidget {
   }
 }
 
-class _StatusPill extends StatelessWidget {
-  const _StatusPill({required this.label, required this.color});
-
-  final String label;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.16),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withValues(alpha: 0.30)),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: color,
-          fontSize: 11.5,
-          fontWeight: FontWeight.w900,
-        ),
-      ),
-    );
-  }
-}
-
 class _ActionButton extends StatelessWidget {
   const _ActionButton({
     required this.label,
@@ -297,24 +271,6 @@ class _IconButton extends StatelessWidget {
       ),
     );
   }
-}
-
-String _statusLabel(LanguageService texts, String status) {
-  return switch (status) {
-    'preparing' => texts.text('merchant.orders.status.preparing'),
-    'done' => texts.text('merchant.orders.status.done'),
-    'cancelled' => texts.text('merchant.orders.status.cancelled'),
-    _ => texts.text('merchant.orders.status.new'),
-  };
-}
-
-Color _statusColor(String status) {
-  return switch (status) {
-    'preparing' => MerchantPremiumColors.gold,
-    'done' => MerchantPremiumColors.success,
-    'cancelled' => MerchantPremiumColors.danger,
-    _ => MerchantPremiumColors.warning,
-  };
 }
 
 String _price(num value, LanguageService texts) {

@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -29,6 +30,11 @@ class _MeinePartnerPageState extends State<MeinePartnerPage> {
   bool _loading = true;
   String? _error;
 
+  /// Merchants unfollowed in THIS session — their row stays (showing „Folgen")
+  /// until the page is reloaded, Instagram-style.
+  Set<String> _unfollowed = {};
+  Set<String> _busy = {};
+
   @override
   void initState() {
     super.initState();
@@ -51,11 +57,89 @@ class _MeinePartnerPageState extends State<MeinePartnerPage> {
           .map((d) => WalletCardModel.fromMap(d.data()))
           .where((c) => c.merchantId.isNotEmpty)
           .toList();
-      if (mounted) setState(() { _cards = cards; _loading = false; });
+      if (mounted) {
+        setState(() {
+          _cards = cards;
+          _unfollowed = {};
+          _loading = false;
+        });
+      }
     } catch (e) {
       if (mounted) setState(() { _error = e.toString(); _loading = false; });
     }
   }
+
+  /// Instagram-style follow toggle. Unfollow really deletes the user-owned
+  /// walletCards doc (source of truth → also removes it from the Wallet), but the
+  /// row stays in this list showing „Folgen" until reload. Re-follow recreates
+  /// the doc from the card we still hold in memory. Stamp progress / earned
+  /// rewards are server-only, so they survive both ways.
+  Future<void> _toggleFollow(WalletCardModel card) async {
+    final uid = _authService.currentUser?.uid;
+    if (uid == null) return;
+    final mid = card.merchantId;
+    if (_busy.contains(mid)) return;
+    final wasUnfollowed = _unfollowed.contains(mid);
+    setState(() => _busy = {..._busy, mid});
+    try {
+      if (wasUnfollowed) {
+        await _firestoreService.setDocument(
+            FirebasePaths.userWalletCard(uid, mid), _cardData(card),
+            merge: true);
+        await _setFollowerFlag(mid, uid, true);
+        if (mounted) setState(() => _unfollowed = {..._unfollowed}..remove(mid));
+      } else {
+        await _firestoreService
+            .document(FirebasePaths.userWalletCard(uid, mid))
+            .delete();
+        await _setFollowerFlag(mid, uid, false);
+        if (mounted) setState(() => _unfollowed = {..._unfollowed, mid});
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Aktion fehlgeschlagen. Bitte erneut versuchen.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = {..._busy}..remove(mid));
+    }
+  }
+
+  Future<void> _setFollowerFlag(String mid, String uid, bool value) async {
+    try {
+      await _firestoreService.setDocument(
+        FirebasePaths.merchantCustomer(mid, uid),
+        {'uid': uid, 'isFollower': value},
+        merge: true,
+      );
+    } catch (_) {
+      // Best-effort only — the walletCards write is the source of truth.
+    }
+  }
+
+  Map<String, dynamic> _cardData(WalletCardModel card) => {
+        'merchantId': card.merchantId,
+        'merchantName': card.merchantName,
+        'merchantLogoUrl': card.merchantLogoUrl,
+        'merchantCoverUrl': card.merchantCoverUrl,
+        'merchantCity': card.merchantCity,
+        'merchantShopType': card.merchantShopType,
+        'merchantOrigin': card.merchantOrigin,
+        'walletCode': card.walletCode,
+        'walletNumber': card.walletNumber,
+        'prefix': card.prefix,
+        'status': 'active',
+        'hasStampCards': card.hasStampCards,
+        'hasPoints': card.hasPoints,
+        'hasCoupons': card.hasCoupons,
+        'addedStampCardIds': card.addedStampCardIds,
+        'joinedAt': FieldValue.serverTimestamp(),
+        'lastActivityAt': FieldValue.serverTimestamp(),
+      };
 
   Future<void> _openPartner(BuildContext context, String merchantId) async {
     showDialog<void>(
@@ -109,20 +193,32 @@ class _MeinePartnerPageState extends State<MeinePartnerPage> {
     return ListView.separated(
       padding: const EdgeInsets.all(AppSpacing.md),
       itemCount: _cards.length,
-      separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.sm),
+      separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
       itemBuilder: (ctx, i) => _PartnerTile(
         card: _cards[i],
         onTap: () => _openPartner(ctx, _cards[i].merchantId),
+        unfollowed: _unfollowed.contains(_cards[i].merchantId),
+        busy: _busy.contains(_cards[i].merchantId),
+        onToggle: () => _toggleFollow(_cards[i]),
       ),
     );
   }
 }
 
 class _PartnerTile extends StatelessWidget {
-  const _PartnerTile({required this.card, required this.onTap});
+  const _PartnerTile({
+    required this.card,
+    required this.onTap,
+    required this.unfollowed,
+    required this.busy,
+    required this.onToggle,
+  });
 
   final WalletCardModel card;
   final VoidCallback onTap;
+  final bool unfollowed;
+  final bool busy;
+  final VoidCallback onToggle;
 
   @override
   Widget build(BuildContext context) {
@@ -154,7 +250,7 @@ class _PartnerTile extends StatelessWidget {
                     ? CachedNetworkImage(
                         imageUrl: card.merchantLogoUrl,
                         fit: BoxFit.cover,
-                        errorWidget: (_, __, ___) => Icon(
+                        errorWidget: (_, _, _) => Icon(
                           Icons.store_rounded,
                           size: 22,
                           color: cs.onSecondaryContainer,
@@ -182,12 +278,71 @@ class _PartnerTile extends StatelessWidget {
                   ],
                 ),
               ),
-              Icon(Icons.chevron_right_rounded,
-                  size: 18, color: cs.onSurfaceVariant),
+              const SizedBox(width: AppSpacing.sm),
+              _FollowButton(
+                unfollowed: unfollowed,
+                busy: busy,
+                onToggle: onToggle,
+              ),
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Instagram-style toggle: „Entfolgen" (outlined, currently following) ↔
+/// „Folgen" (filled, after you unfollowed — until reload).
+class _FollowButton extends StatelessWidget {
+  const _FollowButton({
+    required this.unfollowed,
+    required this.busy,
+    required this.onToggle,
+  });
+
+  final bool unfollowed;
+  final bool busy;
+  final VoidCallback onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    if (busy) {
+      return const SizedBox(
+        width: 96,
+        height: 36,
+        child: Center(
+          child: SizedBox(
+            width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+        ),
+      );
+    }
+    if (unfollowed) {
+      return FilledButton(
+        onPressed: onToggle,
+        // Override the app theme's full-width default (Size.fromHeight(52) =>
+        // infinite width), which crashes inside a Row.
+        style: FilledButton.styleFrom(
+          visualDensity: VisualDensity.compact,
+          minimumSize: const Size(0, 36),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          padding: const EdgeInsets.symmetric(horizontal: 18),
+        ),
+        child: const Text('Folgen'),
+      );
+    }
+    return OutlinedButton(
+      onPressed: onToggle,
+      style: OutlinedButton.styleFrom(
+        visualDensity: VisualDensity.compact,
+        minimumSize: const Size(0, 36),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        foregroundColor: cs.onSurfaceVariant,
+        side: BorderSide(color: cs.outlineVariant),
+      ),
+      child: const Text('Entfolgen'),
     );
   }
 }

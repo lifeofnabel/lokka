@@ -12,6 +12,7 @@ import 'package:lokka/core/theme/appSpacing.dart';
 import 'package:lokka/core/utils/shareUtils.dart';
 import 'package:lokka/features/user/discover/models/publicMerchantUserModel.dart';
 import 'package:lokka/features/user/feed/models/feedPostModel.dart';
+import 'package:lokka/features/stamps/services/stampFunctionsService.dart';
 import 'package:lokka/features/user/feed/services/userFeedService.dart';
 import 'package:lokka/features/user/feed/widgets/commentsSheet.dart';
 import 'package:lokka/features/user/feed/widgets/postCard.dart';
@@ -60,6 +61,7 @@ class _UserPartnerDetailPageState extends State<UserPartnerDetailPage> {
   bool _isInWallet = false;
   bool _isCheckingWallet = true;
   bool _isAdding = false;
+  bool _isRemoving = false;
 
   // Bewertungspille = Schnitt aller Post-Bewertungen dieses Partners.
   double? _avgRating;
@@ -152,6 +154,52 @@ class _UserPartnerDetailPageState extends State<UserPartnerDetailPage> {
     }
   }
 
+  /// Unfollow → server wipes ALL data for this store. Warns first (irreversible).
+  Future<void> _unfollow() async {
+    if (_isRemoving) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Entfolgen?'),
+        content: Text(
+          'Wenn du ${widget.merchant.shopName} entfolgst, verschwinden ALLE deine '
+          'Daten bei diesem Partner: Stempelkarten, gesammelte Stempel, Punkte und '
+          'verdiente Belohnungen. Das lässt sich nicht rückgängig machen.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Abbrechen'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+                backgroundColor: Theme.of(ctx).colorScheme.error),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Entfolgen'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    setState(() => _isRemoving = true);
+    try {
+      await StampFunctionsService()
+          .userUnfollowMerchant(merchantId: widget.merchant.merchantId);
+      if (mounted) {
+        setState(() {
+          _isInWallet = false;
+          _isRemoving = false;
+        });
+        _snack('Du folgst ${widget.merchant.shopName} nicht mehr.');
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _isRemoving = false);
+        _snack('Entfolgen fehlgeschlagen. Bitte erneut versuchen.', error: true);
+      }
+    }
+  }
+
   void _snack(String text, {bool error = false}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -169,16 +217,18 @@ class _UserPartnerDetailPageState extends State<UserPartnerDetailPage> {
   /// Durchschnittsbewertung jedes Beitrags aus dessen feedReviews.
   Future<void> _loadPartnerFeed() async {
     try {
+      // Nur die Beiträge DIESES Partners lesen (statt die ganze feed-Collection
+      // zu laden und client-seitig zu filtern) → drastisch weniger Reads/Kosten.
+      // Composite-Index merchantId+publishedAt liegt in firestore.indexes.json.
       final snap = await _firestore
           .collection(FirebasePaths.feed)
+          .where('merchantId', isEqualTo: widget.merchant.merchantId)
           .orderBy('publishedAt', descending: true)
           .get();
       final posts = snap.docs
           .where((doc) {
             final d = doc.data();
-            return d['merchantId'] == widget.merchant.merchantId &&
-                d['isArchived'] != true &&
-                d['isPrivate'] != true;
+            return d['isArchived'] != true && d['isPrivate'] != true;
           })
           .map((doc) => FeedPostModel.fromMap({...doc.data(), 'postId': doc.id}))
           .toList();
@@ -347,42 +397,48 @@ class _UserPartnerDetailPageState extends State<UserPartnerDetailPage> {
     );
   }
 
+  /// Fragt IMMER zuerst nach, bevor die Speisekarte/der Katalog geöffnet wird
+  /// (eigene Bestätigung statt direktem Sprung). Bei zwei Quellen werden beide
+  /// als Buttons angeboten, sonst genau eine Bestätigungs-Aktion.
   void _openMenu() {
     final m = widget.merchant;
     final hasIntegrated = m.menuIntegratedEnabled;
     final hasExternal = m.hasExternalMenu;
-    if (hasIntegrated && !hasExternal) {
-      _openIntegratedMenu();
-    } else if (hasExternal && !hasIntegrated) {
-      _launchExternalMenu();
-    } else {
-      showPartnerPopout(
-        context,
-        icon: Icons.restaurant_menu_rounded,
-        title: 'Speisekarte',
-        child: _PopoutColumn(
-          children: [
+    showPartnerPopout(
+      context,
+      icon: Icons.restaurant_menu_rounded,
+      title: 'Speisekarte öffnen?',
+      child: _PopoutColumn(
+        children: [
+          const _PopoutText(
+            'Möchtest du die Speisekarte / den Katalog dieses Partners '
+            'wirklich öffnen?',
+          ),
+          const SizedBox(height: 16),
+          if (hasIntegrated)
             FilledButton.icon(
               onPressed: () {
                 Navigator.pop(context);
                 _openIntegratedMenu();
               },
               icon: const Icon(Icons.menu_book_rounded, size: 18),
-              label: const Text('Speisekarte ansehen'),
+              label: const Text('Speisekarte öffnen'),
             ),
-            const SizedBox(height: 10),
-            OutlinedButton.icon(
+          if (hasIntegrated && hasExternal) const SizedBox(height: 10),
+          if (hasExternal)
+            (hasIntegrated ? OutlinedButton.icon : FilledButton.icon)(
               onPressed: () {
                 Navigator.pop(context);
                 _launchExternalMenu();
               },
               icon: const Icon(Icons.open_in_new_rounded, size: 18),
-              label: const Text('Zur Web-Speisekarte'),
+              label: Text(
+                hasIntegrated ? 'Zur Web-Speisekarte' : 'Speisekarte öffnen',
+              ),
             ),
-          ],
-        ),
-      );
-    }
+        ],
+      ),
+    );
   }
 
   void _openIntegratedMenu() {
@@ -392,7 +448,6 @@ class _UserPartnerDetailPageState extends State<UserPartnerDetailPage> {
         builder: (_) => UserMenuPage(
           merchantId: widget.merchant.merchantId,
           shopName: widget.merchant.shopName,
-          tablesEnabled: widget.merchant.featuresPublic.contains('tables'),
           style: widget.merchant.menuStyle,
         ),
       ),
@@ -494,9 +549,9 @@ class _UserPartnerDetailPageState extends State<UserPartnerDetailPage> {
     );
   }
 
-  /// Profil-Aktionsleiste (zentriert). Die vier Kern-Aktionen Route/Zeiten/
-  /// Anrufen/Social sind IMMER sichtbar und werden ausgegraut, wenn die Daten
-  /// fehlen. „Karte" (Speisekarte) erscheint nur, wenn der Partner eine hat.
+  /// Profil-Aktionsleiste (zentriert). Alle Kern-Aktionen Route/Zeiten/Anrufen/
+  /// Karte/Social sind IMMER sichtbar und werden ausgegraut, wenn die Daten
+  /// fehlen. „Karte" (Speisekarte/Katalog) fragt vor dem Öffnen nach.
   List<QuickAction> _quickActions() {
     final m = widget.merchant;
     final hasRoute = m.address.isNotEmpty || m.hasCoordinates;
@@ -522,13 +577,12 @@ class _UserPartnerDetailPageState extends State<UserPartnerDetailPage> {
         enabled: hasPhone,
         onTap: hasPhone ? _call : null,
       ),
-      if (m.hasMenu)
-        QuickAction(
-          icon: Icons.restaurant_menu_rounded,
-          label: 'Karte',
-          enabled: true,
-          onTap: _openMenu,
-        ),
+      QuickAction(
+        icon: Icons.restaurant_menu_rounded,
+        label: 'Karte',
+        enabled: m.hasMenu,
+        onTap: m.hasMenu ? _openMenu : null,
+      ),
       QuickAction(
         icon: Icons.alternate_email_rounded,
         label: 'Social',
@@ -600,7 +654,9 @@ class _UserPartnerDetailPageState extends State<UserPartnerDetailPage> {
                     isInWallet: _isInWallet,
                     isChecking: _isCheckingWallet,
                     isAdding: _isAdding,
+                    isRemoving: _isRemoving,
                     onAdd: _addToWallet,
+                    onUnfollow: _unfollow,
                   ),
                   const SizedBox(height: AppSpacing.lg),
                   QuickActionBar(actions: _quickActions()),
@@ -1418,13 +1474,17 @@ class _WalletButton extends StatelessWidget {
     required this.isInWallet,
     required this.isChecking,
     required this.isAdding,
+    required this.isRemoving,
     required this.onAdd,
+    required this.onUnfollow,
   });
 
   final bool isInWallet;
   final bool isChecking;
   final bool isAdding;
+  final bool isRemoving;
   final VoidCallback onAdd;
+  final VoidCallback onUnfollow;
 
   @override
   Widget build(BuildContext context) {
@@ -1439,26 +1499,49 @@ class _WalletButton extends StatelessWidget {
     }
 
     if (isInWallet) {
-      return Container(
-        height: 56,
-        decoration: BoxDecoration(
-          color: cs.secondaryContainer,
+      // Tappable: "Du folgst" → confirm + unfollow (wipes all data for this store).
+      return Material(
+        color: cs.secondaryContainer,
+        borderRadius: BorderRadius.circular(28),
+        child: InkWell(
           borderRadius: BorderRadius.circular(28),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.check_circle_rounded,
-                color: cs.onSecondaryContainer, size: 20),
-            const SizedBox(width: 8),
-            Text(
-              'Du folgst',
-              style: tt.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: cs.onSecondaryContainer,
-              ),
+          onTap: isRemoving ? null : onUnfollow,
+          child: SizedBox(
+            height: 56,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (isRemoving)
+                  SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: cs.onSecondaryContainer),
+                  )
+                else
+                  Icon(Icons.check_circle_rounded,
+                      color: cs.onSecondaryContainer, size: 20),
+                const SizedBox(width: 8),
+                Text(
+                  isRemoving ? 'Wird entfernt …' : 'Du folgst',
+                  style: tt.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: cs.onSecondaryContainer,
+                  ),
+                ),
+                if (!isRemoving) ...[
+                  const SizedBox(width: 8),
+                  Text(
+                    '· Entfolgen',
+                    style: tt.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: cs.onSecondaryContainer.withValues(alpha: 0.7),
+                    ),
+                  ),
+                ],
+              ],
             ),
-          ],
+          ),
         ),
       );
     }

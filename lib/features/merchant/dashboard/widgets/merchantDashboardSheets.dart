@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../../../core/services/languageService.dart';
 import '../../../../core/theme/appRadius.dart';
 import '../../../../core/theme/appSpacing.dart';
+import '../../feedManager/pages/merchantPostComposePage.dart';
 import '../../shared/widgets/merchantPremiumUi.dart';
 import '../models/dashboardModules.dart';
 import '../services/merchantDashboardService.dart';
@@ -12,61 +13,11 @@ import 'merchantTodaySummarySheet.dart';
 
 /// Alle Dashboard-BottomSheets gebündelt, damit die Page schlank bleibt (#229).
 
+/// Entry from the dashboard "Beitrag erstellen" button → opens the template
+/// chooser directly (2 groups: general post vs. action). Managing existing
+/// posts lives on the hero now, so it is intentionally not offered here.
 void showFeedActionsSheet(BuildContext context) {
-  final texts = context.read<LanguageService>();
-  showModalBottomSheet<void>(
-    context: context,
-    backgroundColor: Colors.transparent,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-    ),
-    builder: (sheetContext) => _PremiumSheetFrame(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            texts.text('merchant.dashboard.feedHub'),
-            style: const TextStyle(
-              color: MerchantPremiumColors.ink,
-              fontSize: 24,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          _FeedSheetRow(
-            icon: Icons.edit_note_rounded,
-            title: texts.text('merchant.dashboard.newPost'),
-            tooltip: texts.text('merchant.dashboard.newPostTip'),
-            onTap: () {
-              Navigator.of(sheetContext).pop();
-              context.push('/merchant/feed/create?kind=post');
-            },
-          ),
-          const SizedBox(height: 10),
-          _FeedSheetRow(
-            icon: Icons.local_activity_rounded,
-            title: texts.text('merchant.dashboard.newAction'),
-            tooltip: texts.text('merchant.dashboard.newActionTip'),
-            onTap: () {
-              Navigator.of(sheetContext).pop();
-              context.push('/merchant/feed/create?kind=action');
-            },
-          ),
-          const SizedBox(height: 10),
-          _FeedSheetRow(
-            icon: Icons.dynamic_feed_rounded,
-            title: texts.text('merchant.dashboard.feedManage'),
-            tooltip: texts.text('merchant.feedManage.tooltip'),
-            onTap: () {
-              Navigator.of(sheetContext).pop();
-              context.push('/merchant/feed/manage');
-            },
-          ),
-        ],
-      ),
-    ),
-  );
+  showPostTemplateChooser(context);
 }
 
 void showMoreToolsSheet(BuildContext context, MerchantDashboardData data) {
@@ -270,70 +221,6 @@ void _showInfoSheet(
       ),
     ),
   );
-}
-
-class _FeedSheetRow extends StatelessWidget {
-  const _FeedSheetRow({
-    required this.icon,
-    required this.title,
-    required this.tooltip,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String title;
-  final String tooltip;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(AppRadius.large),
-      child: MerchantPremiumCard(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        radius: AppRadius.large,
-        child: Row(
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: MerchantPremiumColors.goldSoft,
-                borderRadius: BorderRadius.circular(18),
-              ),
-              child: Icon(icon, color: MerchantPremiumColors.gold),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Text(
-                title,
-                style: const TextStyle(
-                  color: MerchantPremiumColors.ink,
-                  fontSize: 17,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-            Tooltip(
-              message: tooltip,
-              child: const Icon(
-                Icons.info_outline_rounded,
-                size: 19,
-                color: MerchantPremiumColors.muted,
-              ),
-            ),
-            const SizedBox(width: 8),
-            const Icon(
-              Icons.arrow_forward_ios_rounded,
-              size: 16,
-              color: MerchantPremiumColors.muted,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 class _ToolSheetRow extends StatelessWidget {

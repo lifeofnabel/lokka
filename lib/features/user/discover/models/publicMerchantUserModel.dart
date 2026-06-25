@@ -25,6 +25,7 @@ class PublicMerchantUserModel {
     this.socialLinks = const {},
     this.galleryImages = const [],
     this.origins = const [],
+    this.handle = '',
     this.updatedAt,
   });
 
@@ -68,6 +69,10 @@ class PublicMerchantUserModel {
   /// Herkunft/Küchen (z. B. „Italienisch", „Türkisch") aus den Shopdaten.
   final List<String> origins;
 
+  /// Frei wählbarer, eindeutiger Profil-Handle (Slug) für den schönen Link
+  /// `<origin>/<handle>` (Insta-Stil). Klein, [a-z0-9-]. Leer = nicht gesetzt.
+  final String handle;
+
   final DateTime? updatedAt;
 
   factory PublicMerchantUserModel.fromMap(Map<String, dynamic> map) {
@@ -105,6 +110,7 @@ class PublicMerchantUserModel {
               .where((e) => e.trim().isNotEmpty)
               .toList() ??
           const [],
+      handle: (map['handle'] as String? ?? '').trim().toLowerCase(),
       updatedAt: _tsToDate(map['updatedAt']),
     );
   }
@@ -134,6 +140,7 @@ class PublicMerchantUserModel {
       'socialLinks': socialLinks,
       'galleryImages': galleryImages,
       'origins': origins,
+      'handle': handle,
       'updatedAt': updatedAt?.toIso8601String(),
     };
   }

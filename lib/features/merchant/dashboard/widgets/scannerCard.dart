@@ -18,81 +18,118 @@ class ScannerCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final texts = context.watch<LanguageService>();
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(AppRadius.xl),
-      child: Container(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        decoration: BoxDecoration(
-          color: MerchantPremiumColors.surface,
-          borderRadius: BorderRadius.circular(AppRadius.xl),
-          border: Border.all(color: MerchantPremiumColors.line),
-          boxShadow: MerchantPremiumShadows.soft,
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: MerchantPremiumColors.surfaceAlt,
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: MerchantPremiumColors.gold.withValues(alpha: 0.22)),
+    // Primär-Aktion an der Kasse → bewusst die AUFFÄLLIGSTE Karte: gefüllter
+    // Marken-Grün-Verlauf + größeres Icon + Glow, hebt sich klar von den
+    // dunklen Surface-Karten ab.
+    return Semantics(
+      button: true,
+      label: texts.text('merchant.dashboard.scanCustomer'),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(AppRadius.xxl),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(AppRadius.xxl),
+          child: Ink(
+            padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.lg, vertical: 22),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFF2FB389), Color(0xFF0E3A2C)],
               ),
-              child: const Icon(
-                Icons.qr_code_scanner_rounded,
-                color: MerchantPremiumColors.gold,
-                size: 24,
-              ),
+              borderRadius: BorderRadius.circular(AppRadius.xxl),
+              border: Border.all(
+                  color: MerchantPremiumColors.gold.withValues(alpha: 0.55),
+                  width: 1.5),
+              boxShadow: [
+                // Grüner Glow + Tiefe → „leuchtet" gegenüber den anderen Karten.
+                BoxShadow(
+                  color: const Color(0xFF2FB389).withValues(alpha: 0.34),
+                  blurRadius: 28,
+                  spreadRadius: -4,
+                  offset: const Offset(0, 12),
+                ),
+              ],
             ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+            child: Row(
+              children: [
+                Container(
+                  width: 64,
+                  height: 64,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.18),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.30)),
+                  ),
+                  child: const Icon(
+                    Icons.qr_code_scanner_rounded,
+                    color: Colors.white,
+                    size: 32,
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Flexible(
-                        child: Text(
-                          texts.text('merchant.dashboard.scanCustomer'),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: MerchantPremiumColors.ink,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                            height: 1,
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              texts.text('merchant.dashboard.scanCustomer'),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 22,
+                                fontWeight: FontWeight.w900,
+                                height: 1.05,
+                              ),
+                            ),
                           ),
+                          if (comingSoon) ...[
+                            const SizedBox(width: 8),
+                            const _ComingSoonBadge(),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        texts.text('merchant.dashboard.scanCustomerTip'),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        // 14px bold auf Grün = „large text" → AA erfüllt.
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.92),
+                          height: 1.25,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
-                      if (comingSoon) ...[
-                        const SizedBox(width: 8),
-                        const _ComingSoonBadge(),
-                      ],
                     ],
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    texts.text('merchant.dashboard.scanCustomerTip'),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: MerchantPremiumColors.muted,
-                      height: 1.25,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                    ),
+                ),
+                const SizedBox(width: 10),
+                Container(
+                  width: 40,
+                  height: 40,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.20),
+                    shape: BoxShape.circle,
                   ),
-                ],
-              ),
+                  child: const Icon(
+                    Icons.arrow_forward_rounded,
+                    size: 20,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 10),
-            const Icon(
-              Icons.arrow_forward_ios_rounded,
-              size: 16,
-              color: MerchantPremiumColors.muted,
-            ),
-          ],
+          ),
         ),
       ),
     );

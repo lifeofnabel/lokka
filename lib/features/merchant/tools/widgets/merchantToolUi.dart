@@ -137,7 +137,7 @@ class MerchantToolScaffold extends StatelessWidget {
           Text(
             title,
             style: const TextStyle(
-              color: MerchantPremiumColors.surface,
+              color: MerchantPremiumColors.ink,
               fontSize: 30,
               fontWeight: FontWeight.w900,
               height: 1.02,
@@ -393,8 +393,10 @@ class MerchantPrimaryButton extends StatelessWidget {
   final IconData? icon;
   final bool isLoading;
 
-  // Dunkle On-Color-Schrift auf Coral – deutlich lesbarer als Weiß (Kontrast).
-  static const Color _onCoral = Color(0xFF2E1107);
+  // Primär-CTA = Marken-Grün (deckungsgleich mit dem Theme-FilledButton), damit
+  // ALLE primären Aktionen im Merchant-Bereich EINE Farbe haben (vorher 50/50
+  // Coral vs. Grün gemischt). Dunkle On-Color-Schrift für hohen Kontrast.
+  static const Color _onAccent = Color(0xFF06281F);
 
   @override
   Widget build(BuildContext context) {
@@ -404,13 +406,13 @@ class MerchantPrimaryButton extends StatelessWidget {
           ? const SizedBox(
               width: 18,
               height: 18,
-              child: CircularProgressIndicator(strokeWidth: 2, color: _onCoral),
+              child: CircularProgressIndicator(strokeWidth: 2, color: _onAccent),
             )
           : Icon(icon ?? Icons.check_rounded),
       label: Text(label),
       style: FilledButton.styleFrom(
-        backgroundColor: MerchantPremiumColors.coral,
-        foregroundColor: _onCoral,
+        backgroundColor: MerchantPremiumColors.gold,
+        foregroundColor: _onAccent,
         minimumSize: const Size.fromHeight(56),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
       ),

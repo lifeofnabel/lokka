@@ -79,10 +79,11 @@ class _MeinProtokollPageState extends State<MeinProtokollPage> {
       for (final doc in results[0].docs) {
         final ts = _parseDate(doc.data()['likedAt']);
         if (ts != null) {
+          // No raw post-id here — that meant nothing to a normal user.
           entries.add(_ProtocolEntry(
             type: _ProtocolType.like,
-            title: 'Beitrag geliked',
-            subtitle: doc.id,
+            title: 'Beitrag gefällt dir',
+            subtitle: '',
             timestamp: ts,
           ));
         }
@@ -90,13 +91,15 @@ class _MeinProtokollPageState extends State<MeinProtokollPage> {
 
       for (final doc in results[1].docs) {
         final ts = _parseDate(doc.data()['updatedAt']);
-        if (ts != null) {
-          final merchant = doc.data()['merchantName'] as String? ?? 'Händler';
-          final stamps = doc.data()['currentStamps'] as int? ?? 0;
+        final stamps = doc.data()['currentStamps'] as int? ?? 0;
+        // Only show it as "collected" once there is actually a stamp — a fresh
+        // card at 0 isn't an activity worth listing.
+        if (ts != null && stamps > 0) {
+          final shop = _shopName(doc.data()['merchantName']);
           entries.add(_ProtocolEntry(
             type: _ProtocolType.stamp,
             title: 'Stempel gesammelt',
-            subtitle: '$merchant · $stamps Stempel',
+            subtitle: '$stamps Stempel bei $shop',
             timestamp: ts,
           ));
         }
@@ -105,11 +108,10 @@ class _MeinProtokollPageState extends State<MeinProtokollPage> {
       for (final doc in results[2].docs) {
         final ts = _parseDate(doc.data()['joinedAt']);
         if (ts != null) {
-          final merchant = doc.data()['merchantName'] as String? ?? 'Händler';
           entries.add(_ProtocolEntry(
             type: _ProtocolType.walletJoin,
-            title: 'Kundenkarte erhalten',
-            subtitle: merchant,
+            title: 'Laden gefolgt',
+            subtitle: _shopName(doc.data()['merchantName']),
             timestamp: ts,
           ));
         }
@@ -121,6 +123,12 @@ class _MeinProtokollPageState extends State<MeinProtokollPage> {
     } catch (e) {
       if (mounted) setState(() { _error = e.toString(); _loading = false; });
     }
+  }
+
+  /// Plain shop name, with a friendly fallback (never a raw id or "Händler").
+  String _shopName(dynamic value) {
+    final name = (value as String?)?.trim() ?? '';
+    return name.isEmpty ? 'einem Laden' : name;
   }
 
   DateTime? _parseDate(dynamic v) {
@@ -138,7 +146,7 @@ class _MeinProtokollPageState extends State<MeinProtokollPage> {
     return Scaffold(
       backgroundColor: AppColors.surfaceBg,
       appBar: AppBar(
-        title: const Text('Protokoll'),
+        title: const Text('Meine Aktivitäten'),
       ),
       body: _buildBody(),
     );
@@ -152,13 +160,15 @@ class _MeinProtokollPageState extends State<MeinProtokollPage> {
     if (_entries.isEmpty) {
       return const AppEmptyState(
         icon: Icons.history_rounded,
-        title: 'Noch keine Aktivitäten',
+        title: 'Noch nichts los',
+        message: 'Sobald du Beiträge likest, Stempel sammelst oder Läden folgst, '
+            'siehst du hier deine letzten Aktivitäten.',
       );
     }
     return ListView.separated(
       padding: const EdgeInsets.all(AppSpacing.md),
       itemCount: _entries.length,
-      separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.sm),
+      separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
       itemBuilder: (_, i) => _EntryTile(entry: _entries[i]),
     );
   }
@@ -184,6 +194,13 @@ class _EntryTile extends StatelessWidget {
       };
 
   String _fmt(DateTime d) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final day = DateTime(d.year, d.month, d.day);
+    final diff = today.difference(day).inDays;
+    if (diff <= 0) return 'Heute';
+    if (diff == 1) return 'Gestern';
+    if (diff < 7) return 'vor $diff Tagen';
     return '${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}.${d.year}';
   }
 

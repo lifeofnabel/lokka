@@ -40,8 +40,8 @@ class DiscoverCard extends StatelessWidget {
                       height: 90,
                       width: double.infinity,
                       fit: BoxFit.cover,
-                      placeholder: (_, __) => _placeholder(),
-                      errorWidget: (_, __, ___) => _placeholder(),
+                      placeholder: (_, _) => _placeholder(),
+                      errorWidget: (_, _, _) => _placeholder(),
                     )
                   : _placeholder(),
             ),
@@ -60,7 +60,7 @@ class DiscoverCard extends StatelessWidget {
                             width: 24,
                             height: 24,
                             fit: BoxFit.cover,
-                            errorWidget: (_, __, ___) => _logoFallback(),
+                            errorWidget: (_, _, _) => _logoFallback(),
                           ),
                         )
                       else

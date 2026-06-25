@@ -85,8 +85,8 @@ class PartnerHeroCard extends StatelessWidget {
             height: 248,
             width: double.infinity,
             fit: BoxFit.cover,
-            placeholder: (_, __) => _coverPlaceholder(context),
-            errorWidget: (_, __, ___) => _coverPlaceholder(context),
+            placeholder: (_, _) => _coverPlaceholder(context),
+            errorWidget: (_, _, _) => _coverPlaceholder(context),
           )
         : _coverPlaceholder(context);
   }
@@ -125,7 +125,7 @@ class PartnerHeroCard extends StatelessWidget {
             ? CachedNetworkImage(
                 imageUrl: merchant.logoUrl,
                 fit: BoxFit.cover,
-                errorWidget: (_, __, ___) => _logoFallback(context),
+                errorWidget: (_, _, _) => _logoFallback(context),
               )
             : _logoFallback(context),
       ),

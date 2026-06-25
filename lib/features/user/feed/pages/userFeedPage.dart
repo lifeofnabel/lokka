@@ -62,7 +62,7 @@ class UserFeedPage extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
               sliver: SliverList(
                 delegate: SliverChildBuilderDelegate(
-                  (_, __) => const _SkeletonCard(),
+                  (_, _) => const _SkeletonCard(),
                   childCount: 4,
                 ),
               ),

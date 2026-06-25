@@ -288,11 +288,11 @@ class _MerchantCouponEditViewState extends State<_MerchantCouponEditView> {
                       width: double.infinity,
                       fit: BoxFit.cover,
                       memCacheHeight: 340,
-                      placeholder: (_, __) => Container(
+                      placeholder: (_, _) => Container(
                         height: 170,
                         color: MerchantPremiumColors.surfaceAlt,
                       ),
-                      errorWidget: (_, __, ___) => Container(
+                      errorWidget: (_, _, _) => Container(
                         height: 170,
                         color: MerchantPremiumColors.surfaceAlt,
                         alignment: Alignment.center,
@@ -531,12 +531,12 @@ class _CouponPreview extends StatelessWidget {
                 fit: BoxFit.cover,
                 memCacheWidth: 172,
                 memCacheHeight: 172,
-                placeholder: (_, __) => Container(
+                placeholder: (_, _) => Container(
                   width: 86,
                   height: 86,
                   color: MerchantPremiumColors.surfaceAlt,
                 ),
-                errorWidget: (_, __, ___) => Container(
+                errorWidget: (_, _, _) => Container(
                   width: 86,
                   height: 86,
                   color: MerchantPremiumColors.surfaceAlt,

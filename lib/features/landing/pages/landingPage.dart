@@ -159,7 +159,7 @@ class _BrandHeader extends StatelessWidget {
               height: 40,
               color: cs.primary,
               colorBlendMode: BlendMode.srcIn,
-              errorBuilder: (_, __, ___) => Icon(
+              errorBuilder: (_, _, _) => Icon(
                 Icons.local_activity_rounded,
                 color: cs.primary,
                 size: 36,

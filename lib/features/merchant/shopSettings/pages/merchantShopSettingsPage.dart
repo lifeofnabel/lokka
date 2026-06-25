@@ -368,6 +368,18 @@ class _ShopFormState extends State<_ShopForm> {
     _fill(provider);
     final missingFields = _missingFields(texts);
 
+    // Vollständigkeit je Sektion → ✓/!-Pip im Kopf (Überblick ohne Aufklappen).
+    final baseDone =
+        shopName.text.trim().isNotEmpty && phone.text.trim().isNotEmpty;
+    final addressDone = street.text.trim().isNotEmpty &&
+        houseNumber.text.trim().isNotEmpty &&
+        postalCode.text.trim().isNotEmpty &&
+        city.text.trim().isNotEmpty;
+    final categoryDone = selectedShopTypes.isNotEmpty;
+    final hoursDone = _hasOpeningHours();
+    final imagesDone =
+        logoUrl.text.trim().isNotEmpty && coverUrl.text.trim().isNotEmpty;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -390,6 +402,9 @@ class _ShopFormState extends State<_ShopForm> {
         if (!phoneVerified) _PhoneWarning(onVerify: () => _markPhoneVerified(context, provider)),
         _ProfileCompletionCard(missingFields: missingFields),
         _SectionCard(
+          icon: Icons.storefront_rounded,
+          initiallyExpanded: true,
+          done: baseDone,
           title: texts.text('merchant.shop.section.base'),
           children: [
             // Ein einziges Namensfeld; beim Speichern werden shopName UND
@@ -406,6 +421,8 @@ class _ShopFormState extends State<_ShopForm> {
           ],
         ),
         _SectionCard(
+          icon: Icons.location_on_rounded,
+          done: addressDone,
           title: texts.text('merchant.shop.section.address'),
           children: [
             LayoutBuilder(
@@ -476,6 +493,8 @@ class _ShopFormState extends State<_ShopForm> {
           ],
         ),
         _SectionCard(
+          icon: Icons.category_rounded,
+          done: categoryDone,
           title: 'Kategorie & Herkunft',
           children: [
             Text(texts.text('merchant.shop.maxCategories'), style: const TextStyle(color: AppColors.gray500, fontWeight: FontWeight.w800)),
@@ -521,6 +540,8 @@ class _ShopFormState extends State<_ShopForm> {
           ],
         ),
         _SectionCard(
+          icon: Icons.schedule_rounded,
+          done: hoursDone,
           title: texts.text('merchant.shop.section.openingHours'),
           children: [
             // Kompakte Zusammenfassung statt langer Inline-Editor.
@@ -548,6 +569,7 @@ class _ShopFormState extends State<_ShopForm> {
           ],
         ),
         _SectionCard(
+          icon: Icons.share_rounded,
           title: texts.text('merchant.shop.section.social'),
           children: [
             // Benutzernamen reichen: beim Speichern werden daraus volle URLs
@@ -587,6 +609,8 @@ class _ShopFormState extends State<_ShopForm> {
           ],
         ),
         _SectionCard(
+          icon: Icons.photo_library_rounded,
+          done: imagesDone,
           title: texts.text('merchant.shop.images'),
           children: [
             Text(
@@ -608,6 +632,7 @@ class _ShopFormState extends State<_ShopForm> {
           ],
         ),
         _SectionCard(
+          icon: Icons.visibility_rounded,
           title: texts.text('merchant.shop.visibility'),
           children: [
             SwitchListTile(
@@ -1480,11 +1505,35 @@ class _ProfileCompletionCard extends StatelessWidget {
   }
 }
 
-class _SectionCard extends StatelessWidget {
-  const _SectionCard({required this.title, required this.children});
+/// Einklappbare Sektion mit Icon + Chevron. Alle Sektionen eingeklappt geben
+/// oben den Überblick über die Bereiche; gezielt einen aufklappen statt einer
+/// endlosen Formular-Wand. Die Eingabe-Controller gehören dem Form-State, daher
+/// gehen beim Einklappen KEINE Werte verloren.
+class _SectionCard extends StatefulWidget {
+  const _SectionCard({
+    required this.title,
+    required this.children,
+    this.icon = Icons.tune_rounded,
+    this.initiallyExpanded = false,
+    this.done,
+  });
 
   final String title;
   final List<Widget> children;
+  final IconData icon;
+  final bool initiallyExpanded;
+
+  /// Vollständigkeits-Status für den Kopf: `true` = ✓ ausgefüllt, `false` =
+  /// fehlt noch, `null` = optionaler Bereich (kein Badge). So sieht man ohne
+  /// Aufklappen, wo noch etwas fehlt.
+  final bool? done;
+
+  @override
+  State<_SectionCard> createState() => _SectionCardState();
+}
+
+class _SectionCardState extends State<_SectionCard> {
+  late bool _open = widget.initiallyExpanded;
 
   @override
   Widget build(BuildContext context) {
@@ -1494,17 +1543,92 @@ class _SectionCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            title,
-            style: const TextStyle(
-              color: MerchantPremiumColors.ink,
-              fontSize: 18,
-              fontWeight: FontWeight.w900,
+          InkWell(
+            onTap: () => setState(() => _open = !_open),
+            borderRadius: BorderRadius.circular(14),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: MerchantPremiumColors.goldSoft,
+                      borderRadius: BorderRadius.circular(13),
+                    ),
+                    child: Icon(widget.icon,
+                        size: 20, color: MerchantPremiumColors.gold),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Text(
+                      widget.title,
+                      style: const TextStyle(
+                        color: MerchantPremiumColors.ink,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  if (widget.done != null) ...[
+                    _SectionStatus(done: widget.done!),
+                    const SizedBox(width: 10),
+                  ],
+                  AnimatedRotation(
+                    turns: _open ? 0.5 : 0,
+                    duration: const Duration(milliseconds: 180),
+                    child: const Icon(Icons.keyboard_arrow_down_rounded,
+                        color: MerchantPremiumColors.muted),
+                  ),
+                ],
+              ),
             ),
           ),
-          const SizedBox(height: AppSpacing.md),
-          ...children,
+          AnimatedCrossFade(
+            firstChild: const SizedBox(width: double.infinity),
+            secondChild: Padding(
+              padding: const EdgeInsets.only(top: AppSpacing.md),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: widget.children,
+              ),
+            ),
+            crossFadeState:
+                _open ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+            duration: const Duration(milliseconds: 180),
+            sizeCurve: Curves.easeOut,
+          ),
         ],
+      ),
+    );
+  }
+}
+
+/// Kleiner Status-Pip im Sektions-Kopf: grünes ✓ (ausgefüllt) oder gelbes !
+/// (fehlt noch). Gibt den Überblick, ohne die Sektion aufklappen zu müssen.
+class _SectionStatus extends StatelessWidget {
+  const _SectionStatus({required this.done});
+
+  final bool done;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = done ? MerchantPremiumColors.success : MerchantPremiumColors.warning;
+    return Container(
+      width: 24,
+      height: 24,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.18),
+        shape: BoxShape.circle,
+        border: Border.all(color: color.withValues(alpha: 0.6)),
+      ),
+      child: Icon(
+        done ? Icons.check_rounded : Icons.priority_high_rounded,
+        size: 14,
+        color: color,
       ),
     );
   }

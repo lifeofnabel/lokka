@@ -51,8 +51,8 @@ class PartnerHorizontalCard extends StatelessWidget {
                         ? CachedNetworkImage(
                             imageUrl: merchant.coverUrl,
                             fit: BoxFit.cover,
-                            placeholder: (_, __) => _coverPlaceholder(context),
-                            errorWidget: (_, __, ___) =>
+                            placeholder: (_, _) => _coverPlaceholder(context),
+                            errorWidget: (_, _, _) =>
                                 _coverPlaceholder(context),
                           )
                         : _coverPlaceholder(context),
@@ -74,7 +74,7 @@ class PartnerHorizontalCard extends StatelessWidget {
                             ? CachedNetworkImage(
                                 imageUrl: merchant.logoUrl,
                                 fit: BoxFit.cover,
-                                errorWidget: (_, __, ___) => Icon(
+                                errorWidget: (_, _, _) => Icon(
                                   Icons.storefront_rounded,
                                   size: 16,
                                   color: cs.onSecondaryContainer,
@@ -239,8 +239,8 @@ class PartnerCard extends StatelessWidget {
                         ? CachedNetworkImage(
                             imageUrl: merchant.coverUrl,
                             fit: BoxFit.cover,
-                            placeholder: (_, __) => _coverPlaceholder(context),
-                            errorWidget: (_, __, ___) =>
+                            placeholder: (_, _) => _coverPlaceholder(context),
+                            errorWidget: (_, _, _) =>
                                 _coverPlaceholder(context),
                           )
                         : _coverPlaceholder(context),
@@ -262,7 +262,7 @@ class PartnerCard extends StatelessWidget {
                             ? CachedNetworkImage(
                                 imageUrl: merchant.logoUrl,
                                 fit: BoxFit.cover,
-                                errorWidget: (_, __, ___) =>
+                                errorWidget: (_, _, _) =>
                                     _logoFallback(context),
                               )
                             : _logoFallback(context),

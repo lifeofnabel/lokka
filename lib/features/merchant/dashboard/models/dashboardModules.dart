@@ -31,8 +31,8 @@ class DashboardModule {
 const kDashboardMainModules = [
   DashboardModule(
     key: 'feedPosts',
-    titleKey: 'merchant.dashboard.feedHub',
-    descriptionKey: 'merchant.dashboard.feedHubTip',
+    titleKey: 'merchant.dashboard.composePost',
+    descriptionKey: 'merchant.dashboard.composePostTip',
     icon: Icons.campaign_rounded,
     defaultActive: true,
   ),

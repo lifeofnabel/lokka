@@ -185,6 +185,24 @@ class UserDiscoverService {
     return (categories: categories);
   }
 
+  /// The user's saved addresses (interest places) with a valid lat/lng — used as
+  /// quick picks in the "Wo bist du?" location sheet.
+  Future<List<Map<String, dynamic>>> loadFavoritePlaces() async {
+    final uid = authService.currentUser?.uid;
+    if (uid == null) return const [];
+    final data = await firestoreService.readDocument(FirebasePaths.user(uid));
+    final raw = (data?['interestPlaces'] as List?) ?? const [];
+    final places = raw
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .where((p) => p['lat'] is num && p['lng'] is num)
+        .toList();
+    // Default place first.
+    places.sort((a, b) =>
+        (b['isDefault'] == true ? 1 : 0) - (a['isDefault'] == true ? 1 : 0));
+    return places;
+  }
+
   Future<List<PublicMerchantUserModel>> loadPublicMerchants() async {
     final cached = await loadCachedPublicMerchants();
     if (cached != null && cached.isNotEmpty) return cached;

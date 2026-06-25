@@ -111,6 +111,10 @@ class UserDiscoverProvider extends ChangeNotifier {
   Future<void> refreshFresh() => _refreshFreshData();
 
   /// Manuell getippte Adresse übernehmen (aus dem Location-Popup).
+  /// The user's saved addresses (for quick picks in the location sheet).
+  Future<List<Map<String, dynamic>>> loadFavoritePlaces() =>
+      _service.loadFavoritePlaces();
+
   Future<void> setManualLocation({
     required double lat,
     required double lng,

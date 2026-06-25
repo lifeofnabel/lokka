@@ -112,6 +112,11 @@ class _OnboardingSurveyPageState extends State<OnboardingSurveyPage> {
             _places.addAll(
               user.interestPlaces.map((p) => Map<String, dynamic>.from(p)),
             );
+            // Ensure exactly one default exists for already-saved places.
+            if (_places.isNotEmpty &&
+                !_places.any((p) => p['isDefault'] == true)) {
+              _places[0]['isDefault'] = true;
+            }
           }
           _loading = false;
         });
@@ -155,6 +160,12 @@ class _OnboardingSurveyPageState extends State<OnboardingSurveyPage> {
   }
 
   void _addPlace(GeoResult g) {
+    if (_places.length >= 5) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Maximal 5 Orte möglich.')),
+      );
+      return;
+    }
     final place = <String, dynamic>{
       'label': g.formatted,
       'street': g.street,
@@ -163,6 +174,8 @@ class _OnboardingSurveyPageState extends State<OnboardingSurveyPage> {
       'district': g.district,
       'lat': g.lat,
       'lng': g.lng,
+      // The first place added becomes the default automatically.
+      'isDefault': _places.isEmpty,
     };
     setState(() {
       final exists = _places.any((p) => p['label'] == place['label']);
@@ -174,8 +187,23 @@ class _OnboardingSurveyPageState extends State<OnboardingSurveyPage> {
     FocusScope.of(context).unfocus();
   }
 
+  void _setDefaultPlace(int index) {
+    setState(() {
+      for (var i = 0; i < _places.length; i++) {
+        _places[i]['isDefault'] = i == index;
+      }
+    });
+  }
+
   void _removePlace(int index) {
-    setState(() => _places.removeAt(index));
+    setState(() {
+      final wasDefault = _places[index]['isDefault'] == true;
+      _places.removeAt(index);
+      // Keep exactly one default: promote the first remaining place.
+      if (wasDefault && _places.isNotEmpty) {
+        _places[0]['isDefault'] = true;
+      }
+    });
   }
 
   Future<void> _save() async {
@@ -249,6 +277,9 @@ class _OnboardingSurveyPageState extends State<OnboardingSurveyPage> {
                             options: _originOptions,
                             selected: _selectedOrigins,
                             onToggle: (v) => _toggle(_selectedOrigins, v),
+                            showAll: true,
+                            onSelectAll: () =>
+                                setState(_selectedOrigins.clear),
                           ),
                           const SizedBox(height: AppSpacing.xl),
                         ],
@@ -257,6 +288,9 @@ class _OnboardingSurveyPageState extends State<OnboardingSurveyPage> {
                           options: _postTypeOptions,
                           selected: _selectedPostTypes,
                           onToggle: (v) => _toggle(_selectedPostTypes, v),
+                          showAll: true,
+                          onSelectAll: () =>
+                              setState(_selectedPostTypes.clear),
                         ),
                         const SizedBox(height: AppSpacing.xl),
                         _PlacesSection(
@@ -267,6 +301,7 @@ class _OnboardingSurveyPageState extends State<OnboardingSurveyPage> {
                           onChanged: _onPlaceQueryChanged,
                           onPick: _addPlace,
                           onRemove: _removePlace,
+                          onSetDefault: _setDefaultPlace,
                         ),
                         const SizedBox(height: AppSpacing.xl),
                       ],
@@ -344,12 +379,20 @@ class _Section extends StatelessWidget {
     required this.options,
     required this.selected,
     required this.onToggle,
+    this.showAll = false,
+    this.onSelectAll,
   });
 
   final String title;
   final List<String> options;
   final Set<String> selected;
   final ValueChanged<String> onToggle;
+
+  /// When true, an „Alles" chip is shown first. It is highlighted exactly when
+  /// nothing specific is selected (empty = no filter = everything), and tapping
+  /// it clears the specific selection.
+  final bool showAll;
+  final VoidCallback? onSelectAll;
 
   @override
   Widget build(BuildContext context) {
@@ -365,13 +408,20 @@ class _Section extends StatelessWidget {
         Wrap(
           spacing: AppSpacing.sm,
           runSpacing: AppSpacing.sm,
-          children: options.map((o) {
-            return _InterestChip(
-              label: o,
-              selected: selected.contains(o),
-              onTap: () => onToggle(o),
-            );
-          }).toList(),
+          children: [
+            if (showAll)
+              _InterestChip(
+                label: 'Alles',
+                selected: selected.isEmpty,
+                onTap: onSelectAll ?? () {},
+              ),
+            for (final o in options)
+              _InterestChip(
+                label: o,
+                selected: selected.contains(o),
+                onTap: () => onToggle(o),
+              ),
+          ],
         ),
       ],
     );
@@ -441,6 +491,7 @@ class _PlacesSection extends StatelessWidget {
     required this.onChanged,
     required this.onPick,
     required this.onRemove,
+    required this.onSetDefault,
   });
 
   final TextEditingController controller;
@@ -450,6 +501,9 @@ class _PlacesSection extends StatelessWidget {
   final ValueChanged<String> onChanged;
   final ValueChanged<GeoResult> onPick;
   final ValueChanged<int> onRemove;
+  final ValueChanged<int> onSetDefault;
+
+  static const _maxPlaces = 5;
 
   @override
   Widget build(BuildContext context) {
@@ -464,7 +518,7 @@ class _PlacesSection extends StatelessWidget {
         ),
         const SizedBox(height: AppSpacing.xs),
         Text(
-          'Damit zeigen wir dir, was in deiner Nähe los ist.',
+          'Bis zu 5 Orte. Tippe den Stern, um einen als Standard zu setzen.',
           style: tt.bodyMedium?.copyWith(
             color: cs.onSurfaceVariant,
             height: 1.4,
@@ -479,13 +533,41 @@ class _PlacesSection extends StatelessWidget {
               for (var i = 0; i < places.length; i++)
                 _PlaceChip(
                   label: (places[i]['label'] ?? '').toString(),
+                  isDefault: places[i]['isDefault'] == true,
+                  onSetDefault: () => onSetDefault(i),
                   onRemove: () => onRemove(i),
                 ),
             ],
           ),
           const SizedBox(height: AppSpacing.md),
         ],
-        TextField(
+        if (places.length >= _maxPlaces)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.md, vertical: 14),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceGray,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: cs.outlineVariant),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.info_outline_rounded,
+                    size: 18, color: cs.onSurfaceVariant),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Text(
+                    'Maximal 5 Orte erreicht. Entferne einen, um einen neuen hinzuzufügen.',
+                    style:
+                        tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                  ),
+                ),
+              ],
+            ),
+          )
+        else
+          TextField(
           controller: controller,
           onChanged: onChanged,
           textInputAction: TextInputAction.search,
@@ -568,35 +650,56 @@ class _PlacesSection extends StatelessWidget {
 }
 
 class _PlaceChip extends StatelessWidget {
-  const _PlaceChip({required this.label, required this.onRemove});
+  const _PlaceChip({
+    required this.label,
+    required this.isDefault,
+    required this.onSetDefault,
+    required this.onRemove,
+  });
 
   final String label;
+  final bool isDefault;
+  final VoidCallback onSetDefault;
   final VoidCallback onRemove;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
+    final onChip =
+        isDefault ? cs.onPrimaryContainer : cs.onSecondaryContainer;
     return Material(
-      color: cs.secondaryContainer,
+      color: isDefault ? cs.primaryContainer : cs.secondaryContainer,
       borderRadius: BorderRadius.circular(100),
       clipBehavior: Clip.antiAlias,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 8, 6, 8),
+        padding: const EdgeInsets.fromLTRB(4, 6, 6, 6),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.place_rounded, size: 16, color: cs.primary),
-            const SizedBox(width: 6),
+            // Star = set/show default.
+            InkWell(
+              onTap: onSetDefault,
+              borderRadius: BorderRadius.circular(100),
+              child: Padding(
+                padding: const EdgeInsets.all(4),
+                child: Icon(
+                  isDefault ? Icons.star_rounded : Icons.star_outline_rounded,
+                  size: 18,
+                  color: isDefault ? AppColors.googleYellow : onChip,
+                ),
+              ),
+            ),
+            const SizedBox(width: 2),
             ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 220),
+              constraints: const BoxConstraints(maxWidth: 200),
               child: Text(
-                label,
+                isDefault ? '$label · Standard' : label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: tt.labelLarge?.copyWith(
                   fontWeight: FontWeight.w600,
-                  color: cs.onSecondaryContainer,
+                  color: onChip,
                 ),
               ),
             ),
@@ -606,11 +709,7 @@ class _PlaceChip extends StatelessWidget {
               borderRadius: BorderRadius.circular(100),
               child: Padding(
                 padding: const EdgeInsets.all(4),
-                child: Icon(
-                  Icons.close_rounded,
-                  size: 16,
-                  color: cs.onSecondaryContainer,
-                ),
+                child: Icon(Icons.close_rounded, size: 16, color: onChip),
               ),
             ),
           ],

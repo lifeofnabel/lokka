@@ -3,8 +3,6 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 
-import '../../../core/theme/appColors.dart';
-
 /// Lädt ein Legal-Dokument (AGB / Datenschutz) aus assets/legal/*.json und
 /// zeigt es in einem hellen Material-3-Sheet. Backend-frei, rein lokal.
 Future<void> showLegalSheet(BuildContext context, String asset) async {
@@ -72,7 +70,9 @@ class _LegalSheet extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: AppColors.surfaceGray,
+                  // Theme-adaptiv (hell im User-Flow, dunkel im Merchant-Flow) –
+                  // vorher fix hellgrau → weißer Kasten mit hellem Text auf Dark.
+                  color: cs.surfaceContainerHigh,
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Text(

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:qr_flutter/qr_flutter.dart';
 import 'package:lokka/core/constants/firebasePaths.dart';
 import 'package:lokka/core/services/firestoreService.dart';
 import 'package:lokka/features/user/wallet/models/walletCardModel.dart';
+import 'package:lokka/features/user/wallet/utils/cityShorten.dart';
 import 'package:lokka/features/user/wallet/utils/walletCode.dart';
 
 /// Session cache: merchantId → coverUrl, so the cover is fetched at most once
@@ -12,8 +12,8 @@ import 'package:lokka/features/user/wallet/utils/walletCode.dart';
 final Map<String, String> _walletCoverCache = {};
 
 /// Premium, credit-card-grade Wallet tile. The store's COVER image is the
-/// background, heavily darkened so the text and QR stay readable. A scannable
-/// QR sits top-right; the whole card opens the store detail page.
+/// background, heavily darkened so the text stays readable. The whole card opens
+/// the store detail view.
 ///
 /// The cover is read live from `publicMerchants/{merchantId}.coverUrl` (with the
 /// denormalised value as a fast path), so it shows even for stores that were
@@ -22,12 +22,10 @@ class WalletCard extends StatefulWidget {
   const WalletCard({
     super.key,
     required this.card,
-    required this.uid,
     this.onTap,
   });
 
   final WalletCardModel card;
-  final String uid;
   final VoidCallback? onTap;
 
   @override
@@ -40,9 +38,6 @@ class _WalletCardState extends State<WalletCard> {
   static const _g2 = Color(0xFF12835F);
 
   String _cover = '';
-
-  String get _qrData =>
-      'lokka://wallet/${widget.uid}/${widget.card.merchantId}/${widget.card.walletCode}';
 
   @override
   void initState() {
@@ -78,10 +73,7 @@ class _WalletCardState extends State<WalletCard> {
     final tt = Theme.of(context).textTheme;
     final card = widget.card;
 
-    final city = card.merchantCity.trim();
-    final title = [card.merchantName.trim(), if (city.isNotEmpty) city]
-        .where((s) => s.isNotEmpty)
-        .join('  –  ');
+    final title = HessenCity.titleNameCity(card.merchantName, card.merchantCity);
     final meta = [card.merchantShopType.trim(), card.merchantOrigin.trim()]
         .where((s) => s.isNotEmpty)
         .join('  ·  ');
@@ -131,7 +123,7 @@ class _WalletCardState extends State<WalletCard> {
                         errorWidget: (context, url, error) =>
                             const SizedBox.shrink(),
                       ),
-                    // 2) Heavy darkening so text/QR never fight the photo.
+                    // 2) Heavy darkening so the text never fights the photo.
                     const DecoratedBox(
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
@@ -150,14 +142,7 @@ class _WalletCardState extends State<WalletCard> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _logo(),
-                              const Spacer(),
-                              _qrBadge(),
-                            ],
-                          ),
+                          _logo(),
                           const Spacer(),
                           Text(
                             title.isEmpty ? 'Partner' : title,
@@ -240,23 +225,5 @@ class _WalletCardState extends State<WalletCard> {
 
   Widget _logoFallback() {
     return const Icon(Icons.storefront_rounded, size: 22, color: Colors.white);
-  }
-
-  /// Small scannable QR top-right (replaces the old wordmark). White plate so it
-  /// stays readable against any darkened cover.
-  Widget _qrBadge() {
-    return Container(
-      padding: const EdgeInsets.all(5),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: QrImageView(
-        data: _qrData,
-        version: QrVersions.auto,
-        size: 46,
-        padding: EdgeInsets.zero,
-      ),
-    );
   }
 }

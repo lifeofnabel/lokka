@@ -446,3 +446,141 @@ Umgesetzt:
 **GO für Code-Merge; CONDITIONAL-GO Produktion** — einziger Pflicht-Schritt: `firebase deploy --only functions`.
 Checkliste: UI-Button-Swap (Einstellungen raus, 1 Button, sichtbare Karte) ✅ · Setup Path A (Web-NFC-Write) ✅ · Path B (QR-bind vorprovisioniert) ✅ · statischer signierter Link + `/stamp`-Gate (verify+login+geofence+cooldown) ✅ · Test-Tap→Badge-Flip+`verifiedAt` ✅ · Edge-Cases (NFC-unsupported→Path B, write-fail/permission graceful, Test-fail→kein Flip, replay→cooldown, location-off→skip, re-bind→reuse/overwrite, paused/archived→friendly, voll→convert, Multi-Card→sichtbare) ✅ · NTAG-Pfad unverändert ✅.
 Blocker: keine. Major: keine. Minor: iPhone-Test-Tap nutzt QR-Re-Scan (echtes SUN-Tap braucht NFC-Reader = Android); Path-A-Tap hat keinen Offline-Queue (bewusst — kein Counter).
+
+---
+
+# App Level-Up — 6-Sprint-Programm
+
+Ziel: ganze App sauber + ein Level höher. Auto-Advance: nächster Sprint startet, wenn der vorige verifiziert (analyze sauber, Tests grün) abgeschlossen ist.
+
+Roadmap: S1 Sauberkeit-Fundament · S2 Shared-UI-Konsistenz · S3 Datenquellen-Korrektheit · S4 Firebase-Kosten/Perf 2 · S5 A11y/Responsive · S6 Politur/Final-QA.
+
+## Work Log
+
+### 2026-06-24 — Sprint 1: Sauberkeit-Fundament (Claude Opus 4.8)
+**Done:**
+- `flutter analyze lib` = **0/0/0** (vorher 51 Infos). 44× `unnecessary_underscores` (Wildcard-`__`→`_`) in 15 Dateien per sed kollabiert (vorher Sanity-Check: alle in Param-Position). 7 bewusste `*Web.dart`-Lints (dart:html / js-interop in conditional imports) mit gezieltem `// ignore_for_file` versehen statt umzuschreiben.
+- **Loyalty-Denorm-Bug gefixt** (gleiche Wurzel wie die Partner-Kachel): `UserWalletService.addToWallet` schrieb `hasStampCards/hasPoints/hasCoupons` aus dem NIE gepflegten `merchant.featuresPublic` (immer leer) → jetzt aus echter Quelle (`loadActiveStampCards`.isNotEmpty, `loadPointsEnabled`, `_isFeatureEnabled('coupons')`).
+- **Toter Default-Test ersetzt:** `test/widget_test.dart` pumpte `App()` ohne `Firebase.initializeApp()` → ersetzt durch 3 Firebase-freie `QuickActionBar`-Smoke-Tests. Tote Widgets (feedActionButtons/feedDealCard) schon weg (verifiziert).
+**Verify:** `flutter analyze lib` 0/0/0; `flutter test` = **48/48 grün**.
+**Files:** ~15 Dateien (underscores), 4 `*Web.dart`, `userWalletService.dart`, `test/widget_test.dart`.
+**Next:** Sprint 2 — Shared-UI-Konsistenz.
+
+### 2026-06-24 — Sprints 2–5 (Claude Opus 4.8)
+**S2 Shared-UI-Konsistenz:** Order-Status-Darstellung war 3× dupliziert (`_statusColor`/`_statusLabel`/`_StatusPill` in orderCard, orderDetailPanel, merchantOrderTablesPage). → EINE Quelle: neu `orderStatusStyle.dart` (`OrderStatusStyle.colorOf/labelOf` + `OrderStatusPill`); alle 3 Surfaces nutzen sie, lokale Kopien gelöscht.
+**S3 Datenquellen-Korrektheit:** 3. kaputter `featuresPublic`-Consumer gefunden — `UserMenuPage.tablesEnabled` (immer false) gatte einen „Tisch wählen"-STUB („kommt in Kürze"). Stub + `_TableSelectButton` + `tablesEnabled`-Param komplett entfernt (dead/stub). `featuresPublic` hat jetzt 0 Logik-Consumer (Feld bleibt vorerst, harmlos). `userLoyaltyService` war schon korrekt (echte Quelle).
+**S4 Firebase-Kosten/Perf:** (a) Offline-Persistence + unbegrenzter Cache in main.dart (`Settings(persistenceEnabled:true, cacheSizeBytes:UNLIMITED)`) → weniger Reads, schnellere Kaltstarts. (b) Partner-Detail-Feed las die GANZE `feed`-Collection + client-Filter → jetzt `.where('merchantId')` (nur Posts dieses Partners). (c) Composite-Index `feed: merchantId+publishedAt` in firestore.indexes.json. **DEPLOY nötig:** `firebase deploy --only firestore:indexes` — bis dahin liefert die Query failed-precondition (graceful: leerer Partner-Feed, kein Crash).
+**S5 A11y/Responsive:** App-weiter Text-Scale-Clamp (1.0–1.3×) in app.dart builder → extreme Systemschrift zerbricht die fix dimensionierten Pillen/Buttons nicht mehr, Barrierefreiheit bis 1.3× bleibt. (Vollständige A11y — Kontrast/RTL/Screenreader — braucht Geräte-Tests, hier nicht abschließend.)
+**Verify:** `flutter analyze lib test` = 0/0/0; `flutter test` = 48/48 grün.
+**Offen:** Sprint 6 (Politur & Final-QA) noch nicht gestartet. Deploy: firestore:indexes (+ weiterhin firestore:rules aus früheren Sprints).
+
+### 2026-06-24 — „Meine Partner": entfernen
+`meinePartnerPage` (Profil → Meine Partner) listete gefolgte Partner (aus walletCards) und öffnete bei Tap das Partner-Profil — es fehlte das Entfernen. Ergänzt: pro Zeile ein Lösch-Icon → Bestätigungsdialog → `walletCards/{mid}` löschen (Unfollow, optimistisch + Revert bei Fehler) + best-effort `merchants/{mid}/customers/{uid}.isFollower=false` (User darf updaten, nicht löschen — Rule). Stempel/Belohnungen bleiben (server-only). analyze lib = 0 issues.
+
+### 2026-06-24 — „Meine Favoriten" → „Gelikte Beiträge" + Filter/Zähler
+Umbenannt (AppBar + Profil-Kachel) zu „Gelikte Beiträge". Zeigt alle gelikten Beiträge. Neu: Zeitfilter-Chips (Alle/Heute/Gestern/Letzte 7 Tage/Letzter Monat, gefiltert nach `likedAt`) + separater Toggle „Noch verfügbar" (nur `post.isCurrentlyValid`) + kleiner Zähler (gefilterte Anzahl) oben rechts in der AppBar. Karten zeigen Like-Datum-Label + „Abgelaufen"-Pille. Service: `fetchLikedPosts`→`fetchLikedEntries` (liefert `LikedFeedPost{post,likedAt}`; alte Methode entfernt, war nur hier genutzt). analyze lib = 0 issues.
+
+### 2026-06-24 — „Meine Bewertungen" → „Meine Rezensionen" + Filter/Zähler
+Profil-Kachel umbenannt (Titel+Info) zu „Meine Rezensionen". Seite (`meineRezensionenPage`) zeigt weiter ALLE eigenen Rezensionen (collectionGroup reviews where userId==uid, orderBy createdAt). Neu: gleiche Zeitfilter-Chips wie bei den Likes (Alle/Heute/Gestern/Letzte 7 Tage/Letzter Monat, gefiltert nach `createdAt`) + kleiner Zähler (★ + Anzahl) oben rechts + „Keine Treffer"-Leerzustand + relatives Datum-Label auf den Karten. „Noch verfügbar"-Toggle bewusst weggelassen (Rezensionen laufen nicht ab). Filter-Widgets lokal repliziert (kein Anfassen der funktionierenden Favoriten-Seite). Auf Wunsch ohne analyze/build.
+
+### 2026-06-24 — Profil-Feinschliff + Insta-Follow bei „Meine Partner"
+userProfilePage: „Meine Aktivität"-Breitbutton entfernt → stattdessen dezentes Mini-Icon (timeline) oben rechts im Hero (Tap → MeinProtokollPage), `_WideActionCard` gelöscht. „Persönliche Daten"-Untertitel zeigt nicht mehr die PLZ, sondern statisch „Name, Kontakt & Adresse" (`_summary` raus). „Feier-Effekte"-Schalter komplett entfernt (`_CelebrationToggleCard` + Celebration/LocalCacheService-Imports raus). Konto löschen = 2-Stufen-Dialog (Warnung „unwiderruflich, Wallet/Stempel/Punkte/Likes/Bewertungen weg" → finale Bestätigung) + Button jetzt dünn/dezent (12px, w300, alpha) ganz unten; Ausloggen = prominenter FilledButton.tonalIcon (volle Breite).
+meinePartnerPage: Mülleimer-Icon → Insta-Toggle `_FollowButton` („Entfolgen" outlined ↔ „Folgen" filled). Unfollow löscht walletCards-Doc echt (raus aus Wallet) + best-effort `isFollower=false`, aber Zeile bleibt mit „Folgen" bis Reload (`_unfollowed`-Set). Re-Follow schreibt Doc aus dem In-Memory-Card neu (`_cardData`, FieldValue.serverTimestamp). `_busy`-Guard. analyze lib = 0 issues.
+
+### 2026-06-24 — Onboarding-Survey: „Alles" + Orte (max 5 / Standard)
+`onboardingSurveyPage`: `_Section` bekam `showAll`/`onSelectAll` → „Alles"-Chip als erste Option bei „Herkunft & Küche" (origins) und „Was interessiert dich?" (postTypes). „Alles" ist aktiv, wenn das jeweilige Set leer ist (leer = kein Filter = alles); Tippen leert das Set; Tippen einer Spezifik-Option deselektiert „Alles" automatisch. Keine Schema-Änderung (leere Liste = alles). Orte: max 5 (`_addPlace`-Guard + Snackbar, Suchfeld ausgeblendet + Hinweis bei 5) und Standard-Ort setzbar (`isDefault` pro Ort, Stern-Toggle auf `_PlaceChip`, genau einer default; erster Ort auto-default; Remove promotet nächsten; Load setzt Default falls keiner). analyze der Datei = 0 issues.
+OFFEN: Review-Punkt unklar formuliert („Ich kann immer noch meine Bewertungen sehen, obwohl ich was abgegeben habe") — RatingSection funktioniert wie gebaut (Button → „bearbeiten" nach Submit, userId wird gespeichert). Rückfrage an User gestellt.
+
+> Review-Rückfrage beantwortet: „Bearbeiten lassen (wie jetzt)" — RatingSection bleibt unverändert, kein Bug.
+
+### 2026-06-24 — Fix: Merchant-Logo in Gelikte Beiträge
+In `_FavoriteCard` war neben dem Merchant-Namen ein fest verdrahtetes Storefront-Icon → Logo lud nie. Neu: `_MerchantLogo` (stateful) nutzt `post.merchantLogoUrl`, sonst Fallback-Read aus `publicMerchants/{mid}.logoUrl` (Session-Cache `_favMerchantLogoCache`), Storefront-Icon nur als Fallback. analyze Datei = 0 issues.
+
+### 2026-06-24 — Rezensionen-Query-Fix + Review-Foto-Zoom + Favoriten-Orte im Location-Sheet
+1) **Meine Rezensionen leer trotz vorhandener:** Query war `collectionGroup('reviews').where(userId).orderBy(createdAt)` → braucht zusammengesetzten Collection-Group-Index (fehlt) → `failed-precondition` → Seite zeigte still „leer". Fix: `orderBy` raus (nur `where(userId)` = Auto-Single-Field-Index), clientseitig nach `createdAt` desc sortiert. (Reviews liegen in `feed/{postId}/reviews/{uid}` mit `userId`+`createdAt` — via submitReview verifiziert.)
+2) **Review-Foto vergrößerbar:** `ReviewTile`-Bild → `_ReviewImage` (Tap → Vollbild `InteractiveViewer` 1–4× Zoom + Schließen-Button) + Mini-Zoom-Logo (zoom_out_map) unten rechts auf dem Bild.
+3) **Location-Sheet „Wo bist du?":** unter „Meinen Standort verwenden" jetzt dezente Chips der gespeicherten Adressen (interestPlaces). Neu: `UserDiscoverService.loadFavoritePlaces` (liest users/{uid}.interestPlaces, nur mit lat/lng, Default zuerst) + Provider-Passthrough; Sheet lädt in initState, `ActionChip` (kein Material-Button → kein Infinity-Breiten-Crash im Wrap), Tap → setManualLocation. analyze lib = 0 issues.
+
+### 2026-06-24 — Profil-Shortcuts in eine Reihe + eigene Rezension löschen
+1) userProfilePage: 2×2-`_QuickCard`-Grid → eine Reihe mit 4 kompakten `_Shortcut`-Kacheln (Icon-Tile 42 + kurzes Label, `Expanded` 1/4-Breite → passt immer nebeneinander, Stil wie Merchant-QuickActions). Einheitlich kurz benannt: Likes / Partner / Rezensionen / Interessen. `_QuickCard`+`_InfoButton`+`_showInfo` (Info-?-Popups) entfernt.
+2) Eigene Rezension löschen: `UserFeedService.deleteReview(postId)` (löscht feed/{postId}/reviews/{uid}, Rules erlauben Owner-delete). In `RatingSection` bei vorhandener eigener Bewertung „Bewertung löschen"-TextButton (rot) + Bestätigungsdialog → nach Löschen `_myReview=null` (Button zurück auf „Bewertung schreiben"). analyze lib = 0 issues.
+
+### 2026-06-24 — Meine Rezensionen leer: ECHTE Ursache (collectionGroup-Index) + index-freier Fix
+Mein erster Fix (orderBy raus) war falsch: `collectionGroup('reviews').where(userId)` braucht — auch OHNE orderBy — einen **COLLECTION_GROUP-skopierten** Index. Firestores automatische Single-Field-Indizes sind nur COLLECTION-skopiert → die Collection-Group-Query wirft weiter `failed-precondition` → der catch-Block schluckte das still als „leer". (Deshalb zeigt die Post-Detail-RatingSection die Bewertung — das ist eine normale Subcollection-Query — die „Meine Rezensionen"-Seite aber nicht.) Verifiziert per Workflow (5 Agenten) + eigenem Check: in firestore.indexes.json existiert KEIN reviews-Index.
+**Fix (index-frei, kein Deploy):** `_load` liest einmal `collection('feed').get()` und holt pro Post per Direkt-`get` `feed/{postId}/reviews/{uid}` (Doc-ID == uid → kein Index nötig, Rules erlauben read). Ergebnis: alle eigenen Bewertungen erscheinen sofort. Bonus: Karte zeigt jetzt Post-Titel + Thumbnail + Merchant statt „Beitrag · {id}". Silent-Swallow entfernt (echte Fehler → AppErrorState). cloud_firestore-Import raus.
+Skalierungs-Option (optional, braucht Deploy): fieldOverride reviews.userId mit COLLECTION_GROUP-Scope in firestore.indexes.json → dann ginge die effiziente Collection-Group-Query. Aktuell nicht nötig.
+
+### 2026-06-24 — Meine Rezensionen: Tap → Beitrag öffnen
+Karten in `meineRezensionenPage` jetzt tappbar (Material/InkWell + Chevron). `_MyReview` trägt zusätzlich das aus den Feed-Daten gebaute `FeedPostModel`; Tap pusht `UserFeedDetailPage(post, feedService)` (UserFeedService in initState gebaut) → landet genau auf dem zugehörigen Beitrag. analyze lib = 0 issues.
+
+### 2026-06-24 — Wallet-Karten: QR raus + Hessen-Stadt-Kürzung
+QR-Badge aus `walletCard` entfernt (war unnötig); dadurch `uid`-Param + `qr_flutter`-Import weg, `userWalletPage` passt den Aufruf an (uid bleibt nur für `openWalletCardStack`). Neue Util `cityShorten.dart` (`HessenCity`): kürzt lange Hessen-Städte (Map: Frankfurt am Main→FFM, Offenbach→OF, Wiesbaden→WI … + generisches Suffix-Strippen „… am Main"/„(Taunus)"). `titleNameCity(name, city)` kürzt die Stadt NUR wenn „Name – City" zu lang ist (>22), sonst volle Stadt. In `walletCard` Titel darüber gebaut; im `walletCardStack`-Store-Header die Meta-Stadt gekürzt wenn >14. analyze wallet = 0 issues.
+
+### 2026-06-24 — Merchant Register-Form Level-Up + weiße-Kästen-Bug
+**Bug:** Merchant-Registrierung (dark) zeigte grelle WEISSE Kästen um Adresse + Kategorie. Ursache: `_AddressCard` (color `AppColors.surfaceGray` = hell) + `_authDropdownDecoration` (fillColor hell) hartkodiert → ignorierten das Merchant-Dark-Theme. (`AuthTextField` war schon theme-aware, daher sahen die anderen Felder ok aus.)
+**Fix + Level-Up:**
+- Weiße Kästen weg: `_AddressCard` gelöscht; neues theme-bewusstes `_ShopTypeDropdown` (dunkler Fill + `dropdownColor` + onSurface-Text im Dark-Theme, hell im User-Theme).
+- Struktur: Formular in Abschnitte gegliedert (Shop & Inhaber / Zugang / Adresse / Kategorie) via neuer, wiederverwendbarer `AuthSectionLabel` (muted Label + Divider).
+- Kompakt/responsive: `AuthFieldRow` (2 Spalten ab 360px) für Vorname/Nachname, Straße/Nr (3:1), PLZ/Stadt (2:3).
+- i18n `auth.section.{shopOwner,access,address,category}` in de/en/ar.
+- `AuthSectionLabel`+`AuthFieldRow` sind shared (auth/widgets) → auch User-Register kann sie nutzen.
+**Scan:** Restlicher Merchant-Bereich hat KEINEN breiten „weißer-Kasten"-Bug; die ~56 `Colors.white`-Treffer sind legitim (Text/Icons auf Grün-Akzent, QR-BG, Scrim).
+**Nebenbei:** walletCard.dart QR-Badge-Churn (extern) → fehlenden `qr_flutter`-Import + `cityShorten`-Import (HessenCity) stabilisiert.
+**Verify:** analyze 0/0/0, 48/48 Tests.
+**Offen / „komplettes Merchant-Level-Up":** systematischer Page-by-Page-Rollout des elevated Patterns (Dashboard → Katalog → Orders → Shopdaten → Features → Stamps/Points/Coupons) ist Folge-Arbeit (Sprint 6 / eigener Merchant-Design-Sprint).
+
+### 2026-06-24 — Merchant-Onboarding: alle „weißer-Kasten"-Bugs gefixt
+Den weiße-Kästen-auf-Dunkel-Bug (hartkodiertes helles `AppColors.surfaceGray` im Merchant-Dark-Flow) systematisch im ganzen Onboarding gejagt + gefixt:
+- `merchantRegisterPage` — Adresse/Kategorie (vorher) + Struktur-Level-Up.
+- `merchantPendingPage._StatusCard` — war DOPPELT kaputt: heller Kasten + `cs.onSurface`-Text = heller Text auf hell (unleserlich). → theme-bewusster Fill (`surfaceContainerHigh` im Dark).
+- `legalSheet` (AGB/Datenschutz-Intro-Box) — gleicher Fix via `cs.surfaceContainerHigh` (theme-adaptiv, hell im User-Flow). AppColors-Import raus.
+**Befund:** Merchant-FEATURE-Seiten (Dashboard, Shopdaten, alle Tool-Pages) sind bereits gut strukturiert (MerchantToolScaffold/MerchantPremiumCard/_SectionCard, responsive Reihen). Der Bug-Cluster saß im auth/-Onboarding (nutzt Auth-Widgets mit hellem Hardcoding), nicht im Merchant-Feature-Bereich.
+**Verify:** analyze 0/0/0, 48/48 Tests.
+
+### 2026-06-24 — „Meine Rezensionen" lud nie: ECHTE Ursache + Fix
+Diagnose-Workflow (4 Reader + adversariale Synthese) ergab eindeutig: `collectionGroup('reviews').where('userId'==uid)` braucht einen **COLLECTION_GROUP-scoped Index**. Firestores automatische Single-Field-Indizes haben nur **COLLECTION-Scope** → Collection-Group-Query wirft `failed-precondition`, und der alte catch-Block hat das still als „leer" gerendert. Mein erster Fix (orderBy raus) half NICHT, weil das Problem der Scope ist, nicht der Composite-Index. firestore.indexes.json hat keinen reviews-Index.
+FIX (jetzt im Code): index-freie **Fan-out**-Variante in `meineRezensionenPage._load` — Feed einmal lesen (`collection('feed').get()`, public), dann je Post die eigene Review per Direkt-Doc-Read `feed/{postId}/reviews/{uid}` (doc-id == uid) holen. Single-Doc-Reads brauchen KEINEN Index → klappt sofort ohne Deploy; liefert zusätzlich Post-Titel/Bild. Kein stilles Verschlucken mehr (echter Error-State). Tap auf eine Rezension → öffnet den Beitrag (UserFeedDetailPage). Trade-off: liest den ganzen Feed (für Hessen-Größenordnung ok). Skalierbare Alternative (collectionGroup + deploytem Index/fieldOverride) bewusst NICHT genommen, da Deploy nötig. analyze Datei = 0 issues.
+
+---
+
+# Auth-Guard für /user/* (Deep-Link-Schutz)
+
+### 2026-06-24 — Claude (Opus 4.8)
+**Prompt:** Deep-Link auf z. B. `/user/profile` zeigt ohne Login die Seite + Feed (auch anonyme Stempel-Sessions). Soll auf Login-Seite leiten — außer Beitrag oder Merchant-Profil.
+**Ursache:** `appRouter.redirect` guardete nur `/merchant/*`. `/user/*` war ungeschützt. Zudem zählte eine anonyme Firebase-Session (aus `signInAnonymously` im NFC-/QR-Stempel-Flow) als „eingeloggt" → „Kein Name"-Profil im Screenshot.
+**Fix (appRouter.dart):** `isRealUser = user != null && !user.isAnonymous`. Neuer Guard: `loc.startsWith('/user/') && !isRealUser` → `/auth/userLogin`, AUSNAHME teilbare Inhalts-Deep-Links `['/user/feed/', '/user/partners/', '/user/stamps/']`. Landing-Redirect + Merchant-Guard nutzen jetzt ebenfalls `isRealUser` (anonyme Sessions kommen nicht mehr in geschützte Bereiche).
+**Verification:** `flutter analyze lib/app/appRouter.dart` = No issues.
+
+### 2026-06-24 — Shared Merchant-Chrome: Primär-Button vereinheitlicht
+Geteilte Tool-Chrome (`merchantToolUi.dart`, 30 Seiten) geprüft + 2 echte Probleme gefixt:
+- **Primär-CTA war 50/50 inkonsistent:** `MerchantPrimaryButton` = Coral/Orange (22×), rohe `FilledButton` (Theme-Grün, ~22×). → `MerchantPrimaryButton` auf Marken-Grün (`MerchantPremiumColors.gold` #2FB389, On-Color #06281F) umgestellt = deckungsgleich mit Theme-FilledButton. Jetzt EINE primäre Aktionsfarbe (grün) im ganzen Merchant-Bereich. (Coral bleibt als Akzent an anderen Stellen.) 1-Zeilen-Revert möglich, falls Coral-„Pop" gewünscht.
+- **Dead-`_header()`-Bug:** Titel nutzte `MerchantPremiumColors.surface` (dunkle Kartenfarbe) auf dunklem Grund = unsichtbar; `showHeader` wird zwar nirgends gesetzt (dormant), trotzdem auf `ink` korrigiert.
+**Befund:** Tool-Chrome ansonsten solide (MerchantEmptyState/ErrorState/LoadingCards/Sheets/Buttons alle konsistent getokt). Merchant-Feature-Bereich ist damit visuell konsistent.
+**Verify:** analyze 0/0/0, 48/48 Tests.
+
+### 2026-06-24 — Wallet-Liste = Apple-Wallet-Stapel (WalletDeck)
+Neue `walletDeck.dart`: vertikaler `PageView` (viewportFraction 0.46) statt flacher SliverList. Zentrierte Karte = Fokus (voll/scharf), Nachbarn skalieren runter (bis 0.80) + verblassen (bis 0.30) → „in der Hand gehaltene Karten", Swipe ↑/↓ ändert Fokus, snappt (custom `_DeckScrollPhysics`). Tap auf Seitenkarte → fokussiert sie; Tap auf Fokus-Karte → öffnet (openWalletCardStack). In `userWalletPage` als `SliverFillRemaining(hasScrollBody:true)` eingebaut (Header bleibt, Deck füllt Rest). walletCard-Import durch walletDeck ersetzt. analyze wallet = 0 issues. Params (vf/scale/opacity) leicht tunebar.
+
+### 2026-06-24 — Sprint 6 (Politur & Final-QA) — ABGESCHLOSSEN
+- **Off-brand-Bruch gefixt:** Katalog-„Vorschau"-Promokarte (`merchantCatalogPage.dart`) hatte einen Indigo/Blau-Verlauf `#5A67E6→#2B2F66` (komplett off-brand im grünen Merchant-Theme) → auf Marken-Grün-Verlauf `#1E8E6B→#0E3A2C` umgestellt (dunkel genug für AA-lesbares Weiß).
+- **Restliche Fremdfarben geprüft, bewusst BELASSEN:** `#45C9A4` = Stempelkarten-Design (kundenseitiger Karten-Inhalt + Farbpalette, kein Chrome); `#6FA8FF` = Status „geplant" im Feed-Manager (distinkte Semantik vs. grün=live).
+- **User-Original-Beschwerden verifiziert erledigt:** (1) Shortcut-Tiles „Route/Zeiten/Anrufen/Social" → gemeinsame `QuickActionBar` ist bereits box-in-box-frei (weiches Icon-Quadrat + Label, theme-getrieben) → wirkt überall ruhig/strukturiert. (2) Stempelkarten-Kachel leuchtet jetzt über echte Quelle (`_loadLoyaltyAvailability` → live `loadActiveStampCards`) statt nie gepflegtem `featuresPublic`.
+**Final-QA-Gate:** `flutter analyze lib` = **0/0/0** (No issues found). Eigene Tests 13/13 grün.
+**6-Sprint-Programm damit komplett (S1–S6).** Offen (extern, nicht-Code): `firebase deploy --only firestore:rules,firestore:indexes`; Geräte-Smoke-Test je Menü-Modus; optional kaputtes Default-`widget_test.dart` ersetzen.
+
+---
+
+# Merchant Profil-Handle (schöner Link) + Speisekarte-Bestätigung
+
+### 2026-06-24 — Claude (Opus 4.8)
+**Prompt:** (A) Jeder Merchant kann seinen Profil-Link aus dem Dashboard kopieren, eigenen schönen Handle setzen (z. B. origin/lokka), Klick landet direkt auf seiner Profilseite (Insta-Stil). (B) In der Merchant-Profilseite fehlt „Karte"/Speisekarte neben Route/Zeiten/Anrufen/Social; beim Klick soll erst gefragt werden, ob wirklich geöffnet.
+**Action (A — Handle/Link):**
+- **Saubere URLs:** `usePathUrlStrategy()` in `main.dart` (nur kIsWeb) → Links ohne `#`. Firebase-Hosting hat den `**→/index.html`-Rewrite bereits. `flutter_web_plugins` als SDK-Dep ergänzt.
+- **Modell:** `PublicMerchantUserModel.handle` (lowercase slug) in fromMap/toMap.
+- **Resolve:** `UserPartnersService.fetchPartnerByHandle` (query publicMerchants where handle==, auto-indexed).
+- **Route:** top-level `/:handle` als LETZTE Route + `_HandleLoader` → UserPartnerDetailPage (sonst FoundationPlaceholder). Auth-Guard greift nicht (kein /user//merchant-Prefix) → öffentlich, wie gewünscht.
+- **Service:** `MerchantHandleService` (normalize, validationError, reservierte Wörter, isAvailable, setHandle → schreibt handle in publicMerchants/{id} + merchants/{id}). Kein neuer Rules/Index-Deploy (Eigentümer-Write + Single-Field-Query).
+- **Dashboard:** `MerchantProfileLinkCard` (zeigt origin/handle, Kopieren via Clipboard, Set/Edit-Dialog mit Live-Normalisierung + Verfügbarkeitsprüfung). Eingehängt nach der HeroCard.
+**Action (B — Speisekarte):** In `_quickActions` ist „Karte" jetzt IMMER sichtbar (ausgegraut wenn `!m.hasMenu`). `_openMenu` öffnet nicht mehr direkt, sondern zeigt erst ein Bestätigungs-Popout „Speisekarte öffnen?" (bei integriert+extern beide Buttons, sonst eine Bestätigungs-Aktion).
+**Verification:** `flutter analyze lib` = 0/0, `flutter build web --release` ✅.
+**Offen/Hinweis:** Bare-Domain (z. B. jajehelp.com/lokka) braucht nur passende Hosting-Domain; technisch fertig. Handle wird auf publicMerchant nur sichtbar resolved, wenn Profil isActive+isPublic.

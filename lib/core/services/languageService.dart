@@ -47,6 +47,13 @@ class LanguageService {
       'merchant.stamps.duplicate': 'Duplizieren',
       'merchant.stamps.duplicated': 'Karte dupliziert (Entwurf)',
       'merchant.stamps.cap': '{n}/{max} aktiv',
+      'merchant.stamps.cooldownTitle': 'Wartezeit zwischen Stempeln',
+      'merchant.stamps.cooldownHint':
+          'Schützt vor versehentlichem Mehrfach-Stempeln. Gibst du mehrere Stempel pro Einkauf, wähle „Keine“.',
+      'merchant.stamps.cooldown.none': 'Keine',
+      'merchant.stamps.cooldown.1min': '1 Min',
+      'merchant.stamps.cooldown.2min': '2 Min',
+      'merchant.stamps.cooldown.5min': '5 Min',
       'merchant.stamps.capReachedTitle': 'Maximal 3 Karten',
       'merchant.stamps.capReachedBody': 'Du hast bereits 3 aktive Karten. Archiviere oder lösche eine, um Platz zu schaffen.',
       'merchant.stamps.settings': 'Einstellungen',
@@ -68,6 +75,8 @@ class LanguageService {
       'merchant.stamps.previewWallet': 'Im Wallet',
       'merchant.stamps.previewProgress': 'Noch {n} bis zur Belohnung',
       'merchant.stick.setup': 'Stempelstift einrichten',
+      'merchant.stick.copyLink': 'Link kopieren',
+      'merchant.stick.linkCopied': 'Link kopiert',
       'merchant.stick.setupTitle': 'Stift einrichten',
       'merchant.stick.scanHint': 'Scanne den QR-Code auf dem Stift',
       'merchant.stick.manualLabel': 'Stift-Code manuell eingeben',
@@ -117,6 +126,10 @@ class LanguageService {
       'merchant.stampScan.err.master-key-missing': 'Stempel-Dienst nicht konfiguriert.',
       'merchant.stampScan.err.offline': 'Keine Verbindung. Bitte später erneut versuchen.',
       'merchant.stampScan.err.generic': 'Etwas ist schiefgelaufen.',
+      'merchant.stampScan.err.unreachable':
+          'Stempel-Dienst gerade nicht erreichbar. Bitte später erneut versuchen.',
+      'merchant.stick.copyManual':
+          'Konnte nicht automatisch kopieren. Markiere den Link und kopiere ihn manuell:',
       'merchant.stampScan.err.invalid-request': 'Ungültige Anfrage.',
       'stampTap.working': 'Stempel wird hinzugefügt …',
       'stampTap.successTitle': 'Stempel gesammelt!',
