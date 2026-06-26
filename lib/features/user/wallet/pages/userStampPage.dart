@@ -9,6 +9,7 @@ import 'package:lokka/core/services/firestoreService.dart';
 import 'package:lokka/core/theme/appColors.dart';
 import 'package:lokka/core/theme/appSpacing.dart';
 import 'package:lokka/core/widgets/appEmptyState.dart';
+import 'package:lokka/core/widgets/responsiveContentWidth.dart';
 import 'package:lokka/core/widgets/appErrorState.dart';
 import 'package:lokka/core/services/localCacheService.dart';
 import 'package:lokka/core/widgets/appLoadingState.dart';
@@ -98,7 +99,7 @@ class _UserStampPageState extends State<UserStampPage> {
           onPressed: () => Navigator.pop(context),
         ),
       ),
-      body: _buildBody(),
+      body: ResponsiveContentWidth(child: _buildBody()),
     );
   }
 

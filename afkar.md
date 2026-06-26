@@ -708,5 +708,14 @@ Architecture report ✅ · full route+data inventory ✅ · ranked risk list ✅
   - **`userPartnerStampsPage.dart`** (Column body), **`userPartnerPointsPage.dart`** + **`userPartnerPointsShopPage.dart`** (CustomScrollView bodies) — default 640 cap.
 - **Deliberately skipped:** `publicShopPage.dart` (Menükarte) — most layout-complex, own header, likely wants a wider cap; left for visual review.
 - **Verified:** `flutter analyze` 0/0/0 + `flutter build web --release` clean (exit 0). **Still visually unverified at desktop** (headless CanvasKit WebGL context stayed exhausted for the whole session — even a fresh server + fresh build would not repaint). User to eyeball at ≥1024px.
-- **Coverage now:** partner detail, feed detail, partner stamps, partner points, points shop, + the 4 shell tabs = the core user-facing surface. Remaining: public shop, plus any niche user pages (favorites/reviews/onboarding) if they also stretch.
+- **Coverage now:** partner detail, feed detail, partner stamps, partner points, points shop, + the 4 shell tabs = the core user-facing surface.
+
+## Rollout part 2 (2026-06-26, "mach weiter")
+- **`publicShopPage.dart`** (Menükarte) — wrapped the body content `ResponsiveContentWidth(maxWidth: 900)` (wider cap for a multi-column menu; appBar/full-bleed stays outside).
+- **`meineFavoritenPage.dart`** + **`meineRezensionenPage.dart`** — wrapped the Column body (640); the Scaffold appBar stays full-width.
+- **`userStampPage.dart`** — wrapped `_buildBody()` (640); appBar full-width.
+- **`stampTapPage.dart`** — already capped (`ConstrainedBox(maxWidth: 460)`); no change needed.
+- **Verified:** `flutter analyze` 0/0/0; `flutter build web --release` clean (exit 0).
+- **Full user-facing responsive coverage achieved.** Still desktop-visually-unverified this session (headless CanvasKit WebGL context never recovered — confirmed dead even after a fresh build + ~10min). User verifies at ≥1024px.
+- **Tuning knob:** all caps are one-liners — `responsiveContentWidth.dart` default (640) or per-call `maxWidth:` (shell 720, shop 900).
 

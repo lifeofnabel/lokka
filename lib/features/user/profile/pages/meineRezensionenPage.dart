@@ -5,6 +5,7 @@ import 'package:lokka/core/constants/firebasePaths.dart';
 import 'package:lokka/core/services/authService.dart';
 import 'package:lokka/core/services/firestoreService.dart';
 import 'package:lokka/core/theme/appColors.dart';
+import 'package:lokka/core/widgets/responsiveContentWidth.dart';
 import 'package:lokka/core/theme/appRadius.dart';
 import 'package:lokka/core/theme/appSpacing.dart';
 import 'package:lokka/core/widgets/appEmptyState.dart';
@@ -159,7 +160,8 @@ class _MeineRezensionenPageState extends State<MeineRezensionenPage> {
             ),
         ],
       ),
-      body: Column(
+      body: ResponsiveContentWidth(
+        child: Column(
         children: [
           if (!_loading && _error == null && _reviews.isNotEmpty)
             _FilterBar(
@@ -168,6 +170,7 @@ class _MeineRezensionenPageState extends State<MeineRezensionenPage> {
             ),
           Expanded(child: _buildBody(filtered)),
         ],
+        ),
       ),
     );
   }

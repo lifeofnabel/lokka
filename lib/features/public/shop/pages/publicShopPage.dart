@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../../../core/services/firestoreService.dart';
 import '../../../../core/widgets/appImage.dart';
+import '../../../../core/widgets/responsiveContentWidth.dart';
 import '../../../../core/services/languageService.dart';
 import '../../../../core/services/translatorService.dart';
 import '../../../../core/theme/appRadius.dart';
@@ -338,7 +339,9 @@ class _PublicShopViewState extends State<_PublicShopView> {
           textDirection: TranslatorService.isRtl(_language)
               ? TextDirection.rtl
               : TextDirection.ltr,
-          child: content,
+          // Cap the menu width on desktop so it doesn't stretch edge-to-edge;
+          // 900 keeps a comfortable multi-column menu while taming large screens.
+          child: ResponsiveContentWidth(maxWidth: 900, child: content),
         ),
       ),
     );
