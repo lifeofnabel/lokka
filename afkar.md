@@ -700,5 +700,13 @@ Architecture report ✅ · full route+data inventory ✅ · ranked risk list ✅
 
 ## Status / next
 - DONE: harness, reproduction, root cause, reusable system, fix on 2 worst-offender detail pages.
-- NOT DONE (honest): full-matrix after-shots; rollout to the remaining data screens (shell tabs discover/explore/wallet/profile, public shop, partner stamps/points) — each needs per-screen verification because some have full-width headers that shouldn't be capped; Sprint 2 (visual "life") + Sprint 3 (state/consistency QA) not started. The token system (AppColors/AppTextStyles/MerchantPremiumColors) already exists and is mandatory — Sprint 2 should refine within it, not rebuild.
+- NOT DONE (honest): full-matrix after-shots; Sprint 2 (visual "life") + Sprint 3 (state/consistency QA) not started. The token system (AppColors/AppTextStyles/MerchantPremiumColors) already exists and is mandatory — Sprint 2 should refine within it, not rebuild.
+
+## Rollout (2026-06-26, after user said "you eyeball it, I roll out")
+- Applied `ResponsiveContentWidth` to the remaining high-value data screens:
+  - **`userShellPage.dart`** — wraps the `IndexedStack` (maxWidth **720**) → caps ALL 4 main tabs at once (discover/explore/wallet/profile); the `bottomNavigationBar` stays full-width (it's outside the body). Wider cap (720) because discover/explore have card grids.
+  - **`userPartnerStampsPage.dart`** (Column body), **`userPartnerPointsPage.dart`** + **`userPartnerPointsShopPage.dart`** (CustomScrollView bodies) — default 640 cap.
+- **Deliberately skipped:** `publicShopPage.dart` (Menükarte) — most layout-complex, own header, likely wants a wider cap; left for visual review.
+- **Verified:** `flutter analyze` 0/0/0 + `flutter build web --release` clean (exit 0). **Still visually unverified at desktop** (headless CanvasKit WebGL context stayed exhausted for the whole session — even a fresh server + fresh build would not repaint). User to eyeball at ≥1024px.
+- **Coverage now:** partner detail, feed detail, partner stamps, partner points, points shop, + the 4 shell tabs = the core user-facing surface. Remaining: public shop, plus any niche user pages (favorites/reviews/onboarding) if they also stretch.
 

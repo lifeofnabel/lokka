@@ -4,6 +4,7 @@ import 'package:lokka/core/services/authService.dart';
 import 'package:lokka/core/services/firestoreService.dart';
 import 'package:lokka/core/services/localCacheService.dart';
 import 'package:lokka/core/theme/appColors.dart';
+import 'package:lokka/core/widgets/responsiveContentWidth.dart';
 import 'package:lokka/core/theme/appSpacing.dart';
 import 'package:lokka/core/widgets/appEmptyState.dart';
 import 'package:lokka/core/widgets/appErrorState.dart';
@@ -198,11 +199,13 @@ class _UserPartnerStampsPageState extends State<UserPartnerStampsPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.greenTint,
-      body: Column(
-        children: [
-          _header(),
-          Expanded(child: _body()),
-        ],
+      body: ResponsiveContentWidth(
+        child: Column(
+          children: [
+            _header(),
+            Expanded(child: _body()),
+          ],
+        ),
       ),
       bottomNavigationBar: _showBottomBar ? _bottomBar() : null,
     );

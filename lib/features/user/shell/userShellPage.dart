@@ -6,6 +6,7 @@ import 'package:lokka/core/services/authService.dart';
 import 'package:lokka/core/services/firestoreService.dart';
 import 'package:lokka/core/services/localCacheService.dart';
 import 'package:lokka/core/theme/appColors.dart';
+import 'package:lokka/core/widgets/responsiveContentWidth.dart';
 import 'package:lokka/core/widgets/appLoadingState.dart';
 import 'package:lokka/features/user/discover/pages/userDiscoverPage.dart';
 import 'package:lokka/features/user/discover/providers/userDiscoverProvider.dart';
@@ -158,14 +159,17 @@ class _UserShellPageState extends State<UserShellPage> {
                   if (show != _showToolbar) setState(() => _showToolbar = show);
                   return false;
                 },
-                child: IndexedStack(
-                  index: _index,
-                  children: const [
-                    UserDiscoverPage(),
-                    UserExplorePage(),
-                    UserWalletPage(),
-                    UserProfilePage(),
-                  ],
+                child: ResponsiveContentWidth(
+                  maxWidth: 720,
+                  child: IndexedStack(
+                    index: _index,
+                    children: const [
+                      UserDiscoverPage(),
+                      UserExplorePage(),
+                      UserWalletPage(),
+                      UserProfilePage(),
+                    ],
+                  ),
                 ),
               ),
               // Beim Runterscrollen schrumpft die Toolbar (verschwindet nicht),

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:lokka/core/services/firestoreService.dart';
 import 'package:lokka/core/theme/appColors.dart';
+import 'package:lokka/core/widgets/responsiveContentWidth.dart';
 import 'package:lokka/core/theme/appRadius.dart';
 import 'package:lokka/core/theme/appSpacing.dart';
 import 'package:lokka/core/widgets/appEmptyState.dart';
@@ -72,7 +73,8 @@ class _UserPartnerPointsShopPageState extends State<UserPartnerPointsShopPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.greenTint,
-      body: CustomScrollView(
+      body: ResponsiveContentWidth(
+        child: CustomScrollView(
         slivers: [
           _header(),
           if (_loading)
@@ -108,6 +110,7 @@ class _UserPartnerPointsShopPageState extends State<UserPartnerPointsShopPage> {
               ),
             ),
         ],
+      ),
       ),
     );
   }
