@@ -676,3 +676,29 @@ Architecture report ✅ · full route+data inventory ✅ · ranked risk list ✅
 
 **Regression vs baseline:** clean — no Dart touched, `flutter analyze` still 0/0/0; JSON configs validated.
 
+---
+
+# DESIGN-ONLY OPTIMIZATION — Responsive Integrity (Sprint 1)
+
+> 2026-06-26 · Branch `main`. Design only (no logic/data/backend). Goal: kill the cross-device shift/resize/wrap + flat look.
+
+## Reproduction harness (built)
+- Set up a live screenshot harness: `.claude/launch.json` + `.claude/preview-server.js` (tiny Node static server for `build/web` with SPA fallback) driven by the Claude preview MCP (`preview_resize`/`preview_screenshot`). Fetched real public IDs via Firestore REST (publicMerchants are public-read) to load the actual data-driven screens through the router's public deep-links (`/user/partners/:id`, `/user/feed/:postId`, `/shop/:id`) — no login needed.
+- **Captured real renders:** landing @390 (excellent), landing @1440, partner profile @390 (excellent, no overflow), partner profile @1440 (**BUG REPRODUCED**).
+
+## Root cause (found, with proof)
+- The mobile-first **data screens have no max-content-width constraint**, so on tablet/desktop they stretch edge-to-edge: the "Folgen" button becomes a giant bar, action icons cluster tiny in the centre, loyalty cards over-stretch → "elements bigger than intended" + sparse/dead look. The landing page does NOT break because it already uses `ConstrainedBox(maxWidth: 460)`. So the breakage is NOT systemic debt — it's a missing, consistent content-width cap on the data screens.
+
+## Fix (built + compiled, design-only)
+- New reusable widget **`lib/core/widgets/responsiveContentWidth.dart`** — `Center > ConstrainedBox(maxWidth: 640)`; no-op on phones (<640), centres + caps content on wide screens. Works for box AND sliver scroll bodies.
+- Applied to **`userPartnerDetailPage.dart`** (wraps `CustomScrollView`) and **`userFeedDetailPage.dart`** (wraps `ListView`). One-line wrap each, import added.
+- **Verified compiled:** `flutter analyze` 0/0/0; `flutter build web --release` clean, `main.dart.js` grew 5,423,772 → 5,423,960 B (+188) confirming the edits are in the bundle (an earlier `flutter run --release` had served a STALE cached bundle — caught via identical byte size).
+
+## ⛔ Blocker — after-shot proof
+- **Headless CanvasKit could not produce the after-shot.** Flutter renders to a single WebGL `<canvas>`; after many reload/resize cycles the headless browser's WebGL context becomes exhausted (0 frames, then a hung `preview_screenshot`). The BEFORE shot + mobile shots were captured before exhaustion. The fix is logically standard (Instagram/Twitter-web style centred column) + analyze/build-clean, but is **visually unverified at desktop width** in this environment.
+- **To verify:** open `/user/partners/<id>` (or any feed post) at ≥1024px in a real desktop browser — content should now sit in a centred ≤640px column instead of stretching full-width. Or re-run the harness fresh (one load, no repeated reloads).
+
+## Status / next
+- DONE: harness, reproduction, root cause, reusable system, fix on 2 worst-offender detail pages.
+- NOT DONE (honest): full-matrix after-shots; rollout to the remaining data screens (shell tabs discover/explore/wallet/profile, public shop, partner stamps/points) — each needs per-screen verification because some have full-width headers that shouldn't be capped; Sprint 2 (visual "life") + Sprint 3 (state/consistency QA) not started. The token system (AppColors/AppTextStyles/MerchantPremiumColors) already exists and is mandatory — Sprint 2 should refine within it, not rebuild.
+

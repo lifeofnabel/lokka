@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:lokka/core/services/externalLinkService.dart';
 import 'package:lokka/core/theme/appColors.dart';
 import 'package:lokka/core/theme/appRadius.dart';
+import 'package:lokka/core/widgets/responsiveContentWidth.dart';
 import 'package:lokka/core/theme/appSpacing.dart';
 import 'package:lokka/core/utils/shareUtils.dart';
 import 'package:lokka/features/user/discover/models/publicMerchantUserModel.dart';
@@ -274,7 +275,8 @@ class _UserFeedDetailPageState extends State<UserFeedDetailPage> {
     final post = _post;
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: ListView(
+      body: ResponsiveContentWidth(
+        child: ListView(
         padding: EdgeInsets.zero,
         children: [
           // 1 — Bild-Hero (zentriert, ohne Overlay)
@@ -344,6 +346,7 @@ class _UserFeedDetailPageState extends State<UserFeedDetailPage> {
             ),
           ),
         ],
+      ),
       ),
     );
   }

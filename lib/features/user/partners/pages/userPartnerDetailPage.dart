@@ -10,6 +10,7 @@ import 'package:lokka/core/services/localCacheService.dart';
 import 'package:lokka/core/theme/appColors.dart';
 import 'package:lokka/core/theme/appSpacing.dart';
 import 'package:lokka/core/utils/shareUtils.dart';
+import 'package:lokka/core/widgets/responsiveContentWidth.dart';
 import 'package:lokka/features/user/discover/models/publicMerchantUserModel.dart';
 import 'package:lokka/features/user/feed/models/feedPostModel.dart';
 import 'package:lokka/features/stamps/services/stampFunctionsService.dart';
@@ -630,7 +631,8 @@ class _UserPartnerDetailPageState extends State<UserPartnerDetailPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.surfaceBg,
-      body: CustomScrollView(
+      body: ResponsiveContentWidth(
+        child: CustomScrollView(
         slivers: [
           SliverToBoxAdapter(
             child: _CenteredHero(
@@ -670,6 +672,7 @@ class _UserPartnerDetailPageState extends State<UserPartnerDetailPage> {
             ),
           ),
         ],
+        ),
       ),
     );
   }
