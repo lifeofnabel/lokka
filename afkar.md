@@ -651,7 +651,7 @@ Architecture report ✅ · full route+data inventory ✅ · ranked risk list ✅
 
 **Deferred ⏭️ (decision left to user — risk #3):**
 - **Service-worker blanket-unregister in `index.html` NOT removed.** It still unregisters every SW + clears all caches on load → no PWA offline/caching. Rationale: it is the user's current staleness defence on a custom domain (jajehelp.com) where the new `firebase.json` headers do **not** apply unless they deploy via Firebase Hosting. Removing it blind (no commit, in-flux hosting) could resurrect the stale-build bug. **Hand-off:** once on Firebase Hosting (headers active), delete the unregister `<script>` in `web/index.html` body to gain real PWA caching + installability.
-- **Code-splitting (0 deferred imports):** not done — meaningful win but touches many Dart files + go_router builders; out of the surgical, no-safety-net budget for this pass.
+- **Code-splitting — DONE (2026-06-26, after the user authorised a baseline commit).** The entire `/godmode` admin tree (15 files) + the heavy `pdf` package (which *nothing else* imports) is now a `deferred as admin_gate` import in `appRouter.dart`, loaded on demand by a new `_DeferredAdminGate` widget (loader + retry-on-error). Verified by `flutter build web --release` → a separate **`main.dart.js_1.part.js` = 622 KB** chunk is emitted and no longer ships in the initial bundle every user downloads (main.dart.js = 5.42 MB). Added a `**/*.part.js` → no-cache header to `firebase.json` so a redeploy can't serve a stale chunk. Blast radius of a failed chunk load = the owner-only /godmode route only.
 
 ## SPRINT 6 — SECURITY GATE ✅ (audit verdict; no blind rule changes)
 

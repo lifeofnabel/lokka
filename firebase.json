@@ -71,6 +71,13 @@
         ]
       },
       {
+        "comment": "Deferred-import chunks (e.g. main.dart.js_1.part.js) are not content-hashed by the Flutter build → must revalidate so a redeploy can't serve a stale chunk.",
+        "source": "**/*.part.js",
+        "headers": [
+          { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+        ]
+      },
+      {
         "comment": "Self-hosted Firebase SDK is version-pinned in the import map → safe to cache hard.",
         "source": "/firebase/**",
         "headers": [

@@ -17,7 +17,11 @@ import '../features/auth/pages/merchantRegisterPage.dart';
 import '../features/auth/pages/userLoginPage.dart';
 import '../features/auth/pages/userRegisterPage.dart';
 import '../features/admin/adminTheme.dart';
-import '../features/admin/pages/adminGatePage.dart';
+// Deferred: the entire /godmode admin tree (15 files + the heavy `pdf` package,
+// which nothing else uses) is split into its own lazily-loaded chunk so it never
+// ships in the initial bundle that every normal user downloads. Loaded on demand
+// by _DeferredAdminGate when the secret /godmode route is opened.
+import '../features/admin/pages/adminGatePage.dart' deferred as admin_gate;
 import '../features/dev/pages/devFoundationPage.dart';
 import '../features/landing/pages/landingPage.dart';
 import '../features/merchant/catalog/pages/merchantCatalogPage.dart';
@@ -679,7 +683,7 @@ class AppRouter {
       // not swallowed as a merchant handle.
       GoRoute(
         path: '/godmode',
-        builder: (context, state) => adminThemed(const AdminGatePage()),
+        builder: (context, state) => adminThemed(const _DeferredAdminGate()),
       ),
       // MUST stay last: a top-level custom merchant handle (Insta-style link
       // <origin>/<handle>). Single-segment paths that match no route above land
@@ -820,6 +824,63 @@ class _RouteLoader extends StatelessWidget {
       body: Center(
         child: CircularProgressIndicator(),
       ),
+    );
+  }
+}
+
+/// Lazily loads the deferred /godmode admin chunk, then shows the gate. Keeping
+/// the admin tree (and the `pdf` package it alone pulls in) out of the initial
+/// bundle is a meaningful initial-load win; the blast radius of a failed chunk
+/// load is just this owner-only route, so it degrades to a retry instead of
+/// breaking anything a normal user can reach.
+class _DeferredAdminGate extends StatefulWidget {
+  const _DeferredAdminGate();
+
+  @override
+  State<_DeferredAdminGate> createState() => _DeferredAdminGateState();
+}
+
+class _DeferredAdminGateState extends State<_DeferredAdminGate> {
+  Future<void>? _load;
+
+  @override
+  void initState() {
+    super.initState();
+    _load = admin_gate.loadLibrary();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<void>(
+      future: _load,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const _RouteLoader();
+        }
+        if (snapshot.hasError) {
+          // Chunk failed to download (offline / blocked host) — let the owner
+          // retry rather than leaving a dead spinner.
+          return Scaffold(
+            body: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.wifi_off_rounded, size: 40),
+                  const SizedBox(height: 12),
+                  const Text('Konnte den Godmode nicht laden.'),
+                  const SizedBox(height: 12),
+                  FilledButton(
+                    onPressed: () =>
+                        setState(() => _load = admin_gate.loadLibrary()),
+                    child: const Text('Erneut versuchen'),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+        return admin_gate.AdminGatePage();
+      },
     );
   }
 }
