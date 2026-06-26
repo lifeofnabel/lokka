@@ -448,10 +448,19 @@ class _Footer extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
+    // Doubles as the secret Godmode entry: a tap opens /godmode, which reveals
+    // nothing unless the caller is the admin.
     return Center(
-      child: Text(
-        'powered by Jajehelp',
-        style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => context.go('/godmode'),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
+          child: Text(
+            'powered by Jajehelp',
+            style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
+          ),
+        ),
       ),
     );
   }

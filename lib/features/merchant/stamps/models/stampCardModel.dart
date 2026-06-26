@@ -108,6 +108,7 @@ class StampCardModel {
     required this.rewardDescription,
     this.rewardTiers = const [],
     this.boundStickId = '',
+    this.staticToken = '',
     this.stickType = '',
     this.stickVerifiedAt,
     required this.backgroundColor,
@@ -158,6 +159,12 @@ class StampCardModel {
   /// empty when no stick is connected yet.
   final String boundStickId;
 
+  /// Signed static-link token, prepared the moment the card goes live. The
+  /// shareable tap link is `<app-base>/s/<staticToken>`. Public (it's what goes
+  /// on a tag), so it's safe to keep on the card and copy instantly — no
+  /// server round-trip at copy time.
+  final String staticToken;
+
   /// Stick kind: 'static' (browser-written link) | 'ntag424' (pre-provisioned).
   /// Server-managed mirror; the client only reads it.
   final String stickType;
@@ -194,6 +201,9 @@ class StampCardModel {
   bool get isArchivedCard => status == StampCardStatus.archived || isArchived;
 
   bool get hasStick => boundStickId.isNotEmpty;
+
+  /// A shareable tap link has been prepared for this card.
+  bool get hasLink => staticToken.isNotEmpty;
 
   /// A stick is connected AND passed its Test-Tap → show "Stift verbunden ✓".
   bool get stickVerified => stickVerifiedAt != null;
@@ -289,6 +299,7 @@ class StampCardModel {
               .toList() ??
           const [],
       boundStickId: (map['boundStickId'] ?? '').toString(),
+      staticToken: (map['staticToken'] ?? '').toString(),
       stickType: (map['stickType'] ?? '').toString(),
       stickVerifiedAt: _readDateTime(map['stickVerifiedAt']),
       backgroundColor: (map['backgroundColor'] ?? '#171A18').toString(),
@@ -336,6 +347,8 @@ class StampCardModel {
       'rewardDescription': rewardDescription.trim(),
       'rewardTiers': rewardTiers.map((t) => t.toMap()).toList(),
       'boundStickId': boundStickId,
+      // Preserved across full-replace saves so the prepared link is never lost.
+      'staticToken': staticToken,
       'backgroundColor': backgroundColor,
       'gradientColor': gradientColor,
       'gradientEnabled': gradientEnabled,
@@ -379,6 +392,7 @@ class StampCardModel {
     String? rewardDescription,
     List<StampRewardTier>? rewardTiers,
     String? boundStickId,
+    String? staticToken,
     String? stickType,
     DateTime? stickVerifiedAt,
     String? backgroundColor,
@@ -422,6 +436,7 @@ class StampCardModel {
       rewardDescription: rewardDescription ?? this.rewardDescription,
       rewardTiers: rewardTiers ?? this.rewardTiers,
       boundStickId: boundStickId ?? this.boundStickId,
+      staticToken: staticToken ?? this.staticToken,
       stickType: stickType ?? this.stickType,
       stickVerifiedAt: stickVerifiedAt ?? this.stickVerifiedAt,
       backgroundColor: backgroundColor ?? this.backgroundColor,

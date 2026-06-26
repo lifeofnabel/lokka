@@ -55,6 +55,42 @@
         "source": "**",
         "destination": "/index.html"
       }
+    ],
+    "headers": [
+      {
+        "comment": "Entry/shell files must ALWAYS revalidate. This is the real root-cause fix for the 'I re-uploaded but the browser still runs old code' bug — proper cache headers, not a blanket service-worker unregister.",
+        "source": "/index.html",
+        "headers": [
+          { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+        ]
+      },
+      {
+        "source": "/@(flutter_bootstrap.js|flutter_service_worker.js|main.dart.js|manifest.json|version.json)",
+        "headers": [
+          { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+        ]
+      },
+      {
+        "comment": "Self-hosted Firebase SDK is version-pinned in the import map → safe to cache hard.",
+        "source": "/firebase/**",
+        "headers": [
+          { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+        ]
+      },
+      {
+        "comment": "Static, content-stable assets — long immutable cache for fast repeat loads. (json deliberately excluded: root manifest/version json must revalidate.)",
+        "source": "**/*.@(png|jpg|jpeg|gif|webp|svg|woff|woff2|ttf|otf|wasm)",
+        "headers": [
+          { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+        ]
+      },
+      {
+        "comment": "CanvasKit + Flutter asset bundles are content-addressed by the build.",
+        "source": "/@(canvaskit|assets)/**",
+        "headers": [
+          { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+        ]
+      }
     ]
   },
   "database": {

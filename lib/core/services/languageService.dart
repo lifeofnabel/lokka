@@ -130,6 +130,7 @@ class LanguageService {
           'Stempel-Dienst gerade nicht erreichbar. Bitte später erneut versuchen.',
       'merchant.stick.copyManual':
           'Konnte nicht automatisch kopieren. Markiere den Link und kopiere ihn manuell:',
+      'merchant.stick.linkReady': 'Link bereit',
       'merchant.stampScan.err.invalid-request': 'Ungültige Anfrage.',
       'stampTap.working': 'Stempel wird hinzugefügt …',
       'stampTap.successTitle': 'Stempel gesammelt!',

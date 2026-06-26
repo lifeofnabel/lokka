@@ -20,6 +20,13 @@ service cloud.firestore {
     function isUser(uid) {
       return isSignedIn() && request.auth.uid == uid;
     }
+    // Godmode: carries the `admin` custom claim (set once by the bootstrapAdmin
+    // Cloud Function for the owner account). The global override below grants
+    // these accounts full read/write so the admin console can manage/repair any
+    // document directly. Normal accounts never have the claim → unaffected.
+    function isAdmin() {
+      return isSignedIn() && request.auth.token.admin == true;
+    }
     // merchantId entspricht der Auth-UID des Merchants.
     function isMerchantOwner(mid) {
       return isUser(mid);
@@ -48,6 +55,16 @@ service cloud.firestore {
         && incoming().items is list
         && incoming().get('paid', false) == false
         && incoming().get('isArchived', false) == false;
+    }
+
+    // ---- Godmode-Vollzugriff (Admin-Override) -----------------------------
+    // Additiv: gewährt NUR Accounts mit dem `admin`-Claim Voll-Lese/-Schreib auf
+    // ALLE Dokumente (Godmode-Konsole: alles einsehen/reparieren). Für normale
+    // Accounts ist isAdmin() false → diese Regel gewährt nichts, die übrigen
+    // Regeln gelten unverändert. Schreiben hier umgeht bewusst die Server-only-
+    // Sperren (z. B. stampProgress) — der Owner ist vertrauenswürdig.
+    match /{document=**} {
+      allow read, write: if isAdmin();
     }
 
     // ---- Öffentliche Referenzdaten ----------------------------------------

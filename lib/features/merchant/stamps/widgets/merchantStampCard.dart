@@ -84,7 +84,11 @@ class MerchantStampCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppSpacing.sm),
-          _StickBadge(verified: card.stickVerified, bound: card.hasStick),
+          _StickBadge(
+            verified: card.stickVerified,
+            bound: card.hasStick,
+            hasLink: card.hasLink,
+          ),
           const SizedBox(height: AppSpacing.sm),
           Wrap(
             spacing: 8,
@@ -169,13 +173,20 @@ class _MiniAction extends StatelessWidget {
 }
 
 class _StickBadge extends StatelessWidget {
-  const _StickBadge({required this.verified, required this.bound});
+  const _StickBadge({
+    required this.verified,
+    required this.bound,
+    this.hasLink = false,
+  });
 
   /// Stick bound AND passed a Test-Tap → "Stift verbunden ✓".
   final bool verified;
 
-  /// Stick bound but not yet test-tapped → "Test-Tap nötig".
+  /// A physical stick is bound but not yet test-tapped → "Test-Tap nötig".
   final bool bound;
+
+  /// A shareable tap link is prepared → "Link bereit" (no test-tap needed).
+  final bool hasLink;
 
   @override
   Widget build(BuildContext context) {
@@ -186,17 +197,23 @@ class _StickBadge extends StatelessWidget {
             Icons.check_circle_rounded,
             MerchantPremiumColors.gold
           )
-        : bound
+        : hasLink
             ? (
-                'merchant.stick.testNeeded',
-                Icons.touch_app_rounded,
-                MerchantPremiumColors.muted
+                'merchant.stick.linkReady',
+                Icons.link_rounded,
+                MerchantPremiumColors.gold
               )
-            : (
-                'merchant.stick.notConnected',
-                Icons.link_off_rounded,
-                MerchantPremiumColors.muted
-              );
+            : bound
+                ? (
+                    'merchant.stick.testNeeded',
+                    Icons.touch_app_rounded,
+                    MerchantPremiumColors.muted
+                  )
+                : (
+                    'merchant.stick.notConnected',
+                    Icons.link_off_rounded,
+                    MerchantPremiumColors.muted
+                  );
     return Align(
       alignment: Alignment.centerLeft,
       child: Container(

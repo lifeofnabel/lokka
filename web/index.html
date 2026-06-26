@@ -16,23 +16,71 @@
   -->
   <base href="$FLUTTER_BASE_HREF">
 
+  <!--
+    Self-host the Firebase JS SDK. FlutterFire dynamically imports these modules
+    from www.gstatic.com at runtime; on a flaky/blocking network (uni/eduroam,
+    VPN, content blocker) that import can FAIL → Firebase Auth/Functions die →
+    every callable fails with no server log ("works sometimes, not others").
+    This import map redirects those exact gstatic URLs to copies served from our
+    OWN origin (web/firebase/*.js) → no external CDN dependency at runtime.
+    Degrades gracefully: browsers without import-map support, or a future SDK
+    version bump, simply fall back to gstatic. Keep the version below in sync
+    with firebase_core_web's bundled SDK version (currently 12.14.0).
+  -->
+  <script type="importmap">
+  {
+    "imports": {
+      "https://www.gstatic.com/firebasejs/12.14.0/firebase-app.js": "/firebase/firebase-app.js",
+      "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js": "/firebase/firebase-auth.js",
+      "https://www.gstatic.com/firebasejs/12.14.0/firebase-functions.js": "/firebase/firebase-functions.js",
+      "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js": "/firebase/firebase-firestore.js",
+      "https://www.gstatic.com/firebasejs/12.14.0/firebase-storage.js": "/firebase/firebase-storage.js",
+      "https://www.gstatic.com/firebasejs/12.14.0/firebase-messaging.js": "/firebase/firebase-messaging.js"
+    }
+  }
+  </script>
+
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="description" content="Lokka — discover local deals, follow your favourite shops, collect stamps and rewards.">
+  <!-- Brand theme colour (matches manifest theme_color) for the browser/PWA chrome. -->
+  <meta name="theme-color" content="#1FA97E">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="lokka">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Lokka">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>lokka</title>
+  <title>Lokka — Local Deals & Loyalty</title>
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
+  <!--
+    Freshness guard: unregister stale service workers and clear their caches so
+    the hosted app always runs the freshly uploaded build. This kills the
+    "I re-uploaded but the browser still runs old code" class of bug on custom
+    hosting (jajehelp.com). Safe: no forced reload, so no reload loop.
+  -->
+  <script>
+    (function () {
+      try {
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations().then(function (regs) {
+            regs.forEach(function (r) { r.unregister(); });
+          }).catch(function () {});
+        }
+        if (window.caches && caches.keys) {
+          caches.keys().then(function (keys) {
+            keys.forEach(function (k) { caches.delete(k); });
+          }).catch(function () {});
+        }
+      } catch (e) {}
+    })();
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

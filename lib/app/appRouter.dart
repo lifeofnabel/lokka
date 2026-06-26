@@ -16,6 +16,8 @@ import '../features/auth/pages/merchantPendingPage.dart';
 import '../features/auth/pages/merchantRegisterPage.dart';
 import '../features/auth/pages/userLoginPage.dart';
 import '../features/auth/pages/userRegisterPage.dart';
+import '../features/admin/adminTheme.dart';
+import '../features/admin/pages/adminGatePage.dart';
 import '../features/dev/pages/devFoundationPage.dart';
 import '../features/landing/pages/landingPage.dart';
 import '../features/merchant/catalog/pages/merchantCatalogPage.dart';
@@ -81,6 +83,17 @@ class _MerchantAccess {
 
 final Map<String, _MerchantAccess> _accessCache = {};
 
+/// Erlaubt der Rollen-Weiche, ihren bereits gelesenen Zustand in den Router-
+/// Cache zu spiegeln, damit der anschließende /merchant/*-Guard NICHT erneut
+/// dieselben Dokumente liest (halbiert die Reads beim Merchant-Kaltstart). Es
+/// wird – wie in [_resolveMerchantAccess] – nur ein finaler Zustand gecacht,
+/// „pending" bleibt absichtlich ungecacht, damit eine frische Freigabe greift.
+void seedMerchantAccess(String uid, String? role, String? status) {
+  if (role == 'user' || status == 'approved') {
+    _accessCache[uid] = _MerchantAccess(role, status);
+  }
+}
+
 /// Lässt GoRouter.redirect bei Login/Logout erneut laufen und leert dabei den
 /// Access-Cache, damit ein neuer Account neu bewertet wird.
 class _AuthRefresh extends ChangeNotifier {
@@ -111,11 +124,11 @@ Future<_MerchantAccess> _resolveMerchantAccess(
   if (cached != null) return cached;
   final firestore = context.read<FirestoreService>();
   try {
-    final profile = await firestore.getUserProfile(uid);
+    final profile = await firestore.getUserProfileResilient(uid);
     final role = profile?['role'] as String?;
     String? status;
     if (role == 'merchant') {
-      final merchant = await firestore.getMerchantProfile(uid);
+      final merchant = await firestore.getMerchantProfileResilient(uid);
       status = merchant?['verificationStatus'] as String? ?? 'pending';
     }
     final access = _MerchantAccess(role, status);
@@ -659,6 +672,14 @@ class AppRouter {
         path: '/dev/foundation',
         name: devFoundation,
         builder: (context, state) => const DevFoundationPage(),
+      ),
+      // Secret Godmode entry — reached via the landing "powered by jajehelp"
+      // link or by navigating here directly while signed in. The gate reveals
+      // nothing to non-admins. MUST stay above the /:handle catch-all so it is
+      // not swallowed as a merchant handle.
+      GoRoute(
+        path: '/godmode',
+        builder: (context, state) => adminThemed(const AdminGatePage()),
       ),
       // MUST stay last: a top-level custom merchant handle (Insta-style link
       // <origin>/<handle>). Single-segment paths that match no route above land

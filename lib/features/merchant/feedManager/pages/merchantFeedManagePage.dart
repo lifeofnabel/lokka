@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../../../../core/feed/feedPostTypeStyle.dart';
 import '../../../../core/services/authService.dart';
 import '../../../../core/services/firestoreService.dart';
 import '../../../../core/services/languageService.dart';
@@ -366,16 +367,26 @@ class _FeedTile extends StatelessWidget {
                       ],
                     ),
                   ),
-                  child: Text(
-                    post.title.isEmpty ? texts.text('merchant.feedManage.noTitle') : post.title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w900,
-                      height: 1.15,
-                    ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (post.type.isNotEmpty) ...[
+                        FeedTypeBadge(type: post.type, onImage: true, compact: true),
+                        const SizedBox(height: 6),
+                      ],
+                      Text(
+                        post.title.isEmpty ? texts.text('merchant.feedManage.noTitle') : post.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w900,
+                          height: 1.15,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),

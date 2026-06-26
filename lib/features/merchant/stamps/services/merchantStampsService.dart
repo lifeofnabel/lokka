@@ -146,6 +146,16 @@ class MerchantStampsService {
     );
   }
 
+  /// Persists the prepared share-link token on the card (merge). The merchant
+  /// owns the card doc, so this is a plain client write — no Cloud Function.
+  Future<void> setStaticToken(String stampCardId, String token) {
+    return firestoreService.setDocument(
+      FirebasePaths.merchantStampCard(merchantId, stampCardId),
+      {'staticToken': token, 'updatedAt': FieldValue.serverTimestamp()},
+      merge: true,
+    );
+  }
+
   Future<void> deleteDraftCard(String stampCardId) {
     return firestoreService
         .document(FirebasePaths.merchantStampCard(merchantId, stampCardId))

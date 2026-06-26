@@ -451,6 +451,11 @@ class _MerchantStampEditViewState extends State<_MerchantStampEditView> {
       imageUrl: _imageUrl,
       imagePlacement: _imagePlacement,
       claimLimits: {...existing.claimLimits, 'cooldownSeconds': _cooldownSeconds},
+      // Preserve the prepared share link + stick binding across edits.
+      staticToken: existing.staticToken,
+      boundStickId: existing.boundStickId,
+      stickType: existing.stickType,
+      stickVerifiedAt: existing.stickVerifiedAt,
       status: status,
       isActive: status == StampCardStatus.active,
       isArchived: status == StampCardStatus.archived,

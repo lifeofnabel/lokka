@@ -1,6 +1,7 @@
 {
   "project_info": {
     "project_number": "715791241789",
+    "firebase_url": "https://lokka-069-default-rtdb.europe-west1.firebasedatabase.app",
     "project_id": "lokka-069",
     "storage_bucket": "lokka-069.firebasestorage.app"
   },
@@ -10,6 +11,42 @@
         "mobilesdk_app_id": "1:715791241789:android:11e90b85d6f9980ffd9054",
         "android_client_info": {
           "package_name": "com.example.lokka"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "715791241789-3cgsacm625h5e0lh7oiqt498nrisdq6v.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB8krLsyuwGJM1yugfb56K6rkiPZXdQkS4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "715791241789-3cgsacm625h5e0lh7oiqt498nrisdq6v.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "715791241789-dbgpr1v3bfq2o5p2ocvolnfnedj2jqh9.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.lokka"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:715791241789:android:5269a837822f855efd9054",
+        "android_client_info": {
+          "package_name": "lokka.ffm"
         }
       },
       "oauth_client": [

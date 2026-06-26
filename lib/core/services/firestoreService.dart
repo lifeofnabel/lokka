@@ -92,6 +92,52 @@ class FirestoreService {
     return readDocument(FirebasePaths.merchant(uid));
   }
 
+  /// Rollen-Weiche-optimiert: liest das Nutzerprofil zuerst aus dem lokalen
+  /// Cache (die Rolle ändert sich praktisch nie) und nur bei Cache-Miss vom
+  /// Server – mit Timeout. So dreht „Rolle prüfen" für wiederkehrende Nutzer
+  /// nicht auf den Server-Roundtrip und ein flakiges Netz lässt die Seite nicht
+  /// endlos hängen, sondern wirft sauber in einen Wiederholen-Zustand.
+  Future<Map<String, dynamic>?> getUserProfileResilient(
+    String uid, {
+    Duration serverTimeout = const Duration(seconds: 8),
+  }) async {
+    final ref = document(FirebasePaths.user(uid));
+    try {
+      final cached = await ref.get(const GetOptions(source: Source.cache));
+      if (cached.exists) return cached.data();
+    } catch (_) {
+      // Cache-Miss (erstes Gerät / frischer Login) → Server.
+    }
+    final fresh = await ref
+        .get(const GetOptions(source: Source.server))
+        .timeout(serverTimeout);
+    return fresh.exists ? fresh.data() : null;
+  }
+
+  /// Wie [getMerchantProfile], aber server-first mit Timeout und Cache-Fallback:
+  /// eine frische Freigabe (pending→approved) greift sofort, ein flakiges Netz
+  /// fällt auf den letzten bekannten Stand zurück, statt endlos zu hängen.
+  Future<Map<String, dynamic>?> getMerchantProfileResilient(
+    String uid, {
+    Duration serverTimeout = const Duration(seconds: 6),
+  }) async {
+    final ref = document(FirebasePaths.merchant(uid));
+    try {
+      final fresh = await ref
+          .get(const GetOptions(source: Source.server))
+          .timeout(serverTimeout);
+      return fresh.data();
+    } catch (_) {
+      try {
+        final cached = await ref.get(const GetOptions(source: Source.cache));
+        if (cached.exists) return cached.data();
+      } catch (_) {
+        // Auch kein Cache → echter Fehler, an Aufrufer weiterreichen.
+      }
+      rethrow;
+    }
+  }
+
   Future<void> updateEmailVerified(String uid, bool emailVerified) async {
     final data = {
       'emailVerified': emailVerified,

@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../../../core/services/uploadService.dart';
+import '../../../stamps/services/stampFunctionsService.dart';
 import '../../catalog/models/merchantItemData.dart';
 import '../models/stampCardModel.dart';
 import '../services/merchantStampsService.dart';
@@ -9,10 +10,12 @@ class MerchantStampsProvider extends ChangeNotifier {
   MerchantStampsProvider({
     required this.service,
     required this.uploadService,
-  });
+    StampFunctionsService? functions,
+  }) : functions = functions ?? StampFunctionsService();
 
   final MerchantStampsService service;
   final UploadService uploadService;
+  final StampFunctionsService functions;
 
   bool isLoading = true;
   bool isSaving = false;
@@ -81,7 +84,35 @@ class MerchantStampsProvider extends ChangeNotifier {
   }
 
   Future<String?> publishCard(StampCardModel card) async {
-    return _saving(() => service.publishCard(card));
+    final id = await _saving(() => service.publishCard(card));
+    // The shareable tap link is prepared the moment the card goes live, so the
+    // merchant can copy it immediately (no waiting, no server call at copy time).
+    if (id != null) await ensureStaticLink(id);
+    return id;
+  }
+
+  /// Ensures a card has a prepared share link (`staticToken`). Idempotent —
+  /// skips if one already exists. Best-effort: the copy button has its own
+  /// fallback if this didn't run (e.g. older cards published before this).
+  Future<void> ensureStaticLink(String cardId) async {
+    StampCardModel? card;
+    for (final c in cards) {
+      if (c.id == cardId) {
+        card = c;
+        break;
+      }
+    }
+    if (card == null || card.staticToken.isNotEmpty) return;
+    try {
+      // createStaticStick is server-authored: it creates the stick AND writes
+      // the card's staticToken atomically. We only refresh to pick it up.
+      final stick = await functions.createStaticStick(cardId: cardId);
+      if (stick.token.isEmpty) return;
+      await _refreshCard(cardId);
+      notifyListeners();
+    } catch (_) {
+      // Leave it; copy will fall back to fetching on demand.
+    }
   }
 
   Future<void> pauseCard(String stampCardId) async {

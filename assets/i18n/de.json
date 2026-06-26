@@ -1447,5 +1447,6 @@
   "merchant.stamps.cooldown.2min": "2 Min",
   "merchant.stamps.cooldown.5min": "5 Min",
   "merchant.stampScan.err.unreachable": "Stempel-Dienst gerade nicht erreichbar. Bitte später erneut versuchen.",
-  "merchant.stick.copyManual": "Konnte nicht automatisch kopieren. Markiere den Link und kopiere ihn manuell:"
+  "merchant.stick.copyManual": "Konnte nicht automatisch kopieren. Markiere den Link und kopiere ihn manuell:",
+  "merchant.stick.linkReady": "Link bereit"
 }

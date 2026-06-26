@@ -584,3 +584,95 @@ Neue `walletDeck.dart`: vertikaler `PageView` (viewportFraction 0.46) statt flac
 **Action (B — Speisekarte):** In `_quickActions` ist „Karte" jetzt IMMER sichtbar (ausgegraut wenn `!m.hasMenu`). `_openMenu` öffnet nicht mehr direkt, sondern zeigt erst ein Bestätigungs-Popout „Speisekarte öffnen?" (bei integriert+extern beide Buttons, sonst eine Bestätigungs-Aktion).
 **Verification:** `flutter analyze lib` = 0/0, `flutter build web --release` ✅.
 **Offen/Hinweis:** Bare-Domain (z. B. jajehelp.com/lokka) braucht nur passende Hosting-Domain; technisch fertig. Handle wird auf publicMerchant nur sichtbar resolved, wenn Profil isActive+isPublic.
+
+### 2026-06-26 — Claude (Opus 4.8) — NFC-Link „hängt im Login" = NETZWERK-FIREWALL, kein App-Bug
+**Prompt Summary:** Diagnose-first: NFC-Stempel-Link scheitert gehostet (landet im Login/hängt), lokal (Android Studio) ok.
+**Answer / Action Summary:** Root-Cause per Live-Evidence gefunden: **Test-Netzwerk-Firewall `hsfw02.heusenstamm.de` (Web-Content-Filter) blockt `jajehelp.com` komplett** (307 → `…/ips/block/webcat?cat=40`, TLS-Interception → `SEC_E_UNTRUSTED_ROOT`) UND `cloudfunctions.net` (000). Beweis: `jajehelp.com/main.dart.js|de.json|firebase/*` = 307 (blockiert); `gstatic.com` 200, `google.com` 200, **`lokka-069.web.app` 200** (Firebase-Hosting NICHT geblockt). „Android Studio lokal" = localhost wird nicht gefiltert. Code sauber: **kein Emulator-Wiring** (grep leer), `Firebase.initializeApp` + `usePathUrlStrategy` normal, anonymes Login funktioniert (REST-Test idToken ok).
+**Files Changed:** keine (Diagnose; Code ist nicht die Ursache).
+**Important Decision:** Kein Code-Patch gegen ein Netzwerk-Problem. Fix ist operativ: (a) anderes Netz (mobile Daten) → läuft sofort; (b) auf `lokka-069.web.app` hosten (Firewall erlaubt *.web.app, zudem Auth-authorized + Callable-CORS ok) — Rebuild `--base-href /` + `firebase deploy --only hosting`; ggf. Functions via Hosting-Rewrite same-origin (cloudfunctions.net wird auch geblockt); (c) jajehelp.com im Heusenstamm-Filter whitelisten.
+**Next Useful Step:** User auf mobilen Daten testen lassen (beweist App ok). Bei Bedarf web.app-Deploy einrichten.
+
+---
+
+# GOD PROMPT — 6-Sprint Road to 90% Releasable Web PWA
+
+> Started 2026-06-26 · Branch `main` · Project `lokka-069`. Reports in English per God Prompt rule.
+> This section is the cross-sprint BASELINE + ledger. Every later sprint must not regress the Baseline Inventory below.
+
+## SPRINT 1 — FOUNDATION & ARCHITECTURE AUDIT ✅
+
+### Baseline health (regression anchor)
+- `flutter analyze` = **No issues found!** (0 errors / 0 warnings / 0 infos). This is the regression floor — every later sprint must keep it at 0.
+- Code size: **346 Dart files**, **92 page widgets** under `lib/features/**/pages`.
+- Backend: `functions/` (TS, Node 20, europe-west1) — **17 callables** incl. full NTAG-424 crypto core (`aesCmac`, `ntag424`, `staticToken`, `provisioning`) + godmode/admin. `firestore.rules` = 327 lines, server-authored loyalty.
+- Tests: 8 Dart test files (`comment_model`, `feed_cta_stamp_ad`, `menu_modes`, `merchant_customer_follower`, `order_idempotency`, `stamp_card`, `wallet_code`, `widget_test`). `widget_test.dart` is the broken default scaffold (pre-existing, `[core/no-app]`).
+
+### Route inventory (source of truth = `lib/app/appRouter.dart`)
+- **Public/landing:** `/`, `/godmode`, `/:handle` (catch-all merchant handle, MUST stay last).
+- **Auth:** `/auth/{userLogin,userRegister,merchantLogin,merchantRegister,forgotPassword,merchantForgotPassword,emailVerification,roleGate,chooseRole,merchantPending,demoComingSoon}` + legacy redirects.
+- **User (shell tabs):** `/user/{discover,explore,wallet,profile}` + deep-links `/user/partners/:id`, `/user/stamps/:id`, `/user/feed/:postId` (these 3 are intentionally login-free / shareable).
+- **Public shop (Menükarte):** `/shop/:id`, `/shop/:id/table/:tableId`, `/runner/:id`.
+- **Merchant:** `/merchant/{dashboard,finance,features,shop,menu,customers,stamps(+edit),points(+system/reward edit),catalog(+design,qr,runners),coupons(+edit),orders(+tables,+detail),feed/{create,manage,stamp-ad},tools/*}`.
+- **Coming-soon (deliberate, i18n-backed, NOT dead UI):** `/merchant/{campaigns,shifts,delivery,reservations}` via `MerchantComingSoonPage`. Coupons fully built but intentionally not surfaced (feature toggle off).
+- **Stamp tap:** `/stamp?picc&cmac` (NTAG SUN), `/s/:token` (static Path A).
+- **Claim placeholders:** `/claim/{stamp,campaign,coupon,walletJoin}` → `FoundationPlaceholderPage` (genuine stubs — only reachable via not-yet-issued claim links).
+- **Guards:** `/user/*` needs real (non-anonymous) login except the 3 share prefixes; `/merchant/*` needs login + role==merchant + verificationStatus==approved (cached in `_accessCache`).
+
+### Data model (`firebasePaths.dart`)
+- Top-level: `users`, `merchants`, `publicMerchants`, `feed`, `sticks` (server-only), `merchantRatings`, `contentReports`, `supportTickets`, `merchantInvites`, `aiUsage`, + chooser/system.
+- Per-merchant subcols: `featureConfigs, customers, feedPosts, stampCards, pointsSystems, pointsRewards, coupons, campaigns, orders, items, itemTags, itemCategories, tables, tableAreas, openingHours, appointments, shifts`.
+- Per-user subcols: `walletCards, likedPosts, postInteractions, stampProgress (server-only), pointsProgress (server-only), earnedRewards (server-only), coupons, availableRewards, orders, notifications`.
+- Per-post subcols: `likes, reviews, comments, views, clicks`.
+
+### Architecture decisions FROZEN for this program (do not "fix")
+1. **State management stays Provider/ChangeNotifier — NO Riverpod migration.** The God Prompt suggests "consolidate on Riverpod," but this codebase deliberately and repeatedly chose Provider (documented across 5+ prior sprints, 346 files, ~1100 static-const theme refs). A rewrite = massive regression risk for zero user value. OVERRIDE the prompt here per its own "never regress" + priority rules.
+2. **Shared widgets already unified:** single `PostCard` (feed+profile), single `QuickActionBar`, single card-visual renderer (`StampCardVisual`), single `/stamp` gate, single `OrderStatusStyle`. Sprint-1 dedup goal already largely met by prior work.
+3. **Loyalty is server-authored** (rules deny client writes to stamp/points/earnedRewards). Keep it that way.
+
+### Ranked risk list (what actually blocks 90% release — drives Sprints 2–6)
+1. **⛔ Uncommitted working tree (HIGHEST):** 19 modified + 34 untracked files = essentially ALL recent feature work (stamps, godmode/admin, `functions/`, feed/wallet refactors, post compose) is NOT committed. No clean baseline to regress against; one bad edit risks hours of work. → commit a checkpoint before any sprint touches code.
+2. **🔴 PWA shell is Flutter boilerplate (directly blocks the hosted-Web-PWA target):** `manifest.json` name="lokka"/description="A new Flutter project."/theme_color=#0175C2 (Flutter blue, off-brand); `index.html` description boilerplate, no theme-color meta. → Sprint 2/4.
+3. **🔴 No service-worker caching at all:** `index.html` actively *unregisters* every SW and clears all caches on load (anti-stale hack). Kills PWA offline/install caching + repeat-load perf. Tension to resolve: stale-protection vs. PWA caching. → Sprint 4 (decide: versioned SW cache, no blanket unregister).
+4. **🟠 No code-splitting:** 0 `deferred as` imports across 346 files → one monolithic `main.dart.js`. → Sprint 4 (lazy-load merchant area / godmode / heavy pages).
+5. **🟠 Hosted-vs-local parity already bitten once:** prior log shows NFC link "hangs in login" was a network firewall blocking `jajehelp.com` + self-host Firebase SDK fix. Confirms Sprint 5 must verify on the real hosted origin (prefer `*.web.app`). → Sprint 5.
+6. **🟡 External-only release gates (the human's 10%, cannot be done by AI):** Blaze plan, `STAMP_MASTER_KEY` secret, `firebase deploy --only functions,firestore:rules,firestore:indexes,storage`, NTAG-424 chip programming, real-device matrix, FCM push, legal/content.
+
+### Exit criteria — Sprint 1
+Architecture report ✅ · full route+data inventory ✅ · ranked risk list ✅ · build not broken (analyze 0/0/0) ✅. **No code changed in Sprint 1** (pure audit) → zero regression risk.
+
+> **Scope decision (user, 2026-06-26):** Run **PWA + security only** (Sprints 4 + 6), edit **without a pre-commit checkpoint**. Cosmetic design re-pass (Sprint 2) and full logic walk (Sprints 3/5) deferred by the user. Edits kept surgical + analyze-verified because there is no git safety net.
+
+## SPRINT 4 — PWA SHELL & HOSTING CACHING (scoped) ✅
+
+**Done ✅ (all pure client config — zero Dart, zero flow-risk):**
+- **`web/manifest.json`** — replaced Flutter boilerplate: name "Lokka — Local Deals & Loyalty", short_name "Lokka", real description, `theme_color` `#1FA97E` (brand green, was Flutter blue `#0175C2`), `background_color` `#FAFBF7` (app launch bg). Icons (incl. maskable) kept.
+- **`web/index.html`** — real description meta, added `<meta name="theme-color" content="#1FA97E">`, fixed `<title>` + apple-web-app title to "Lokka", status-bar `black-translucent`.
+- **`firebase.json` hosting `headers`** — added proper `Cache-Control`: shell/entry files (`index.html`, `flutter_bootstrap.js`, `flutter_service_worker.js`, `main.dart.js`, `manifest.json`, `version.json`) → `no-cache, no-store, must-revalidate`; `/firebase/**` (version-pinned SDK) + images/fonts/wasm + `canvaskit`/`assets` → `immutable, max-age=1y`. Fixed header-precedence so root JSON stays revalidated. This is the **real root-cause fix** for the "re-uploaded but browser runs old code" staleness bug. Headers only apply on Firebase Hosting deploys → safe no-op elsewhere. JSON validated.
+
+**Deferred ⏭️ (decision left to user — risk #3):**
+- **Service-worker blanket-unregister in `index.html` NOT removed.** It still unregisters every SW + clears all caches on load → no PWA offline/caching. Rationale: it is the user's current staleness defence on a custom domain (jajehelp.com) where the new `firebase.json` headers do **not** apply unless they deploy via Firebase Hosting. Removing it blind (no commit, in-flux hosting) could resurrect the stale-build bug. **Hand-off:** once on Firebase Hosting (headers active), delete the unregister `<script>` in `web/index.html` body to gain real PWA caching + installability.
+- **Code-splitting (0 deferred imports):** not done — meaningful win but touches many Dart files + go_router builders; out of the surgical, no-safety-net budget for this pass.
+
+## SPRINT 6 — SECURITY GATE ✅ (audit verdict; no blind rule changes)
+
+**Baseline security = already strong.** Verified:
+- **No hardcoded secrets in client.** The Firebase web `apiKey` in `firebase_options.dart` is a public identifier by design (security is in the rules, not key secrecy). No `AIza…`/`secret=` literals elsewhere.
+- **No served mixed content.** Only `http://` hits are URL-scheme *validation* guards, not http loads.
+- **`.env` gitignored + NOT tracked** (no secret in git history). `authDomain` = `lokka-069.firebaseapp.com` ✅.
+- **`firestore.rules` (327 lines):** default-deny (no catch-all allow), server-authored loyalty (stamp/points/earnedRewards write:false), `sticks` server-only, admin override gated on custom claim, guest-order create validated (`validNewOrder`).
+- **`storage.rules`:** owner-scoped write, image+8MB validation, public read (deals app), default-deny.
+- **`/stamp` verification:** CMAC + monotonic counter (replay-proof) + cooldown + best-effort geofence/opening-hours, both NTAG (Path B) and static-token (Path A). Solid.
+
+**Flagged for the human (need emulator-test + `firebase deploy` → the user's gate, NOT changed blind):**
+1. 🟠 `orders` `list: if true` — public order listing leaks PII (names, items). Load-bearing for guest order-tracking; proper fix = anonymous-auth scoping. Documented trade-off.
+2. 🟠 `merchantRatings` `write: if isSignedIn()` — any signed-in user can write aggregate ratings (manipulation). Recommend: move aggregation to a Cloud Function, set `write:false`.
+3. 🟡 `devChecks` `read,write: if isSignedIn()` — dev tool; rule's own TODO says close in prod (`if false`).
+4. 🟡 `chooser` `write: if isSignedIn()` — arrayUnion abuse possible; later restrict to a callable.
+5. 🟡 **App Check not configured** — without it the public apiKey + open callables are reachable by non-app clients (abuse vector). Add for production.
+6. 🟡 `GEOAPIFY_API_KEY` is **bundled into the web build** (`.env` is a pubspec asset) → publicly extractable. Must be HTTP-referrer-restricted in the Geoapify dashboard. Also: stale `CLOUDINARY_*` keys still in local `.env` (Cloudinary removed earlier) — harmless, clean up.
+
+### GO / NO-GO verdict
+**Code/PWA-shell: GO.** Security baseline: **GO with conditions** — the rules are least-privilege except the documented `orders.list`/`merchantRatings` trade-offs, which are deploy-gated decisions for the owner. None are remote-code/secret-leak class.
+
+**Regression vs baseline:** clean — no Dart touched, `flutter analyze` still 0/0/0; JSON configs validated.
+
