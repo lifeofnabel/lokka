@@ -71,7 +71,6 @@ class _UserRegisterPageState extends State<UserRegisterPage> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AuthProvider>();
-    final texts = context.watch<LanguageService>();
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
 
@@ -91,6 +90,7 @@ class _UserRegisterPageState extends State<UserRegisterPage> {
                 controller: _firstName,
                 labelKey: 'auth.firstName',
                 required: true,
+                prefixIcon: Icons.person_outline_rounded,
                 textInputAction: TextInputAction.next,
                 autofillHints: const [AutofillHints.givenName],
                 onSubmitted: (_) => _lastNameFocus.requestFocus(),
@@ -115,6 +115,7 @@ class _UserRegisterPageState extends State<UserRegisterPage> {
           focusNode: _emailFocus,
           labelKey: 'auth.email',
           required: true,
+          prefixIcon: Icons.mail_outline_rounded,
           keyboardType: TextInputType.emailAddress,
           textInputAction: TextInputAction.next,
           autofillHints: const [AutofillHints.email],
@@ -125,6 +126,7 @@ class _UserRegisterPageState extends State<UserRegisterPage> {
           focusNode: _passwordFocus,
           labelKey: 'auth.password',
           required: true,
+          prefixIcon: Icons.lock_outline_rounded,
           obscureText: true,
           textInputAction: TextInputAction.done,
           autofillHints: const [AutofillHints.newPassword],
@@ -177,7 +179,7 @@ class _UserRegisterPageState extends State<UserRegisterPage> {
             ),
             TextButton(
               onPressed: () => context.go('/auth/userLogin'),
-              child: Text(texts.text('auth.login.link')),
+              child: const Text('Einloggen'),
             ),
           ],
         ),

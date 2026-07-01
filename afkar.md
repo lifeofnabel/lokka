@@ -959,3 +959,29 @@ Der Cover-Ausschnitt ist "exakt wie im Profil" nur soweit garantiert, wie die Co
 
 ## Verifikation (Gesamtstand, parallel-Agent + diese Fixes)
 `cd functions && npm run build` (tsc grün) · `npm test` **11/11** · `flutter analyze` **0/0/0** · `flutter build web --release` **√**.
+
+---
+
+# Godmode: setState/Future-Crash + Inventar-Performance (2026-07-02)
+
+## Bug 1 — `setState() callback argument returned a Future`
+**Root Cause:** Das Muster `setState(() => _future = f)` ist eine Dart-Falle: eine Pfeilfunktion `() => x = future` gibt den WERT der Zuweisung zurück — und der ist das Future-Objekt selbst. `setState` erwartet `void Function()`; zur Laufzeit prüft es den Rückgabewert und wirft im Debug/Profile-Modus (assert-basiert, in Release stumm). Betraf **7 Stellen**: `adminUsersPage.dart` (Händler-Tab, Nutzer-Tab), `adminModerationPage.dart` (Beiträge, Meldungen), `adminRegistryPage.dart` (Stifte, Stempelkarten), `adminStickWorkshopPage.dart` (Inventar).
+**Fix:** überall auf Block-Body `setState(() { _future = f; });` umgestellt (Zuweisung, kein Rückgabewert).
+
+## Bug 2 — Inventar lädt sehr langsam
+**Root Cause:** Alle anderen Admin-Listen (Händler/Nutzer/Moderation/Register-Stempelkarten) lesen **direkt via Firestore-SDK** (`AdminDataService`) — schnell, weil Admin-Accounts laut `firestore.rules` (`match /{document=**} { allow read, write: if isAdmin(); }`) ohnehin Vollzugriff haben. Das Stift-Inventar ging stattdessen über den Cloud-Function-Callable `adminListSticks` — bei jedem Öffnen ein Netzwerk-Hop + Cold-Start-Latenz (Cloud Run), unnötig da der Rules-Override längst Direktzugriff erlaubt.
+**Fix:**
+- `AdminDataService.listSticks()` (neuer direkter Read: `sticks` Collection, orderBy updatedAt, limit).
+- `StickInventoryItem.fromDoc(AdminDoc)` (neue Factory, verarbeitet Firestore-`Timestamp` statt Millis-Int; gleiche bound/verified-Ableitung wie vorher server-seitig).
+- `adminStickWorkshopPage.dart` (Werkstatt→Inventar) + `adminRegistryPage.dart` (Register→Stifte) beide auf `widget.data.listSticks()` umgestellt.
+- **Toter Code entfernt:** `AdminService.listSticks()` (Client), `StickInventoryItem.fromMap`, Cloud Function `adminListSticks` + Helper `toMillis` (admin.ts) + `index.ts`-Export — sowie der jetzt ungenutzte `AdminService`-Parameter aus `AdminRegistryPage`/`_SticksTab` (nur noch `AdminDataService` nötig).
+- `adminDeleteStick` bleibt bewusst als Cloud Function (seltener genutzt, Delete-Latenz nicht der gemeldete Schmerzpunkt).
+
+## Verifikation
+`cd functions && npm run build` (tsc grün, `toMillis` korrekt mitentfernt wegen `noUnusedLocals`) · `flutter analyze` **0/0/0** · `flutter build web --release` (läuft/läuft durch).
+
+## Hinweis: STAMP_MASTER_KEY
+User hatte lokal schon Stifte erzeugt → Secret ist gesetzt, NICHT neu setzen (würde alle bereits signierten Links ungültig machen). Nur `firebase deploy --only functions` nötig, damit `adminDeleteStick` + die entfernten `adminListSticks`-Aufräumarbeiten live sind.
+
+## Nächster Schritt für den User
+`firebase deploy --only functions` (nimmt automatisch das gesetzte Secret) → dann `flutter build web --base-href "/lokka/"` + Hosting-Deploy, wie beim letzten Mal.

@@ -51,11 +51,6 @@ function requireAdmin(req: CallableRequest): string {
   return uid;
 }
 
-const toMillis = (v: unknown): number | null => {
-  const t = v as { toMillis?: () => number } | undefined;
-  return t && typeof t.toMillis === 'function' ? t.toMillis() : null;
-};
-
 // ─────────────────────────────────────────────────────────────────────────────
 //  Bootstrap — one-time, idempotent. The owner (signed in as the verified
 //  BOOTSTRAP_ADMIN_EMAIL) grants themselves the admin custom claim. No password
@@ -128,36 +123,6 @@ export const adminMintStaticSticks = onCall(
     return { sticks };
   },
 );
-
-// ─────────────────────────────────────────────────────────────────────────────
-//  Stick register — list the inventory (newest first) for the Godmode panel.
-// ─────────────────────────────────────────────────────────────────────────────
-export const adminListSticks = onCall({ cors: true }, async (req) => {
-  requireAdmin(req);
-  const limit = Math.max(1, Math.min(500, Math.floor(Number(req.data?.limit) || 200)));
-  const db = getFirestore();
-  const snap = await db
-    .collection('sticks')
-    .orderBy('updatedAt', 'desc')
-    .limit(limit)
-    .get();
-
-  const sticks = snap.docs.map((d) => {
-    const s = d.data();
-    return {
-      stickId: d.id,
-      type: String(s.type ?? ''),
-      bound: s.bound === true || (!!s.boundMerchantId && !!s.boundCardId),
-      boundMerchantId: s.boundMerchantId ? String(s.boundMerchantId) : '',
-      boundCardId: s.boundCardId ? String(s.boundCardId) : '',
-      note: String(s.note ?? ''),
-      verified: !!s.verifiedAt,
-      createdAt: toMillis(s.createdAt),
-      lastTapAt: toMillis(s.lastTapAt),
-    };
-  });
-  return { sticks };
-});
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Delete a stick from the register. If it was bound to a card, the badge is

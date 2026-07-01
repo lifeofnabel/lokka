@@ -399,6 +399,7 @@
   "auth.error.invalidCredentials": "Email oder Passwort ist nicht korrekt.",
   "auth.error.emailInUse": "Diese Email wird bereits verwendet.",
   "auth.error.notMerchantAccount": "Dieses Konto ist kein Geschäftskonto.",
+  "auth.error.notUserAccount": "Dieses Konto ist ein Händlerkonto. Bitte nutze den Händler-Login.",
   "auth.error.googleRequired": "Bitte melde dich zuerst mit Google an.",
   "auth.error.signInAgain": "Bitte melde dich erneut an.",
   "auth.error.googleCancelled": "Google Anmeldung wurde abgebrochen.",

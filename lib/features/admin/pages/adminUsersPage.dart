@@ -70,7 +70,9 @@ class _MerchantsTabState extends State<_MerchantsTab> {
       final all = await widget.data.listMerchants();
       return _MerchantBundle(pending, all);
     }();
-    setState(() => _future = f);
+    setState(() {
+      _future = f;
+    });
     return f;
   }
 
@@ -258,7 +260,9 @@ class _UsersTabState extends State<_UsersTab> {
 
   Future<void> _reload() {
     final f = widget.data.listUsers();
-    setState(() => _future = f);
+    setState(() {
+      _future = f;
+    });
     return f;
   }
 

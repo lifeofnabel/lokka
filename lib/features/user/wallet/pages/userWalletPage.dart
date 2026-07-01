@@ -292,7 +292,7 @@ class _CounterRow extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+      padding: const EdgeInsets.only(top: 2, bottom: 2),
       child: Text(
         '${index.clamp(0, count - 1) + 1} / $count',
         style: tt.labelMedium?.copyWith(

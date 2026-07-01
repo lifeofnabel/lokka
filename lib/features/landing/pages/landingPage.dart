@@ -2,8 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../../../core/appVersion.dart';
 import '../../../core/services/languageService.dart';
+import '../../../core/services/pwaInstall.dart';
 import '../../../core/theme/appColors.dart';
+import '../../../core/widgets/pressableScale.dart';
+import '../../../core/widgets/staggerIn.dart';
+import '../../user/profile/pages/privacyPolicyPage.dart';
 import '../services/landingCookieStorage.dart';
 
 /// Landing (Page 1) – Google-Home / Material 3. Zentriert, ruhig, eine klare
@@ -79,15 +84,22 @@ class _LandingPageState extends State<LandingPage> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              _BrandHeader(appName: texts.text('app.name')),
+                              StaggerIn(
+                                index: 0,
+                                child: _BrandHeader(
+                                    appName: texts.text('app.name')),
+                              ),
                               SizedBox(height: compact ? 26 : 40),
-                              const _Hero(),
+                              const StaggerIn(index: 1, child: _Hero()),
                               SizedBox(height: compact ? 24 : 36),
-                              _PrimaryActions(
-                                loginText: texts.text('landing.login'),
-                                onRegister: () =>
-                                    context.go('/auth/userRegister'),
-                                onLogin: () => context.go('/auth/userLogin'),
+                              StaggerIn(
+                                index: 2,
+                                child: _PrimaryActions(
+                                  loginText: texts.text('landing.login'),
+                                  onRegister: () =>
+                                      context.go('/auth/userRegister'),
+                                  onLogin: () => context.go('/auth/userLogin'),
+                                ),
                               ),
                               SizedBox(height: compact ? 24 : 32),
                               const _SectionLabel('Mehr erfahren'),
@@ -195,6 +207,34 @@ class _Hero extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Container(
+          width: 88,
+          height: 88,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            gradient: AppColors.mintGradientSoft,
+            borderRadius: BorderRadius.circular(26),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.accent.withValues(alpha: 0.20),
+                blurRadius: 24,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: Image.asset(
+            'assets/logo.png',
+            height: 44,
+            color: AppColors.greenDeep,
+            colorBlendMode: BlendMode.srcIn,
+            errorBuilder: (_, _, _) => const Icon(
+              Icons.local_activity_rounded,
+              color: AppColors.greenDeep,
+              size: 40,
+            ),
+          ),
+        ),
+        const SizedBox(height: 18),
+        Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
           decoration: BoxDecoration(
             color: cs.secondaryContainer,
@@ -221,7 +261,7 @@ class _Hero extends StatelessWidget {
         ),
         const SizedBox(height: 14),
         Text(
-          'Entdecke Shops in deiner Nähe, sammle Stempel und sichere dir Vorteile – alles an einem Ort.',
+          'Shops entdecken. Stempel sammeln. Vorteile sichern.',
           textAlign: TextAlign.center,
           style: tt.bodyLarge?.copyWith(
             color: cs.onSurfaceVariant,
@@ -251,14 +291,18 @@ class _PrimaryActions extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        FilledButton(
-          onPressed: onRegister,
-          child: const Text('Konto erstellen'),
+        PressableScale(
+          child: FilledButton(
+            onPressed: onRegister,
+            child: const Text('Konto erstellen'),
+          ),
         ),
         const SizedBox(height: 10),
-        OutlinedButton(
-          onPressed: onLogin,
-          child: Text(loginText.isEmpty ? 'Anmelden' : loginText),
+        PressableScale(
+          child: OutlinedButton(
+            onPressed: onLogin,
+            child: Text(loginText.isEmpty ? 'Anmelden' : loginText),
+          ),
         ),
       ],
     );
@@ -357,7 +401,18 @@ class _LinkTile extends StatelessWidget {
   }
 }
 
-// ── Platform chips (App Store / Play Store öffnen Hinweis-Sheet) ─────────────
+// ── Platform chips (App Store / Play Store: echter Install-Prompt, sonst
+//    Hinweis-Sheet als Fallback) ──────────────────────────────────────────
+
+/// Tries the browser's native "Add to Home Screen" prompt first; only falls
+/// back to the instructions sheet when the browser never offered one (e.g.
+/// iOS Safari, or the app is already installed).
+Future<void> _handleInstallTap(BuildContext context) async {
+  final outcome = await promptPwaInstall();
+  if (outcome == 'unavailable') {
+    if (context.mounted) _showStoreSheet(context);
+  }
+}
 
 class _PlatformLine extends StatelessWidget {
   const _PlatformLine();
@@ -373,12 +428,12 @@ class _PlatformLine extends StatelessWidget {
         _PlatformChip(
           icon: Icons.apple_rounded,
           text: 'App Store',
-          onTap: () => _showStoreSheet(context),
+          onTap: () => _handleInstallTap(context),
         ),
         _PlatformChip(
           icon: Icons.android_rounded,
           text: 'Play Store',
-          onTap: () => _showStoreSheet(context),
+          onTap: () => _handleInstallTap(context),
         ),
       ],
     );
@@ -395,13 +450,15 @@ class _PlatformChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return ActionChip(
-      avatar: Icon(icon, size: 16, color: cs.onSurfaceVariant),
-      label: Text(text),
-      backgroundColor: AppColors.surfaceGray,
-      side: BorderSide(color: cs.outlineVariant),
-      visualDensity: VisualDensity.compact,
-      onPressed: onTap ?? () {},
+    return PressableScale(
+      child: ActionChip(
+        avatar: Icon(icon, size: 16, color: cs.onSurfaceVariant),
+        label: Text(text),
+        backgroundColor: AppColors.surfaceGray,
+        side: BorderSide(color: cs.outlineVariant),
+        visualDensity: VisualDensity.compact,
+        onPressed: onTap ?? () {},
+      ),
     );
   }
 }
@@ -418,26 +475,37 @@ class _BusinessLink extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     return Center(
-      child: TextButton(
-        onPressed: onTap,
-        child: RichText(
-          textAlign: TextAlign.center,
-          text: TextSpan(
-            style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
-            children: [
-              const TextSpan(text: 'Geschäftlich?  '),
-              TextSpan(
-                text: 'Für Händler einloggen',
-                style: tt.bodyMedium?.copyWith(
-                  color: cs.primary,
-                  fontWeight: FontWeight.w600,
+      child: PressableScale(
+        child: Material(
+        color: cs.secondaryContainer,
+        borderRadius: BorderRadius.circular(100),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(100),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.storefront_rounded,
+                    size: 18, color: cs.onSecondaryContainer),
+                const SizedBox(width: 8),
+                Text(
+                  'Für Händler einloggen',
+                  style: tt.bodyMedium?.copyWith(
+                    color: cs.onSecondaryContainer,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(width: 4),
+                Icon(Icons.chevron_right_rounded,
+                    size: 18, color: cs.onSecondaryContainer),
+              ],
+            ),
           ),
         ),
       ),
-    );
+    ));
   }
 }
 
@@ -456,9 +524,22 @@ class _Footer extends StatelessWidget {
         onTap: () => context.go('/godmode'),
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
-          child: Text(
-            'powered by Jajehelp',
-            style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'powered by Jajehelp',
+                style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                kAppVersion,
+                style: tt.labelSmall?.copyWith(
+                  color: cs.onSurfaceVariant.withValues(alpha: 0.6),
+                  fontSize: 10,
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -496,7 +577,7 @@ class _StoreSheet extends StatelessWidget {
               borderRadius: BorderRadius.circular(20),
             ),
             child: Text(
-              'Bis dahin läuft Lokka als Web-App auf jedem Gerät – ganz ohne Installation. Für ein App-Gefühl kannst du Lokka zum Startbildschirm hinzufügen:',
+              'Läuft schon als Web-App, kein Store nötig. Fürs App-Gefühl: zum Startbildschirm hinzufügen.',
               style: tt.bodyMedium
                   ?.copyWith(color: cs.onSurfaceVariant, height: 1.5),
             ),
@@ -514,9 +595,11 @@ class _StoreSheet extends StatelessWidget {
             body: 'Menü ⋮ → „Zum Startbildschirm hinzufügen".',
           ),
           const SizedBox(height: 22),
-          FilledButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Verstanden'),
+          PressableScale(
+            child: FilledButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Verstanden'),
+            ),
           ),
         ],
       ),
@@ -616,11 +699,11 @@ class _HowItWorksSheet extends StatelessWidget {
     ('Wallet – alles an einem Ort', Icons.account_balance_wallet_rounded),
     ('Partner folgen & bewerten', Icons.storefront_rounded),
     ('Favoriten speichern', Icons.favorite_rounded),
+    ('Speisekarten & Tischwahl', Icons.restaurant_menu_rounded),
   ];
 
   static const _soon = [
     ('Native Apps (App Store & Play Store)', Icons.phone_iphone_rounded),
-    ('Speisekarten & Tischwahl', Icons.restaurant_menu_rounded),
     ('Catering-Anfragen', Icons.room_service_rounded),
     ('Mehrsprachigkeit', Icons.translate_rounded),
   ];
@@ -645,9 +728,11 @@ class _HowItWorksSheet extends StatelessWidget {
             available: false,
           ),
           const SizedBox(height: 22),
-          FilledButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Verstanden'),
+          PressableScale(
+            child: FilledButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Verstanden'),
+            ),
           ),
         ],
       ),
@@ -714,7 +799,7 @@ class _AboutSheet extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     return _SheetScaffold(
       title: 'Über Lokka',
-      subtitle: 'Für kleine Läden, die sichtbar bleiben wollen.',
+      subtitle: 'Deals entdecken. Stempel sammeln. Lokal bleiben.',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -732,15 +817,37 @@ class _AboutSheet extends StatelessWidget {
           ),
           const SizedBox(height: 18),
           Text(
-            'Lokka verbindet Kunden mit lokalen Shops – ohne Papierkarten, ohne Chaos, ohne Umwege. Mehr Wiederkommen, mehr Nähe. Ein Produkt von Jajehelp.',
+            'Lokka zeigt dir Deals und Aktionen von Shops in deiner Nähe, sammelt deine Stempelkarten digital und merkt sich deine Lieblingsläden – ohne Papierkram.',
             textAlign: TextAlign.center,
             style: tt.bodyMedium
                 ?.copyWith(color: cs.onSurfaceVariant, height: 1.5),
           ),
-          const SizedBox(height: 22),
-          FilledButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Schließen'),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceGray,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              'Gebaut von einem angehenden Informatiker, der selbst in Gastro und Einzelhandel gearbeitet hat – und wusste: Das geht einfacher.',
+              textAlign: TextAlign.center,
+              style: tt.bodyMedium
+                  ?.copyWith(color: cs.onSurfaceVariant, height: 1.5),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Ein Produkt von Jajehelp.',
+            textAlign: TextAlign.center,
+            style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
+          ),
+          const SizedBox(height: 18),
+          PressableScale(
+            child: FilledButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Schließen'),
+            ),
           ),
         ],
       ),
@@ -793,30 +900,60 @@ class _CookieBox extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 8),
-                Text(
-                  'Wir nutzen Cookies, damit Lokka sauber läuft und besser wird.',
+                Text.rich(
+                  TextSpan(
+                    children: [
+                      const TextSpan(
+                        text:
+                            'Wir nutzen Cookies, damit Lokka sauber läuft und besser wird. ',
+                      ),
+                      WidgetSpan(
+                        alignment: PlaceholderAlignment.baseline,
+                        baseline: TextBaseline.alphabetic,
+                        child: GestureDetector(
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const PrivacyPolicyPage(),
+                            ),
+                          ),
+                          child: Text(
+                            'Mehr dazu',
+                            style: tt.bodySmall?.copyWith(
+                              color: cs.primary,
+                              fontWeight: FontWeight.w600,
+                              decoration: TextDecoration.underline,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                   style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                 ),
                 const SizedBox(height: 14),
                 Row(
                   children: [
                     Expanded(
-                      child: OutlinedButton(
-                        onPressed: onReject,
-                        style: OutlinedButton.styleFrom(
-                          minimumSize: const Size.fromHeight(44),
+                      child: PressableScale(
+                        child: OutlinedButton(
+                          onPressed: onReject,
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size.fromHeight(44),
+                          ),
+                          child: const Text('Ablehnen'),
                         ),
-                        child: const Text('Ablehnen'),
                       ),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
-                      child: FilledButton(
-                        onPressed: onAccept,
-                        style: FilledButton.styleFrom(
-                          minimumSize: const Size.fromHeight(44),
+                      child: PressableScale(
+                        child: FilledButton(
+                          onPressed: onAccept,
+                          style: FilledButton.styleFrom(
+                            minimumSize: const Size.fromHeight(44),
+                          ),
+                          child: const Text('Akzeptieren'),
                         ),
-                        child: const Text('Akzeptieren'),
                       ),
                     ),
                   ],

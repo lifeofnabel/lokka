@@ -45,7 +45,9 @@ class _PostsTabState extends State<_PostsTab> {
 
   Future<void> _reload() {
     final f = widget.data.recentPosts();
-    setState(() => _future = f);
+    setState(() {
+      _future = f;
+    });
     return f;
   }
 
@@ -173,7 +175,9 @@ class _ReportsTabState extends State<_ReportsTab> {
 
   Future<void> _reload() {
     final f = widget.data.recentReports();
-    setState(() => _future = f);
+    setState(() {
+      _future = f;
+    });
     return f;
   }
 

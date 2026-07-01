@@ -349,6 +349,9 @@ class StampCardModel {
       'boundStickId': boundStickId,
       // Preserved across full-replace saves so the prepared link is never lost.
       'staticToken': staticToken,
+      // Stift-Metadaten mitschreiben, damit ein späteres Speichern/Veröffentlichen
+      // die verbundenen Stift-Infos (Typ + Verifiziert-Zeitpunkt) nicht löscht.
+      'stickType': stickType,
       'backgroundColor': backgroundColor,
       'gradientColor': gradientColor,
       'gradientEnabled': gradientEnabled,
@@ -364,6 +367,8 @@ class StampCardModel {
       'status': status,
       'isActive': isActive,
       'isArchived': isArchived,
+      if (stickVerifiedAt != null)
+        'stickVerifiedAt': Timestamp.fromDate(stickVerifiedAt!),
       if (createdAt != null) 'createdAt': Timestamp.fromDate(createdAt!),
       if (updatedAt != null) 'updatedAt': Timestamp.fromDate(updatedAt!),
       if (publishedAt != null) 'publishedAt': Timestamp.fromDate(publishedAt!),

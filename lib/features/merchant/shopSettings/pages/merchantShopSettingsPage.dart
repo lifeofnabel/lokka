@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:cached_network_image/cached_network_image.dart';
@@ -210,11 +211,19 @@ class _ShopFormState extends State<_ShopForm> {
   bool _filled = false;
   bool _hydrating = false;
 
-  // Geoapify-Vorschau (Task 5): zeigt die gespeicherte Adresse + Koordinaten.
+  // Geoapify: Koordinaten werden automatisch berechnet, sobald die Adresse
+  // vollständig ist (kein Button-Klick mehr). Angezeigt wird nur eine kurze
+  // Zeile unter „Land" (Adresse + Koordinaten).
   bool _geoLoading = false;
   bool _geoResolved = false;
   bool _geoNoKey = false;
   GeoResult? _geoResult;
+  Timer? _geoDebounce;
+  // Gespeicherte Koordinaten aus der Datenbank → sofort anzeigbar ohne API-Call
+  // beim Öffnen. Werden verworfen, sobald der Merchant die Adresse ändert.
+  double? _savedLat;
+  double? _savedLng;
+  String _savedFormatted = '';
 
   @override
   void initState() {
@@ -303,12 +312,26 @@ class _ShopFormState extends State<_ShopForm> {
     if (_hydrating) return;
     if (!mounted) return;
     setState(() {
-      // Aufgelöstes Ergebnis ist nicht mehr gültig, sobald die Adresse
-      // bearbeitet wird – die Live-Query (Zeile 1) bleibt aber sichtbar.
+      // Bisheriges Ergebnis (auch das gespeicherte) ist stale, sobald die
+      // Adresse bearbeitet wird.
       _geoResolved = false;
       _geoResult = null;
+      _savedLat = null;
+      _savedLng = null;
+    });
+    // Automatisch neu berechnen, sobald der Nutzer kurz nicht mehr tippt und die
+    // Adresse vollständig genug ist (kein „Vorschau"-Button mehr).
+    _geoDebounce?.cancel();
+    _geoDebounce = Timer(const Duration(milliseconds: 900), () {
+      if (mounted && _addressResolvable()) _resolveGeo();
     });
   }
+
+  /// Adresse hat genug Bestandteile für ein sinnvolles Geocoding.
+  bool _addressResolvable() =>
+      street.text.trim().isNotEmpty &&
+      postalCode.text.trim().isNotEmpty &&
+      city.text.trim().isNotEmpty;
 
   /// Query-String, der exakt so an Geoapify geht (vgl. forwardGeocode).
   String _geoQuery() {
@@ -352,8 +375,50 @@ class _ShopFormState extends State<_ShopForm> {
     });
   }
 
+  /// Kurze Adresse + Koordinaten-Zeile unter „Land" (klein). Zeigt das frisch
+  /// berechnete Ergebnis, sonst die gespeicherten Werte, sonst nichts. Nur die
+  /// Daten, die den Merchant interessieren.
+  Widget _geoLine(LanguageService texts) {
+    const small = TextStyle(fontSize: 12, fontWeight: FontWeight.w800);
+    if (_geoLoading) {
+      return Row(
+        children: [
+          const SizedBox(
+              width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2)),
+          const SizedBox(width: 8),
+          Text('Adresse wird geprüft …',
+              style: small.copyWith(color: MerchantPremiumColors.muted)),
+        ],
+      );
+    }
+    final r = _geoResult;
+    if (r != null) {
+      return Text(
+        '${r.formatted} + ${r.lat.toStringAsFixed(5)}, ${r.lng.toStringAsFixed(5)}',
+        style: small.copyWith(color: MerchantPremiumColors.success),
+      );
+    }
+    if (_savedLat != null && _savedLng != null) {
+      final where = _savedFormatted.isNotEmpty ? _savedFormatted : _geoQuery();
+      return Text(
+        '$where + ${_savedLat!.toStringAsFixed(5)}, ${_savedLng!.toStringAsFixed(5)}',
+        style: small.copyWith(color: MerchantPremiumColors.success),
+      );
+    }
+    if (_geoResolved) {
+      return Text(
+        _geoNoKey
+            ? 'Kein Geoapify-Key geladen – App neu builden.'
+            : texts.text('merchant.shop.geoNotFound'),
+        style: small.copyWith(color: MerchantPremiumColors.warning),
+      );
+    }
+    return const SizedBox.shrink();
+  }
+
   @override
   void dispose() {
+    _geoDebounce?.cancel();
     widget.saveBar.onSave = null;
     for (final controller in _allControllers) {
       controller.dispose();
@@ -383,11 +448,6 @@ class _ShopFormState extends State<_ShopForm> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _ShopTopper(
-          title: texts.text('merchant.shop.title'),
-          subtitle: texts.text('merchant.shop.subtitle'),
-        ),
-        const SizedBox(height: AppSpacing.md),
         _ShopHero(
           shopName: shopName.text,
           city: city.text.trim(),
@@ -481,15 +541,8 @@ class _ShopFormState extends State<_ShopForm> {
                 ),
               ],
             ),
-            const SizedBox(height: AppSpacing.md),
-            _GeoPreview(
-              noKey: _geoNoKey,
-              query: _geoQuery(),
-              resolved: _geoResolved,
-              loading: _geoLoading,
-              result: _geoResult,
-              onResolve: _resolveGeo,
-            ),
+            const SizedBox(height: AppSpacing.sm),
+            _geoLine(texts),
           ],
         ),
         _SectionCard(
@@ -506,9 +559,6 @@ class _ShopFormState extends State<_ShopForm> {
               selected: selectedShopTypes,
               onToggle: _toggleShopType,
             ),
-            const SizedBox(height: AppSpacing.sm),
-            // Nur Auswahl aus dem Bestand – Wunsch fehlt? Hinweis zum Support.
-            const _MissingOptionHint(),
             const SizedBox(height: AppSpacing.lg),
             const Text('Herkunft', style: TextStyle(color: AppColors.gray500, fontWeight: FontWeight.w700)),
             const SizedBox(height: 4),
@@ -685,16 +735,26 @@ class _ShopFormState extends State<_ShopForm> {
     houseNumber.text = data['houseNumber']?.toString() ?? '';
     postalCode.text = data['postalCode']?.toString() ?? '';
     city.text = data['city']?.toString() ?? '';
+    // Gespeicherte Koordinaten sofort anzeigbar machen (kein API-Call beim
+    // Öffnen); die kurze Zeile unter „Land" nutzt sie.
+    _savedLat = (data['lat'] as num?)?.toDouble();
+    _savedLng = (data['lng'] as num?)?.toDouble();
+    final addressData = data['addressData'];
+    _savedFormatted = (data['formattedAddress'] ??
+            (addressData is Map ? addressData['formattedAddress'] : null) ??
+            '')
+        .toString();
     logoUrl.text = data['logoUrl']?.toString() ?? '';
     coverUrl.text = data['coverUrl']?.toString() ?? '';
 
-    // Social-Links (Map mit website/instagram/tiktok/facebook).
+    // Social-Links werden als volle URLs gespeichert, hier aber nur als
+    // Benutzername/Domain angezeigt (der volle Link lebt in der Datenbank).
     final socials = data['socialLinks'];
     if (socials is Map) {
-      website.text = socials['website']?.toString() ?? '';
-      instagram.text = socials['instagram']?.toString() ?? '';
-      tiktok.text = socials['tiktok']?.toString() ?? '';
-      facebook.text = socials['facebook']?.toString() ?? '';
+      website.text = _socialHandle('website', socials['website']?.toString() ?? '');
+      instagram.text = _socialHandle('instagram', socials['instagram']?.toString() ?? '');
+      tiktok.text = _socialHandle('tiktok', socials['tiktok']?.toString() ?? '');
+      facebook.text = _socialHandle('facebook', socials['facebook']?.toString() ?? '');
     }
 
     // Galerie: bis zu 5 Fotos; ein bestehendes Cover, das nicht in der
@@ -804,13 +864,14 @@ class _ShopFormState extends State<_ShopForm> {
         ...selectedOrigins,
       }.toList();
 
-  /// Lädt ein Galerie-Foto hoch – jedes Shop-Bild wird vorher auf 1:1
-  /// zugeschnitten (Square-Crop-Sheet). Das erste Foto wird automatisch
-  /// zum Cover, falls noch keins gewählt ist.
+  /// Lädt ein Galerie-Foto hoch – OHNE manuelles Zuschneiden (Shop-Bilder sollen
+  /// schnell rein; das Beschneiden bleibt Beiträgen und dem Logo vorbehalten).
+  /// Der UploadService optimiert die Datei weiterhin automatisch. Das erste Foto
+  /// wird zum Cover, falls noch keins gewählt ist.
   Future<void> _addGalleryImage(MerchantShopProvider provider) async {
     if (_galleryUploading || galleryImages.length >= _maxGalleryImages) return;
     setState(() => _galleryUploading = true);
-    final url = await _pickCropUploadSquare(provider, UploadImageType.item);
+    final url = await _pickUploadNoCrop(provider, UploadImageType.item);
     if (!mounted) return;
     setState(() {
       _galleryUploading = false;
@@ -870,10 +931,30 @@ class _ShopFormState extends State<_ShopForm> {
       imageBytes: picked.bytes,
     );
     if (cropped == null || !mounted) return null;
+    return _uploadBytes(provider, cropped, picked.fileName, type);
+  }
+
+  /// Wählt ein Bild und lädt es DIREKT hoch – ohne Zuschneide-Sheet. Für
+  /// Shop-Galerie-Bilder gedacht.
+  Future<String?> _pickUploadNoCrop(
+    MerchantShopProvider provider,
+    UploadImageType type,
+  ) async {
+    final picked = await provider.uploadService.pickImageWithFilePicker();
+    if (picked == null || !mounted) return null;
+    return _uploadBytes(provider, picked.bytes, picked.fileName, type);
+  }
+
+  Future<String?> _uploadBytes(
+    MerchantShopProvider provider,
+    Uint8List bytes,
+    String fileName,
+    UploadImageType type,
+  ) async {
     try {
-      final media = await uploadService.uploadOptimizedImageBytes(
-        bytes: cropped,
-        fileName: picked.fileName,
+      final media = await provider.uploadService.uploadOptimizedImageBytes(
+        bytes: bytes,
+        fileName: fileName,
         type: type,
       );
       final url = media.secureUrl.isNotEmpty ? media.secureUrl : media.url;
@@ -1343,7 +1424,10 @@ class _ShopHero extends StatelessWidget {
                             width: 64,
                             height: 64,
                             decoration: BoxDecoration(
-                              color: MerchantPremiumColors.surface,
+                              // Passende Farbe aus dem Shopnamen: füllt den Kreis
+                              // auch dann sauber, wenn kein Logo da ist oder das
+                              // Logo transparente Stellen hat (PNG) → nie „leer".
+                              color: _avatarColor(shopName),
                               borderRadius: BorderRadius.circular(24),
                               border: Border.all(color: Colors.white, width: 3),
                             ),
@@ -1357,7 +1441,16 @@ class _ShopHero extends StatelessWidget {
                                     ),
                                   )
                                 : logoUrl.isEmpty
-                                    ? Center(child: Text(_initials(shopName), style: const TextStyle(fontWeight: FontWeight.w900)))
+                                    ? Center(
+                                        child: Text(
+                                          _initials(shopName),
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 24,
+                                            fontWeight: FontWeight.w900,
+                                          ),
+                                        ),
+                                      )
                                     : CachedNetworkImage(imageUrl: logoUrl, fit: BoxFit.cover),
                           ),
                           // Kleiner Stift-Badge signalisiert „antippbar".
@@ -1929,170 +2022,6 @@ class _GalleryGrid extends StatelessWidget {
   }
 }
 
-/// Einziger, ruhiger Topper für die Seite (ersetzt den doppelten Titel).
-class _ShopTopper extends StatelessWidget {
-  const _ShopTopper({required this.title, required this.subtitle});
-
-  final String title;
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(2, 0, 2, 2),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: const TextStyle(
-              color: MerchantPremiumColors.surface,
-              fontSize: 28,
-              fontWeight: FontWeight.w900,
-              height: 1.02,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            subtitle,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: MerchantPremiumColors.mutedLight,
-              height: 1.35,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Kleine Vorschau dessen, was an Geoapify geht (Query) und was zurückkommt
-/// (formatierte Adresse + Koordinaten). Mini-Button löst das Geocoding aus.
-class _GeoPreview extends StatelessWidget {
-  const _GeoPreview({
-    required this.query,
-    required this.resolved,
-    required this.loading,
-    required this.result,
-    required this.onResolve,
-    this.noKey = false,
-  });
-
-  final String query;
-  final bool resolved;
-  final bool loading;
-  final GeoResult? result;
-  final VoidCallback onResolve;
-  final bool noKey;
-
-  @override
-  Widget build(BuildContext context) {
-    final texts = context.watch<LanguageService>();
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.sm),
-      decoration: BoxDecoration(
-        color: MerchantPremiumColors.surfaceAlt,
-        borderRadius: BorderRadius.circular(AppRadius.large),
-        border: Border.all(color: MerchantPremiumColors.line),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.travel_explore_rounded, size: 15, color: MerchantPremiumColors.muted),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  texts.text('merchant.shop.geoTitle'),
-                  style: const TextStyle(
-                    color: MerchantPremiumColors.muted,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 0.2,
-                  ),
-                ),
-              ),
-              // Mini-Mini-Button: löst forwardGeocode aus.
-              SizedBox(
-                width: 34,
-                height: 34,
-                child: IconButton(
-                  padding: EdgeInsets.zero,
-                  tooltip: texts.text('merchant.shop.geoResolve'),
-                  iconSize: 18,
-                  onPressed: loading ? null : onResolve,
-                  icon: loading
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.my_location_rounded, color: MerchantPremiumColors.ink),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          // Zeile 1: Query, die live aus den Feldern gebaut wird.
-          Text(
-            query.isEmpty ? '—' : query,
-            style: const TextStyle(
-              color: MerchantPremiumColors.ink,
-              fontSize: 13,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          // Zeile 2: aufgelöstes Ergebnis (nach Tippen des Mini-Buttons).
-          if (resolved) ...[
-            const SizedBox(height: 6),
-            if (result == null)
-              Row(
-                children: [
-                  const Icon(Icons.error_outline_rounded, size: 14, color: MerchantPremiumColors.warning),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      noKey
-                          ? 'Kein Geoapify-Key geladen – .env wird beim Build gebündelt: App komplett neu starten/builden.'
-                          : texts.text('merchant.shop.geoNotFound'),
-                      style: const TextStyle(
-                        color: MerchantPremiumColors.warning,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                ],
-              )
-            else
-              Text(
-                '${result!.formatted}  →  ${result!.lat.toStringAsFixed(5)}, ${result!.lng.toStringAsFixed(5)}',
-                style: const TextStyle(
-                  color: MerchantPremiumColors.success,
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-          ],
-          const SizedBox(height: 6),
-          Text(
-            texts.text('merchant.shop.geoHint'),
-            style: const TextStyle(
-              color: MerchantPremiumColors.muted,
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 /// Kompakte Wochenübersicht der Öffnungszeiten (read-only Summary-Zeilen).
 class _OpeningHoursSummary extends StatelessWidget {
   const _OpeningHoursSummary({required this.lines});
@@ -2352,28 +2281,64 @@ class _FeaturesNavTile extends StatelessWidget {
   }
 }
 
-/// Erweitert Social-Eingaben beim Speichern zu vollen URLs:
-/// - bereits volle http(s)-URLs bleiben unverändert
-/// - Website ohne Schema bekommt nur das https://-Präfix
-/// - 'name' oder '@name' wird zur Plattform-URL (Instagram/TikTok/Facebook)
-/// - Domain-/Pfad-Eingaben (z. B. 'instagram.com/name') nur Schema ergänzen
-String _expandSocialLink(String type, String raw) {
-  final value = raw.trim();
-  if (value.isEmpty) return '';
-  final lower = value.toLowerCase();
-  if (lower.startsWith('http://') || lower.startsWith('https://')) return value;
-  if (type == 'website') return 'https://$value';
-  if (lower.startsWith('www.') || lower.contains('/')) return 'https://$value';
-  final name = value.startsWith('@') ? value.substring(1) : value;
-  switch (type) {
-    case 'instagram':
-      return 'https://instagram.com/$name';
-    case 'tiktok':
-      return 'https://www.tiktok.com/@$name';
-    case 'facebook':
-      return 'https://facebook.com/$name';
+/// Zieht aus einer Social-Eingabe (Benutzername ODER voller Link) nur das
+/// Wesentliche: den Benutzernamen (Instagram/TikTok/Facebook) bzw. die Domain
+/// (Website). So zeigt das Feld immer nur den Username; gespeichert wird eine
+/// saubere kanonische Form.
+String _socialHandle(String type, String raw) {
+  var v = raw.trim();
+  if (v.isEmpty) return '';
+  v = v.replaceFirst(RegExp(r'^https?://', caseSensitive: false), '');
+  v = v.replaceFirst(RegExp(r'^www\.', caseSensitive: false), '');
+  if (type == 'website') {
+    return v.split('/').first.trim(); // nur die Domain, z. B. babelimbiss.de
   }
-  return 'https://$value';
+  if (v.contains('/')) {
+    final segs = v.split('/').where((s) => s.trim().isNotEmpty).toList();
+    if (segs.isNotEmpty) v = segs.last; // letztes Pfadsegment = Handle
+  }
+  return v.replaceFirst('@', '').trim();
+}
+
+/// Baut aus der Social-Eingabe die volle URL fürs Speichern – funktioniert
+/// sowohl mit einem bloßen Benutzernamen als auch mit einem eingefügten Link
+/// (dann wird der Username extrahiert und kanonisch neu aufgebaut).
+String _expandSocialLink(String type, String raw) {
+  final handle = _socialHandle(type, raw);
+  if (handle.isEmpty) return '';
+  switch (type) {
+    case 'website':
+      return 'https://$handle';
+    case 'instagram':
+      return 'https://instagram.com/$handle';
+    case 'tiktok':
+      return 'https://www.tiktok.com/@$handle';
+    case 'facebook':
+      return 'https://facebook.com/$handle';
+  }
+  return 'https://$handle';
+}
+
+/// Deterministische, angenehme Avatar-Farbe aus dem Shopnamen (wie Kontakt-
+/// Avatare) – füllt den Logo-Kreis sauber, wenn kein Bild da ist.
+Color _avatarColor(String name) {
+  const palette = [
+    Color(0xFF1E7A5F),
+    Color(0xFF2E7DD1),
+    Color(0xFF8E5BD9),
+    Color(0xFFD64545),
+    Color(0xFFE8762A),
+    Color(0xFFD94F8E),
+    Color(0xFF1FA9A0),
+    Color(0xFF4D58C9),
+    Color(0xFF3FA45C),
+  ];
+  final key = name.trim().isEmpty ? 'L' : name.trim();
+  var hash = 0;
+  for (final code in key.codeUnits) {
+    hash = (hash * 31 + code) & 0x7fffffff;
+  }
+  return palette[hash % palette.length];
 }
 
 class _Day {

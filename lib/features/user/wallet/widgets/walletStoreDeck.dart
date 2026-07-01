@@ -491,11 +491,8 @@ class _MainStoreCard extends StatelessWidget {
   final VoidCallback onEnlarge;
   final VoidCallback onOpenMerchant;
 
-  /// Same fixed height the merchant's own profile page uses for its cover
-  /// hero — matching this exactly (same height, same BoxFit.cover) means the
-  /// visible crop of the photo here is identical to what the merchant set.
-  static const _coverHeight = 220.0;
-  static const _logoSize = 92.0;
+  static const _maxCoverHeight = 200.0;
+  static const _maxLogoSize = 88.0;
 
   @override
   Widget build(BuildContext context) {
@@ -518,165 +515,191 @@ class _MainStoreCard extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(
           WalletTokens.md, 0, WalletTokens.md, WalletTokens.sm),
-      child: Container(
-        decoration: BoxDecoration(
-          color: cs.surface,
-          borderRadius: BorderRadius.circular(WalletTokens.cardRadius),
-          boxShadow: WalletTokens.cardShadow,
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Cover — same height/fit as the merchant's own profile hero, so
-            // the crop matches exactly what they set there. The logo overlaps
-            // its bottom edge, mirroring that same layout.
-            SizedBox(
-              height: _coverHeight,
-              child: Stack(
-                clipBehavior: Clip.none,
-                alignment: Alignment.bottomCenter,
-                children: [
-                  Positioned.fill(
-                    child: cover.isNotEmpty
-                        ? CachedNetworkImage(
-                            imageUrl: cover,
-                            fit: BoxFit.cover,
-                            memCacheWidth: 900,
-                            errorWidget: (context, url, error) =>
-                                const _CoverFallback(),
-                          )
-                        : const _CoverFallback(),
-                  ),
-                  Positioned.fill(
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            Colors.black.withValues(alpha: 0.18),
-                            Colors.transparent,
-                            Colors.black.withValues(alpha: 0.22),
-                          ],
-                          stops: const [0, 0.4, 1],
-                        ),
+      // The whole card is sized to the available height so cover + QR + code +
+      // actions ALWAYS fit any device without scrolling: cover, logo and QR all
+      // shrink proportionally on short viewports.
+      child: LayoutBuilder(
+        builder: (context, box) {
+          final h = box.maxHeight;
+          final coverH = (h * 0.30).clamp(96.0, _maxCoverHeight);
+          final logoSize = (h * 0.13).clamp(52.0, _maxLogoSize);
+          return Container(
+            decoration: BoxDecoration(
+              color: cs.surface,
+              borderRadius: BorderRadius.circular(WalletTokens.cardRadius),
+              boxShadow: WalletTokens.cardShadow,
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SizedBox(
+                  height: coverH,
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    alignment: Alignment.bottomCenter,
+                    children: [
+                      Positioned.fill(
+                        child: cover.isNotEmpty
+                            ? CachedNetworkImage(
+                                imageUrl: cover,
+                                fit: BoxFit.cover,
+                                memCacheWidth: 900,
+                                errorWidget: (context, url, error) =>
+                                    const _CoverFallback(),
+                              )
+                            : const _CoverFallback(),
                       ),
-                    ),
-                  ),
-                  Positioned(
-                    bottom: -_logoSize / 2,
-                    child: GestureDetector(
-                      onTap: onOpenMerchant,
-                      child: Container(
-                        width: _logoSize,
-                        height: _logoSize,
-                        decoration: BoxDecoration(
-                          color: cs.surface,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: cs.surface, width: 4),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.18),
-                              blurRadius: 16,
-                              offset: const Offset(0, 6),
+                      Positioned.fill(
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                Colors.black.withValues(alpha: 0.18),
+                                Colors.transparent,
+                                Colors.black.withValues(alpha: 0.22),
+                              ],
+                              stops: const [0, 0.4, 1],
                             ),
-                          ],
-                        ),
-                        child: ClipOval(
-                          child: logo.isNotEmpty
-                              ? CachedNetworkImage(
-                                  imageUrl: logo,
-                                  fit: BoxFit.cover,
-                                  memCacheWidth: 200,
-                                  errorWidget: (context, url, error) =>
-                                      Icon(Icons.storefront_rounded,
-                                          color: cs.onSurfaceVariant, size: 30),
-                                )
-                              : Icon(Icons.storefront_rounded,
-                                  color: cs.onSurfaceVariant, size: 30),
+                          ),
                         ),
                       ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: _logoSize / 2 + WalletTokens.sm),
-            GestureDetector(
-              onTap: onOpenMerchant,
-              child: Column(
-                children: [
-                  Text(name,
-                      textAlign: TextAlign.center,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: tt.titleMedium
-                          ?.copyWith(fontWeight: WalletTokens.wHeavy)),
-                  if (meta.isNotEmpty)
-                    Text(meta,
-                        textAlign: TextAlign.center,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: tt.bodySmall?.copyWith(
-                            color: cs.onSurfaceVariant,
-                            fontWeight: WalletTokens.wSemibold)),
-                ],
-              ),
-            ),
-            const SizedBox(height: WalletTokens.md),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: WalletTokens.lg),
-              child: _PerforatedDivider(),
-            ),
-            // QR + code + actions fill the rest — centred if there's extra
-            // room, scrollable if the device is short (never overflows).
-            Expanded(
-              child: LayoutBuilder(
-                builder: (context, c) {
-                  return SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(WalletTokens.lg,
-                        WalletTokens.md, WalletTokens.lg, WalletTokens.lg),
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(minHeight: c.maxHeight),
-                      child: Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            GestureDetector(
-                              onTap: onEnlarge,
-                              child: Container(
-                                padding: const EdgeInsets.all(WalletTokens.md),
-                                decoration: BoxDecoration(
-                                  color: cs.surfaceContainerHighest,
-                                  borderRadius: BorderRadius.circular(
-                                      WalletTokens.qrRadius),
+                      // Tapping the cover photo opens the merchant's profile.
+                      Positioned.fill(
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: onOpenMerchant,
+                        ),
+                      ),
+                      Positioned(
+                        bottom: -logoSize / 2,
+                        child: GestureDetector(
+                          onTap: onOpenMerchant,
+                          child: Container(
+                            width: logoSize,
+                            height: logoSize,
+                            decoration: BoxDecoration(
+                              color: cs.surface,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: cs.surface, width: 4),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.18),
+                                  blurRadius: 16,
+                                  offset: const Offset(0, 6),
                                 ),
-                                child: QrImageView(
-                                  data: qrData,
-                                  version: QrVersions.auto,
-                                  size: (MediaQuery.sizeOf(context).width *
-                                          0.34)
-                                      .clamp(120.0, 160.0),
-                                ),
-                              ),
+                              ],
                             ),
-                            const SizedBox(height: WalletTokens.sm),
-                            _CodeChip(pretty: WalletCode.pretty(card.walletCode)),
-                            if (actions.isNotEmpty) ...[
-                              const SizedBox(height: WalletTokens.md),
-                              MerchantActionRow(actions: actions),
-                            ],
-                          ],
+                            child: ClipOval(
+                              child: logo.isNotEmpty
+                                  ? CachedNetworkImage(
+                                      imageUrl: logo,
+                                      fit: BoxFit.cover,
+                                      memCacheWidth: 200,
+                                      errorWidget: (context, url, error) =>
+                                          Icon(Icons.storefront_rounded,
+                                              color: cs.onSurfaceVariant,
+                                              size: 28),
+                                    )
+                                  : Icon(Icons.storefront_rounded,
+                                      color: cs.onSurfaceVariant, size: 28),
+                            ),
+                          ),
                         ),
                       ),
-                    ),
-                  );
-                },
-              ),
+                    ],
+                  ),
+                ),
+                SizedBox(height: logoSize / 2 + WalletTokens.sm),
+                GestureDetector(
+                  onTap: onOpenMerchant,
+                  child: Column(
+                    children: [
+                      Text(name,
+                          textAlign: TextAlign.center,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: tt.titleMedium
+                              ?.copyWith(fontWeight: WalletTokens.wHeavy)),
+                      if (meta.isNotEmpty)
+                        Text(meta,
+                            textAlign: TextAlign.center,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: tt.bodySmall?.copyWith(
+                                color: cs.onSurfaceVariant,
+                                fontWeight: WalletTokens.wSemibold)),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: WalletTokens.sm),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: WalletTokens.lg),
+                  child: _PerforatedDivider(),
+                ),
+                // QR + code + actions fill the rest; the QR is sized from the
+                // leftover height so the whole shelf fits without scrolling.
+                Expanded(
+                  child: LayoutBuilder(
+                    builder: (context, c) {
+                      final sh = c.maxHeight;
+                      final hasActions = actions.isNotEmpty;
+                      // Everything except the QR square (scroll padding, the
+                      // QR's own inner padding, the gap, the code chip, and the
+                      // action row when present).
+                      final reserved = 32.0 +
+                          24.0 +
+                          WalletTokens.sm +
+                          34.0 +
+                          (hasActions ? (WalletTokens.md + 64.0) : 0.0);
+                      final qr = (sh - reserved).clamp(84.0, 170.0);
+                      return SingleChildScrollView(
+                        padding: const EdgeInsets.fromLTRB(WalletTokens.lg,
+                            WalletTokens.md, WalletTokens.lg, WalletTokens.lg),
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(minHeight: sh - 32),
+                          child: Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                GestureDetector(
+                                  onTap: onEnlarge,
+                                  child: Container(
+                                    padding:
+                                        const EdgeInsets.all(WalletTokens.md),
+                                    decoration: BoxDecoration(
+                                      color: cs.surfaceContainerHighest,
+                                      borderRadius: BorderRadius.circular(
+                                          WalletTokens.qrRadius),
+                                    ),
+                                    child: QrImageView(
+                                      data: qrData,
+                                      version: QrVersions.auto,
+                                      size: qr,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: WalletTokens.sm),
+                                _CodeChip(
+                                    pretty: WalletCode.pretty(card.walletCode)),
+                                if (hasActions) ...[
+                                  const SizedBox(height: WalletTokens.md),
+                                  MerchantActionRow(actions: actions),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }

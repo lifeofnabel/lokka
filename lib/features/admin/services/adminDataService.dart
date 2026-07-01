@@ -140,6 +140,15 @@ class AdminDataService {
   Future<List<AdminDoc>> stampCards({int limit = 150}) =>
       _docs(_db.collectionGroup('stampCards').limit(limit), fullPath: true);
 
+  // ── Stift-Werkstatt / Register: Stift-Inventar ──────────────────────────────
+  // Direct read (not a Cloud Function): the admin custom-claim override in
+  // firestore.rules already grants full access to `sticks`, so there is no
+  // cold-start round-trip through Cloud Functions — this is what made the
+  // inventory list feel slow to load.
+  Future<List<AdminDoc>> listSticks({int limit = 200}) => _docs(
+        _db.collection('sticks').orderBy('updatedAt', descending: true).limit(limit),
+      );
+
   // ── Generischer Firestore-Editor ────────────────────────────────────────────
   Future<Map<String, dynamic>?> getDoc(String path) async {
     final snap = await _getDoc(path);

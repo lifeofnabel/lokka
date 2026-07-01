@@ -49,8 +49,14 @@ class AuthProvider extends ChangeNotifier {
         email: email,
         password: password,
       );
-      await _markLogin(credential.user!.uid, 'password');
-      return _destinationForUser(credential.user!.uid);
+      final uid = credential.user!.uid;
+      final user = await _firestoreService.getUserProfile(uid);
+      if (user?['role'] == 'merchant') {
+        await _authService.signOut();
+        throw AuthFlowException(_text('auth.error.notUserAccount'));
+      }
+      await _markLogin(uid, 'password');
+      return _destinationForUser(uid);
     });
   }
 

@@ -452,7 +452,6 @@ export const userUnfollowMerchant = onCall({ cors: true }, async (req) => {
 export {
   bootstrapAdmin,
   adminMintStaticSticks,
-  adminListSticks,
   adminDeleteStick,
   claimStaticStick,
 } from './admin';

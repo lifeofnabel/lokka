@@ -156,6 +156,20 @@ class MerchantStampsService {
     );
   }
 
+  /// Sets the claim limits (currently the cooldown between two stamps for the
+  /// same customer) with a targeted merge write — never a full replace, so the
+  /// stick binding and every other field stay untouched.
+  Future<void> setClaimLimits(
+    String stampCardId,
+    Map<String, dynamic> claimLimits,
+  ) {
+    return firestoreService.setDocument(
+      FirebasePaths.merchantStampCard(merchantId, stampCardId),
+      {'claimLimits': claimLimits, 'updatedAt': FieldValue.serverTimestamp()},
+      merge: true,
+    );
+  }
+
   Future<void> deleteDraftCard(String stampCardId) {
     return firestoreService
         .document(FirebasePaths.merchantStampCard(merchantId, stampCardId))

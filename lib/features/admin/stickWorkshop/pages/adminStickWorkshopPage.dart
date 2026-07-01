@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../../stamps/services/appLinkBase.dart';
+import '../../services/adminDataService.dart';
 import '../../services/adminService.dart';
 import '../services/fileDownload.dart';
 import '../services/stickArtifacts.dart';
@@ -14,9 +15,10 @@ import '../services/stickArtifacts.dart';
 /// the NFC link never changes, so re-binding needs no rewrite. Plus an inventory
 /// register.
 class AdminStickWorkshopPage extends StatefulWidget {
-  const AdminStickWorkshopPage({super.key, this.service});
+  const AdminStickWorkshopPage({super.key, this.service, this.dataService});
 
   final AdminService? service;
+  final AdminDataService? dataService;
 
   @override
   State<AdminStickWorkshopPage> createState() => _AdminStickWorkshopPageState();
@@ -24,6 +26,7 @@ class AdminStickWorkshopPage extends StatefulWidget {
 
 class _AdminStickWorkshopPageState extends State<AdminStickWorkshopPage> {
   late final AdminService _admin = widget.service ?? AdminService();
+  late final AdminDataService _data = widget.dataService ?? AdminDataService();
 
   @override
   Widget build(BuildContext context) {
@@ -42,7 +45,7 @@ class _AdminStickWorkshopPageState extends State<AdminStickWorkshopPage> {
         body: TabBarView(
           children: [
             _CreateTab(admin: _admin),
-            _InventoryTab(admin: _admin),
+            _InventoryTab(admin: _admin, data: _data),
           ],
         ),
       ),
@@ -342,19 +345,27 @@ class _MintedStickTile extends StatelessWidget {
 
 // ── Tab 2: Inventar ──────────────────────────────────────────────────────────
 class _InventoryTab extends StatefulWidget {
-  const _InventoryTab({required this.admin});
+  const _InventoryTab({required this.admin, required this.data});
   final AdminService admin;
+  final AdminDataService data;
 
   @override
   State<_InventoryTab> createState() => _InventoryTabState();
 }
 
 class _InventoryTabState extends State<_InventoryTab> {
-  late Future<List<StickInventoryItem>> _future = widget.admin.listSticks();
+  late Future<List<StickInventoryItem>> _future = _load();
+
+  // Direct Firestore read (AdminDataService), not a Cloud Function — instant,
+  // no cold-start round-trip.
+  Future<List<StickInventoryItem>> _load() =>
+      widget.data.listSticks().then((docs) => docs.map(StickInventoryItem.fromDoc).toList());
 
   Future<void> _reload() {
-    final f = widget.admin.listSticks();
-    setState(() => _future = f);
+    final f = _load();
+    setState(() {
+      _future = f;
+    });
     return f;
   }
 

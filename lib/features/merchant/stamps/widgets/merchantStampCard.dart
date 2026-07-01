@@ -21,6 +21,7 @@ class MerchantStampCard extends StatelessWidget {
     required this.onPause,
     required this.onDelete,
     required this.onStick,
+    required this.onLimit,
   });
 
   final StampCardModel card;
@@ -29,8 +30,11 @@ class MerchantStampCard extends StatelessWidget {
   final VoidCallback onPause;
   final VoidCallback onDelete;
 
-  /// Öffnet den Stempel-Link / Stift-Einrichtung für diese Karte.
+  /// Öffnet die Stempelstift-Einrichtung (Kamera-Scan) für diese Karte.
   final VoidCallback onStick;
+
+  /// Öffnet den schnellen „Limit setzen"-Dialog (Wartezeit zwischen Stempeln).
+  final VoidCallback onLimit;
 
   @override
   Widget build(BuildContext context) {
@@ -86,11 +90,11 @@ class MerchantStampCard extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.md),
 
-          // ── Hauptknopf je nach Zustand ──────────────────────────────────
+          // ── Hauptknopf: Stift verbinden (live) bzw. veröffentlichen ─────
           if (card.isLive)
             MerchantPrimaryButton(
-              label: 'Stempel-Link',
-              icon: Icons.ios_share_rounded,
+              label: 'Stempelstift verbinden',
+              icon: Icons.nfc_rounded,
               onPressed: onStick,
             )
           else
@@ -101,7 +105,15 @@ class MerchantStampCard extends StatelessWidget {
             ),
           const SizedBox(height: AppSpacing.sm),
 
-          // ── Kleinere Aktionen ──────────────────────────────────────────
+          // ── Limit (Wartezeit) setzen ───────────────────────────────────
+          MerchantSecondaryButton(
+            label: 'Limit setzen',
+            icon: Icons.timer_outlined,
+            onPressed: onLimit,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+
+          // ── Bearbeiten · Pausieren · Löschen (nebeneinander) ──────────
           Row(
             children: [
               Expanded(

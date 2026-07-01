@@ -399,6 +399,7 @@
   "auth.error.invalidCredentials": "Email or password is not correct.",
   "auth.error.emailInUse": "This email is already in use.",
   "auth.error.notMerchantAccount": "This account is not a business account.",
+  "auth.error.notUserAccount": "This account is a business account. Please use the merchant login.",
   "auth.error.googleRequired": "Please sign in with Google first.",
   "auth.error.signInAgain": "Please sign in again.",
   "auth.error.googleCancelled": "Google sign-in was cancelled.",

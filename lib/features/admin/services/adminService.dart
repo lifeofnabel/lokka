@@ -1,5 +1,8 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+
+import 'adminDataService.dart';
 
 /// Single client gateway to the Godmode (admin) Cloud Functions, region
 /// europe-west1. Admin status lives in a Firebase custom claim (`admin`), set
@@ -60,15 +63,6 @@ class AdminService {
     return ((res['sticks'] as List?) ?? const [])
         .whereType<Map>()
         .map((e) => MintedStick.fromMap(Map<String, dynamic>.from(e)))
-        .toList();
-  }
-
-  /// Loads the stick inventory (newest first) for the register.
-  Future<List<StickInventoryItem>> listSticks({int limit = 200}) async {
-    final res = await _call('adminListSticks', {'limit': limit});
-    return ((res['sticks'] as List?) ?? const [])
-        .whereType<Map>()
-        .map((e) => StickInventoryItem.fromMap(Map<String, dynamic>.from(e)))
         .toList();
   }
 
@@ -176,20 +170,24 @@ class StickInventoryItem {
 
   bool get isStatic => type == 'static';
 
-  factory StickInventoryItem.fromMap(Map<String, dynamic> m) {
-    DateTime? ts(Object? v) {
-      final n = (v as num?)?.toInt();
-      return n == null ? null : DateTime.fromMillisecondsSinceEpoch(n);
-    }
-
+  /// Builds from a direct Firestore read ([AdminDataService.listSticks]) — the
+  /// fast path (no Cloud Functions cold start) used by the inventory lists.
+  /// `bound`/`verified` are re-derived here exactly like the old server-side
+  /// mapping did, since the raw doc doesn't always carry an explicit `bound`.
+  factory StickInventoryItem.fromDoc(AdminDoc d) {
+    final m = d.data;
+    DateTime? ts(Object? v) => v is Timestamp ? v.toDate() : null;
+    final boundMerchantId = (m['boundMerchantId'] ?? '').toString();
+    final boundCardId = (m['boundCardId'] ?? '').toString();
     return StickInventoryItem(
-      stickId: (m['stickId'] ?? '').toString(),
+      stickId: d.id,
       type: (m['type'] ?? '').toString(),
-      bound: m['bound'] == true,
-      boundMerchantId: (m['boundMerchantId'] ?? '').toString(),
-      boundCardId: (m['boundCardId'] ?? '').toString(),
+      bound: m['bound'] == true ||
+          (boundMerchantId.isNotEmpty && boundCardId.isNotEmpty),
+      boundMerchantId: boundMerchantId,
+      boundCardId: boundCardId,
       note: (m['note'] ?? '').toString(),
-      verified: m['verified'] == true,
+      verified: m['verifiedAt'] != null,
       createdAt: ts(m['createdAt']),
       lastTapAt: ts(m['lastTapAt']),
     );

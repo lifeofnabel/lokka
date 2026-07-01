@@ -9,10 +9,13 @@ import '../../merchant/tools/widgets/merchantToolUi.dart';
 import '../services/stampFunctionsService.dart';
 import 'stampScanner.dart';
 
-/// "Stempelstift verbinden" — the merchant scans the bind-QR that shipped with
-/// the (owner-provisioned) stick and links it to [card]. No NFC writing, no
-/// test-tap: the owner already wrote the fixed link onto the tag in the Godmode
-/// workshop, so a successful scan means the stick is ready to use immediately.
+/// „Stempelstift verbinden" für die sichtbare Karte.
+///
+/// Der Stift wird in der Godmode-Werkstatt fertig beschrieben und kommt mit
+/// einem Bind-QR (`lokka-stick-a:<id>:<claim>`). Verbinden = Kamera auf, QR
+/// scannen, fertig. Ist noch kein Stift verbunden, öffnet sich die Kamera
+/// **direkt**. Ist schon einer verbunden, zeigt das Sheet dessen Daten
+/// (Serien-Nr., Typ, Status) in einfacher Form.
 Future<void> startStickSetup(
   BuildContext context, {
   required StampCardModel card,
@@ -48,21 +51,42 @@ class _StickSetupSheet extends StatefulWidget {
 }
 
 class _StickSetupSheetState extends State<_StickSetupSheet> {
-  bool _done = false;
+  // Lokaler, veränderbarer Karten-Stand — nach erfolgreichem Bind sofort
+  // aktualisiert, damit die „verbunden"-Ansicht direkt erscheint.
+  late StampCardModel _card = widget.card;
+
+  bool _busy = false;
   String? _error;
+  bool _rebinding = false; // „Anderen Stift verbinden" gedrückt
+  bool _autoOpened = false;
 
-  StampCardModel get _card => widget.card;
+  bool get _connected => _card.hasStick && !_rebinding;
 
-  /// Scan the delivered bind-QR (`lokka-stick-a:<id>:<claim>`) and bind the
-  /// stick to THIS card. The tag is already written, so a successful bind is all
-  /// that's needed — the badge flips to "Stift verbunden ✓" right away.
+  @override
+  void initState() {
+    super.initState();
+    // Kamera direkt öffnen, wenn noch kein Stift verbunden ist.
+    if (!widget.card.hasStick) {
+      _autoOpened = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _scanAndBind();
+      });
+    }
+  }
+
+  /// Bind-QR (`lokka-stick-a:<id>:<claim>`) scannen und mit DIESER Karte
+  /// verbinden. Der Tag ist bereits beschrieben, ein erfolgreicher Scan genügt.
   Future<void> _scanAndBind() async {
     final texts = context.read<LanguageService>();
-    var bound = false;
+    var serial = '';
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
     await showStampScanner(
       context,
-      title: 'Stift verbinden',
-      hint: 'Scanne den mitgelieferten QR-Code (lokka-stick-a:…).',
+      title: 'Stempelstift scannen',
+      hint: 'Halte den QR-Code auf dem Stift vor die Kamera.',
       manualLabel: texts.text('merchant.stick.manualLabel'),
       onConfirm: (raw) async {
         final parsed = _parseClaimQr(raw);
@@ -75,89 +99,146 @@ class _StickSetupSheetState extends State<_StickSetupSheet> {
             claimToken: parsed.$2,
             cardId: _card.id,
           );
-          bound = true;
+          serial = parsed.$1;
           return const StampScanOutcome.ok('Stift verbunden ✓');
         } catch (e) {
           return StampScanOutcome.fail(texts.text(stampErrorKey(e)));
         }
       },
     );
-    if (!mounted || !bound) return;
+    if (!mounted) return;
+    if (serial.isEmpty) {
+      // Scanner ohne Bind geschlossen (abgebrochen) — zurück zur Startansicht.
+      setState(() => _busy = false);
+      return;
+    }
     widget.onChanged();
     setState(() {
-      _done = true;
+      _card = _card.copyWith(
+        boundStickId: serial,
+        stickType: 'static',
+        stickVerifiedAt: DateTime.now(),
+      );
+      _rebinding = false;
+      _busy = false;
       _error = null;
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    final texts = context.watch<LanguageService>();
     return SafeArea(
       top: false,
       child: Padding(
         padding: EdgeInsets.fromLTRB(
             20, 4, 20, MediaQuery.of(context).viewInsets.bottom + 22),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _TargetHeader(card: _card, texts: texts),
-            const SizedBox(height: AppSpacing.md),
-            if (_error != null) ...[
-              _ErrorBanner(message: _error!),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _Header(cardTitle: _card.title),
               const SizedBox(height: AppSpacing.md),
+              if (_error != null) ...[
+                _ErrorBanner(message: _error!),
+                const SizedBox(height: AppSpacing.md),
+              ],
+              if (_busy) ...[
+                const _BusyRow(),
+                const SizedBox(height: AppSpacing.md),
+              ],
+              if (_connected)
+                ..._connectedChildren()
+              else
+                ..._connectChildren(),
             ],
-            if (_done) ..._doneChildren(texts) else ..._introChildren(texts),
-          ],
+          ),
         ),
       ),
     );
   }
 
-  List<Widget> _introChildren(LanguageService texts) {
+  // ── Ansicht: verbinden (Schritte + Kamera zuerst) ───────────────────────────
+  List<Widget> _connectChildren() {
     return [
+      const _MiniStepper(),
+      const SizedBox(height: AppSpacing.md),
       const _InfoBanner(
         icon: Icons.qr_code_scanner_rounded,
-        message: 'Dein Stift kam mit einem QR-Code. Scanne ihn, um den Stift mit '
-            'dieser Stempelkarte zu verbinden — fertig.',
+        message: 'Dein Stift kam mit einem QR-Code. Halte ihn vor die Kamera — '
+            'der Stift verbindet sich dann mit dieser Stempelkarte.',
       ),
       const SizedBox(height: AppSpacing.md),
       MerchantPrimaryButton(
-        label: 'QR-Code scannen',
+        label: _autoOpened ? 'Kamera erneut öffnen' : 'Kamera öffnen & scannen',
         icon: Icons.qr_code_scanner_rounded,
-        onPressed: _scanAndBind,
+        onPressed: _busy ? null : _scanAndBind,
       ),
     ];
   }
 
-  List<Widget> _doneChildren(LanguageService texts) {
+  // ── Ansicht: verbunden (Stift-Daten einfach zeigen) ─────────────────────────
+  List<Widget> _connectedChildren() {
     return [
-      Column(
+      const Column(
         children: [
-          const Icon(Icons.check_circle_rounded,
-              color: MerchantPremiumColors.gold, size: 52),
-          const SizedBox(height: 10),
+          Icon(Icons.verified_rounded,
+              color: MerchantPremiumColors.gold, size: 50),
+          SizedBox(height: 8),
           Text(
-            texts.text('merchant.stick.doneTitle'),
+            'Stempelstift verbunden',
             textAlign: TextAlign.center,
-            style: const TextStyle(
-                color: MerchantPremiumColors.ink,
-                fontSize: 20,
-                fontWeight: FontWeight.w900),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            texts.text('merchant.stick.doneBody'),
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-                color: MerchantPremiumColors.muted,
-                fontWeight: FontWeight.w700,
-                height: 1.35),
+            style: TextStyle(
+              color: MerchantPremiumColors.ink,
+              fontSize: 21,
+              fontWeight: FontWeight.w900,
+            ),
           ),
         ],
       ),
       const SizedBox(height: AppSpacing.md),
+      Container(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: BoxDecoration(
+          color: MerchantPremiumColors.surfaceAlt,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: MerchantPremiumColors.line),
+        ),
+        child: Column(
+          children: [
+            _InfoRow(
+              icon: Icons.tag_rounded,
+              label: 'Serien-Nr.',
+              value: _serial(_card.boundStickId),
+            ),
+            const _RowGap(),
+            _InfoRow(
+              icon: Icons.nfc_rounded,
+              label: 'Typ',
+              value: _typeLabel(_card.stickType),
+            ),
+            const _RowGap(),
+            const _InfoRow(
+              icon: Icons.check_circle_rounded,
+              label: 'Status',
+              value: 'Aktiv',
+              valueColor: MerchantPremiumColors.gold,
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: AppSpacing.md),
+      MerchantSecondaryButton(
+        label: 'Anderen Stift verbinden',
+        icon: Icons.autorenew_rounded,
+        onPressed: _busy
+            ? null
+            : () => setState(() {
+                  _rebinding = true;
+                  _error = null;
+                }),
+      ),
+      const SizedBox(height: AppSpacing.sm),
       FilledButton(
         onPressed: () => Navigator.of(context).maybePop(),
         style: FilledButton.styleFrom(
@@ -166,19 +247,35 @@ class _StickSetupSheetState extends State<_StickSetupSheet> {
           minimumSize: const Size.fromHeight(52),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
         ),
-        child: Text(texts.text('common.done')),
+        child: const Text('Fertig'),
       ),
     ];
   }
+
+  String _serial(String raw) {
+    if (raw.isEmpty) return '—';
+    final up = raw.toUpperCase();
+    return up.length <= 20 ? up : '${up.substring(0, 20)}…';
+  }
+
+  String _typeLabel(String type) {
+    return switch (type) {
+      'ntag424' || 'ntag' => 'NFC-Stift (NTAG 424)',
+      'static' => 'Lokka-Stift',
+      _ => 'Stempelstift',
+    };
+  }
 }
 
-class _TargetHeader extends StatelessWidget {
-  const _TargetHeader({required this.card, required this.texts});
-  final StampCardModel card;
-  final LanguageService texts;
+class _Header extends StatelessWidget {
+  const _Header({required this.cardTitle});
+  final String cardTitle;
 
   @override
   Widget build(BuildContext context) {
+    final texts = context.watch<LanguageService>();
+    final name =
+        cardTitle.isEmpty ? texts.text('merchant.stamps.untitled') : cardTitle;
     return Row(
       children: [
         Container(
@@ -196,16 +293,16 @@ class _TargetHeader extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                texts.text('merchant.stick.setup'),
-                style: const TextStyle(
+              const Text(
+                'Stempelstift verbinden',
+                style: TextStyle(
                     color: MerchantPremiumColors.ink,
                     fontSize: 18,
                     fontWeight: FontWeight.w900),
               ),
               const SizedBox(height: 2),
               Text(
-                '${texts.text('merchant.stick.forCard')}: ${card.title.isEmpty ? texts.text('merchant.stamps.untitled') : card.title}',
+                'Für: $name',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
@@ -214,6 +311,150 @@ class _TargetHeader extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Kleiner Schritt-Indikator „① Stift scannen · ② Fertig".
+class _MiniStepper extends StatelessWidget {
+  const _MiniStepper();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Row(
+      children: [
+        _StepDot(number: '1', label: 'Stift scannen', active: true),
+        _StepConnector(),
+        _StepDot(number: '2', label: 'Fertig', active: false),
+      ],
+    );
+  }
+}
+
+class _StepDot extends StatelessWidget {
+  const _StepDot(
+      {required this.number, required this.label, required this.active});
+  final String number;
+  final String label;
+  final bool active;
+
+  @override
+  Widget build(BuildContext context) {
+    final color =
+        active ? MerchantPremiumColors.gold : MerchantPremiumColors.muted;
+    return Row(
+      children: [
+        Container(
+          width: 26,
+          height: 26,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: active
+                ? MerchantPremiumColors.goldSoft
+                : MerchantPremiumColors.surfaceAlt,
+            shape: BoxShape.circle,
+            border: Border.all(color: color.withValues(alpha: 0.6)),
+          ),
+          child: Text(number,
+              style: TextStyle(
+                  color: active ? MerchantPremiumColors.mint : color,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 13)),
+        ),
+        const SizedBox(width: 8),
+        Text(label,
+            style: TextStyle(color: color, fontWeight: FontWeight.w800)),
+      ],
+    );
+  }
+}
+
+class _StepConnector extends StatelessWidget {
+  const _StepConnector();
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        height: 2,
+        margin: const EdgeInsets.symmetric(horizontal: 10),
+        color: MerchantPremiumColors.line,
+      ),
+    );
+  }
+}
+
+class _InfoRow extends StatelessWidget {
+  const _InfoRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+    this.valueColor = MerchantPremiumColors.ink,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color valueColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 19, color: MerchantPremiumColors.muted),
+        const SizedBox(width: 10),
+        Text(label,
+            style: const TextStyle(
+                color: MerchantPremiumColors.muted,
+                fontWeight: FontWeight.w800)),
+        const Spacer(),
+        Flexible(
+          child: Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.right,
+            style: TextStyle(color: valueColor, fontWeight: FontWeight.w900),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _RowGap extends StatelessWidget {
+  const _RowGap();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.symmetric(vertical: 10),
+      child: Divider(height: 1, color: MerchantPremiumColors.line),
+    );
+  }
+}
+
+class _BusyRow extends StatelessWidget {
+  const _BusyRow();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Row(
+      children: [
+        SizedBox(
+          width: 18,
+          height: 18,
+          child: CircularProgressIndicator(
+              strokeWidth: 2, color: MerchantPremiumColors.gold),
+        ),
+        SizedBox(width: 12),
+        Expanded(
+          child: Text('Kamera wird geöffnet …',
+              style: TextStyle(
+                  color: MerchantPremiumColors.ink,
+                  fontWeight: FontWeight.w800)),
         ),
       ],
     );

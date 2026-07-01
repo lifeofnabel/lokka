@@ -6,6 +6,8 @@ import '../../../core/services/authService.dart';
 import '../../../core/services/firestoreService.dart';
 import '../../../core/services/languageService.dart';
 import '../../../core/theme/appColors.dart';
+import '../../../core/widgets/pressableScale.dart';
+import '../../../core/widgets/staggerIn.dart';
 import '../../merchant/shared/widgets/merchantPremiumUi.dart';
 import '../providers/authProvider.dart';
 
@@ -102,49 +104,75 @@ class AuthPageShell extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Container(
-                    width: 56,
-                    height: 56,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: markBg,
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                    child: Icon(
-                      icon ?? Icons.account_balance_wallet_rounded,
-                      color: markFg,
-                      size: 28,
+                  StaggerIn(
+                    index: 0,
+                    child: Container(
+                      width: 60,
+                      height: 60,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: markBg,
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: markFg.withValues(alpha: 0.22),
+                            blurRadius: 20,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
+                      ),
+                      child: Icon(
+                        icon ?? Icons.account_balance_wallet_rounded,
+                        color: markFg,
+                        size: 30,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 24),
-                  Text(
-                    texts.text(titleKey),
-                    style: tt.headlineMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      height: 1.1,
-                      letterSpacing: -0.4,
-                      color: titleColor,
+                  StaggerIn(
+                    index: 1,
+                    child: Text(
+                      texts.text(titleKey),
+                      style: tt.headlineMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        height: 1.1,
+                        letterSpacing: -0.4,
+                        color: titleColor,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 8),
-                  Text(
-                    texts.text(subtitleKey),
-                    style: tt.bodyLarge?.copyWith(
-                      color: subtitleColor,
-                      height: 1.4,
+                  StaggerIn(
+                    index: 2,
+                    child: Text(
+                      texts.text(subtitleKey),
+                      style: tt.bodyLarge?.copyWith(
+                        color: subtitleColor,
+                        height: 1.4,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 24),
-                  Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: cardBg,
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: cardBorder),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: children,
+                  StaggerIn(
+                    index: 3,
+                    child: Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: cardBg,
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(color: cardBorder),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.05),
+                            blurRadius: 28,
+                            offset: const Offset(0, 12),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: children,
+                      ),
                     ),
                   ),
                 ],
@@ -169,6 +197,7 @@ class AuthTextField extends StatelessWidget {
     this.onSubmitted,
     this.focusNode,
     this.autofillHints,
+    this.prefixIcon,
   });
 
   final TextEditingController controller;
@@ -182,6 +211,7 @@ class AuthTextField extends StatelessWidget {
   final ValueChanged<String>? onSubmitted;
   final FocusNode? focusNode;
   final Iterable<String>? autofillHints;
+  final IconData? prefixIcon;
 
   @override
   Widget build(BuildContext context) {
@@ -192,6 +222,7 @@ class AuthTextField extends StatelessWidget {
     // Feld aus dem Theme, damit das Eingabefeld nicht auf der Karte „leuchtet".
     final fillColor =
         isDark ? theme.colorScheme.surfaceContainerHigh : AppColors.surfaceGray;
+    final iconColor = theme.colorScheme.onSurfaceVariant;
     final label = texts.text(labelKey) + (required ? ' *' : '');
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -205,6 +236,9 @@ class AuthTextField extends StatelessWidget {
         autofillHints: autofillHints,
         decoration: InputDecoration(
           labelText: label,
+          prefixIcon: prefixIcon == null
+              ? null
+              : Icon(prefixIcon, size: 20, color: iconColor),
           filled: true,
           fillColor: fillColor,
           border: OutlineInputBorder(
@@ -214,6 +248,12 @@ class AuthTextField extends StatelessWidget {
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
             borderSide: BorderSide.none,
+          ),
+          // Deliberate focus state: a crisp 2px ring instead of the M3
+          // default underline — makes it obvious which field is active.
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: theme.colorScheme.primary, width: 2),
           ),
         ),
       ),
@@ -478,17 +518,19 @@ class AuthPrimaryButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final texts = context.watch<LanguageService>();
     final loading = context.select<AuthProvider, bool>((value) => value.isLoading);
-    return FilledButton(
-      onPressed: loading ? null : onPressed,
-      style: FilledButton.styleFrom(
-        minimumSize: const Size.fromHeight(52),
+    return PressableScale(
+      child: FilledButton(
+        onPressed: loading ? null : onPressed,
+        style: FilledButton.styleFrom(
+          minimumSize: const Size.fromHeight(52),
+        ),
+        child: loading
+            ? const SizedBox.square(
+                dimension: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : Text(texts.text(labelKey)),
       ),
-      child: loading
-          ? const SizedBox.square(
-              dimension: 18,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          : Text(texts.text(labelKey)),
     );
   }
 }

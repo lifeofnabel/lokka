@@ -86,6 +86,7 @@ class _MerchantStampsView extends StatelessWidget {
               cards: provider.cards,
               onEdit: (card) => context.push('/merchant/stamps/edit/${card.id}'),
               onPublish: (card) => _publish(context, provider, card),
+              onLimit: (card) => _setLimit(context, provider, card),
               onStick: (card) => startStickSetup(
                 context,
                 card: card,
@@ -134,6 +135,179 @@ class _MerchantStampsView extends StatelessWidget {
       },
     );
   }
+
+  Future<void> _setLimit(BuildContext context, MerchantStampsProvider provider,
+      StampCardModel card) async {
+    final seconds = await showMerchantBottomSheet<int>(
+      context: context,
+      builder: (_) => _LimitSheet(current: _cooldownOf(card)),
+    );
+    if (seconds == null || !context.mounted) return;
+    await provider.setCooldown(card, seconds);
+  }
+
+  int _cooldownOf(StampCardModel card) {
+    final raw = card.claimLimits['cooldownSeconds'];
+    if (raw is num) return raw.round();
+    return int.tryParse('${raw ?? ''}') ?? 120;
+  }
+}
+
+/// „Limit setzen": schnelle Wahl der Wartezeit zwischen zwei Stempeln desselben
+/// Gastes (das einzige serverseitig erzwungene Limit). Große, gut tappbare
+/// Kacheln, ein Speichern-Knopf.
+class _LimitSheet extends StatefulWidget {
+  const _LimitSheet({required this.current});
+
+  final int current;
+
+  @override
+  State<_LimitSheet> createState() => _LimitSheetState();
+}
+
+class _LimitSheetState extends State<_LimitSheet> {
+  static const _options = [
+    (0, 'Keine', 'Jeder Tipp zählt sofort'),
+    (60, '1 Minute', 'Frühestens jede Minute'),
+    (120, '2 Minuten', 'Empfohlen'),
+    (300, '5 Minuten', 'Extra sicher'),
+  ];
+
+  late int _value = widget.current;
+
+  @override
+  Widget build(BuildContext context) {
+    // Falls ein alter, ungewöhnlicher Wert gespeichert ist: als eigene Option zeigen.
+    final hasPreset = _options.any((o) => o.$1 == _value);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Text(
+          'Limit setzen',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: MerchantPremiumColors.ink,
+            fontSize: 22,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        const SizedBox(height: 6),
+        const Text(
+          'Wie lange muss ein Gast bis zum nächsten Stempel warten? '
+          'Das schützt vor doppeltem Stempeln.',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: MerchantPremiumColors.muted,
+            fontWeight: FontWeight.w700,
+            height: 1.35,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        for (final option in _options) ...[
+          _LimitOption(
+            title: option.$2,
+            subtitle: option.$3,
+            selected: _value == option.$1,
+            onTap: () => setState(() => _value = option.$1),
+          ),
+          const SizedBox(height: 8),
+        ],
+        if (!hasPreset)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: _LimitOption(
+              title: '${_value ~/ 60} Minuten',
+              subtitle: 'Aktuell gespeichert',
+              selected: true,
+              onTap: () {},
+            ),
+          ),
+        const SizedBox(height: AppSpacing.sm),
+        MerchantPrimaryButton(
+          label: 'Speichern',
+          onPressed: () => Navigator.of(context).pop(_value),
+        ),
+      ],
+    );
+  }
+}
+
+class _LimitOption extends StatelessWidget {
+  const _LimitOption({
+    required this.title,
+    required this.subtitle,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String title;
+  final String subtitle;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: selected
+                ? MerchantPremiumColors.goldSoft
+                : MerchantPremiumColors.surfaceAlt,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: selected
+                  ? MerchantPremiumColors.gold
+                  : MerchantPremiumColors.line,
+              width: selected ? 2 : 1,
+            ),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        color: selected
+                            ? MerchantPremiumColors.mint
+                            : MerchantPremiumColors.ink,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        color: MerchantPremiumColors.muted,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                selected
+                    ? Icons.radio_button_checked_rounded
+                    : Icons.radio_button_unchecked_rounded,
+                color: selected
+                    ? MerchantPremiumColors.gold
+                    : MerchantPremiumColors.muted,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// Lokale, kostenlose Hinweistexte (kein Credit-/Preis-Bezug mehr).
@@ -146,6 +320,7 @@ class _StampCarousel extends StatefulWidget {
     required this.cards,
     required this.onEdit,
     required this.onPublish,
+    required this.onLimit,
     required this.onStick,
     required this.onPause,
     required this.onDelete,
@@ -154,6 +329,7 @@ class _StampCarousel extends StatefulWidget {
   final List<StampCardModel> cards;
   final void Function(StampCardModel) onEdit;
   final void Function(StampCardModel) onPublish;
+  final void Function(StampCardModel) onLimit;
   final void Function(StampCardModel) onStick;
   final void Function(StampCardModel) onPause;
   final void Function(StampCardModel) onDelete;
@@ -194,6 +370,7 @@ class _StampCarouselState extends State<_StampCarousel> {
                   card: card,
                   onEdit: () => widget.onEdit(card),
                   onPublish: () => widget.onPublish(card),
+                  onLimit: () => widget.onLimit(card),
                   onStick: () => widget.onStick(card),
                   onPause: () => widget.onPause(card),
                   onDelete: () => widget.onDelete(card),

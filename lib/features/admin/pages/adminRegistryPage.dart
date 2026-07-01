@@ -2,18 +2,16 @@ import 'package:flutter/material.dart';
 
 import '../adminNav.dart';
 import '../services/adminDataService.dart';
-import '../services/adminService.dart';
+import '../services/adminService.dart' show StickInventoryItem, adminErrorMessage;
 
 /// Godmode → Stempel/Punkte/Stifte-Register. Stift-Inventar (mit „Bindung
 /// lösen") + alle Stempelkarten über sämtliche Händler. Reparatur via Editor.
 class AdminRegistryPage extends StatelessWidget {
-  const AdminRegistryPage({super.key, this.admin, this.data});
-  final AdminService? admin;
+  const AdminRegistryPage({super.key, this.data});
   final AdminDataService? data;
 
   @override
   Widget build(BuildContext context) {
-    final a = admin ?? AdminService();
     final d = data ?? AdminDataService();
     return DefaultTabController(
       length: 2,
@@ -24,7 +22,7 @@ class AdminRegistryPage extends StatelessWidget {
               tabs: [Tab(text: 'Stifte'), Tab(text: 'Stempelkarten')]),
         ),
         body: TabBarView(
-          children: [_SticksTab(admin: a, data: d), _CardsTab(data: d)],
+          children: [_SticksTab(data: d), _CardsTab(data: d)],
         ),
       ),
     );
@@ -32,8 +30,7 @@ class AdminRegistryPage extends StatelessWidget {
 }
 
 class _SticksTab extends StatefulWidget {
-  const _SticksTab({required this.admin, required this.data});
-  final AdminService admin;
+  const _SticksTab({required this.data});
   final AdminDataService data;
   @override
   State<_SticksTab> createState() => _SticksTabState();
@@ -48,9 +45,15 @@ class _SticksTabState extends State<_SticksTab> {
     _reload();
   }
 
+  // Direct Firestore read (AdminDataService), not a Cloud Function — instant,
+  // no cold-start round-trip.
   Future<void> _reload() {
-    final f = widget.admin.listSticks();
-    setState(() => _future = f);
+    final f = widget.data
+        .listSticks()
+        .then((docs) => docs.map(StickInventoryItem.fromDoc).toList());
+    setState(() {
+      _future = f;
+    });
     return f;
   }
 
@@ -170,7 +173,9 @@ class _CardsTabState extends State<_CardsTab> {
 
   Future<void> _reload() {
     final f = widget.data.stampCards();
-    setState(() => _future = f);
+    setState(() {
+      _future = f;
+    });
     return f;
   }
 
