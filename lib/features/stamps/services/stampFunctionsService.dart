@@ -15,22 +15,6 @@ class StampFunctionsService {
 
   final FirebaseFunctions _functions;
 
-  /// NFC-tap door: forwards the SUN params (and the customer's location, only if
-  /// already granted) to `redeemStampTap`.
-  Future<StampTapResult> redeemStampTap({
-    required String picc,
-    required String cmac,
-  }) async {
-    final loc = await _bestEffortLocation();
-    final res = await _call('redeemStampTap', {
-      'picc': picc,
-      'cmac': cmac,
-      if (loc != null) 'lat': loc.$1,
-      if (loc != null) 'lng': loc.$2,
-    });
-    return StampTapResult.fromMap(res);
-  }
-
   /// Merchant QR-scan door: add [delta] stamps to a scanned customer's card.
   Future<StampTapResult> merchantStampCustomer({
     required String customerUid,
@@ -100,33 +84,10 @@ class StampFunctionsService {
     return ClaimResult.fromMap(res);
   }
 
-  /// Merchant binds a physical stick (scanned QR) to one of their cards.
-  Future<String> setupStick({
-    required String tagUid,
-    required String provToken,
-    required String cardId,
-  }) async {
-    final res = await _call('setupStick', {
-      'tagUid': tagUid,
-      'provToken': provToken,
-      'cardId': cardId,
-    });
-    return (res['stickId'] ?? '').toString();
-  }
-
-  /// Path A — create a static (browser-written) stick for [cardId]. Returns the
-  /// signed token to write onto the tag and its stickId.
-  Future<StaticStick> createStaticStick({required String cardId}) async {
-    final res = await _call('createStaticStick', {'cardId': cardId});
-    return StaticStick(
-      stickId: (res['stickId'] ?? '').toString(),
-      token: (res['token'] ?? '').toString(),
-    );
-  }
-
-  /// Path A inventory — bind an admin-minted static stick (scanned claim code
-  /// `lokka-stick-a:<id>:<claim>`) to [cardId]. Returns the signed redeem token
-  /// to write onto the tag, same as createStaticStick.
+  /// Bind an owner-minted static stick (scanned bind code
+  /// `lokka-stick-a:<id>:<claim>`) to [cardId]. The tag already carries the
+  /// fixed redeem link (written by the owner in the workshop), so binding is all
+  /// that's needed; the returned token is the same identity link.
   Future<StaticStick> claimStaticStick({
     required String stickId,
     required String claimToken,
@@ -145,36 +106,17 @@ class StampFunctionsService {
 
   /// Path A tap — a customer redeems a static stick link. Forwards best-effort
   /// location (only if already granted) for the optional geofence.
-  Future<StampTapResult> redeemStaticStamp({required String token}) async {
-    final loc = await _bestEffortLocation();
+  Future<StampTapResult> redeemStaticStamp({
+    required String token,
+    (double, double)? location,
+  }) async {
+    final loc = location ?? await _bestEffortLocation();
     final res = await _call('redeemStaticStamp', {
       'token': token,
       if (loc != null) 'lat': loc.$1,
       if (loc != null) 'lng': loc.$2,
     });
     return StampTapResult.fromMap(res);
-  }
-
-  /// Test-Tap — confirm a just-written/bound stick resolves to [cardId]. Pass
-  /// either a static [token] or NTAG SUN params ([picc] + [cmac]). On success
-  /// the server marks the stick verified (badge flips to "Stift verbunden ✓").
-  Future<bool> verifyStickBinding({
-    required String cardId,
-    String? token,
-    String? picc,
-    String? cmac,
-    String? tagUid,
-    String? provToken,
-  }) async {
-    final res = await _call('verifyStickBinding', {
-      'cardId': cardId,
-      if (token != null && token.isNotEmpty) 'token': token,
-      if (picc != null && picc.isNotEmpty) 'picc': picc,
-      if (cmac != null && cmac.isNotEmpty) 'cmac': cmac,
-      if (tagUid != null && tagUid.isNotEmpty) 'tagUid': tagUid,
-      if (provToken != null && provToken.isNotEmpty) 'provToken': provToken,
-    });
-    return res['ok'] == true;
   }
 
   /// Merchant loads a scanned customer's cards/progress/rewards.
@@ -225,6 +167,34 @@ class StampFunctionsService {
       return (pos.latitude, pos.longitude);
     } catch (_) {
       return null; // any failure → skip geofence silently
+    }
+  }
+
+  /// Actively asks for a FRESH, high-accuracy device location — prompts for the
+  /// permission if needed (unlike [_bestEffortLocation], which never prompts).
+  /// Used by the "update my location" retry on the "too far" error so a merchant
+  /// who just walked into range can re-stamp immediately. Returns null if the
+  /// user denies permission or no fix is obtained.
+  Future<(double, double)?> requestFreshLocation() async {
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) return null;
+      var perm = await Geolocator.checkPermission();
+      if (perm == LocationPermission.denied) {
+        perm = await Geolocator.requestPermission();
+      }
+      if (perm == LocationPermission.denied ||
+          perm == LocationPermission.deniedForever) {
+        return null;
+      }
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 10),
+        ),
+      ).timeout(const Duration(seconds: 12));
+      return (pos.latitude, pos.longitude);
+    } catch (_) {
+      return null;
     }
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:lokka/core/theme/appColors.dart';
+import 'package:lokka/core/theme/appRadius.dart';
 import 'package:lokka/core/theme/appSpacing.dart';
 import 'package:lokka/features/user/wallet/models/walletCardModel.dart';
 
@@ -27,7 +28,7 @@ class UserQrCard extends StatelessWidget {
       padding: const EdgeInsets.all(AppSpacing.xl),
       decoration: BoxDecoration(
         color: AppColors.surfaceBg,
-        borderRadius: BorderRadius.circular(32),
+        borderRadius: BorderRadius.circular(AppRadius.xxl),
         border: Border.all(color: cs.outlineVariant),
         boxShadow: [
           BoxShadow(
@@ -43,7 +44,8 @@ class UserQrCard extends StatelessWidget {
           QrImageView(
             data: _qrPayload,
             version: QrVersions.auto,
-            size: 248,
+            // Responsive: never overflow a narrow card / large text scale.
+            size: (MediaQuery.sizeOf(context).width * 0.6).clamp(180.0, 248.0),
             backgroundColor: Colors.transparent,
             eyeStyle: const QrEyeStyle(
               eyeShape: QrEyeShape.square,

@@ -192,13 +192,22 @@ class _UserPartnerStampsPageState extends State<UserPartnerStampsPage> {
     }
   }
 
+  // Show the follow CTA only until the user follows. Once they do, the per-card
+  // "In deiner Wallet" status is the single source of truth — no second mint bar.
   bool get _showBottomBar =>
-      widget.merchant != null && !_loading && _error == null && _cards.isNotEmpty;
+      widget.merchant != null &&
+      !_loading &&
+      _error == null &&
+      _cards.isNotEmpty &&
+      !_checkingWallet &&
+      !_isInWallet;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.greenTint,
+      // Neutral stage so the merchant-designed cards are the show, not a big
+      // mint expanse around them.
+      backgroundColor: AppColors.surfaceBg,
       body: ResponsiveContentWidth(
         child: Column(
           children: [
@@ -259,12 +268,14 @@ class _UserPartnerStampsPageState extends State<UserPartnerStampsPage> {
         for (var i = 0; i < _cards.length; i++)
           AnimatedContainer(
             duration: const Duration(milliseconds: 200),
-            margin: const EdgeInsets.symmetric(horizontal: 3),
-            width: i == _page ? 18 : 7,
-            height: 7,
+            margin: const EdgeInsets.symmetric(horizontal: 4),
+            width: i == _page ? 26 : 9,
+            height: 9,
             decoration: BoxDecoration(
-              color: i == _page ? cs.primary : cs.outlineVariant,
-              borderRadius: BorderRadius.circular(4),
+              color: i == _page
+                  ? cs.primary
+                  : cs.primary.withValues(alpha: 0.28),
+              borderRadius: BorderRadius.circular(5),
             ),
           ),
       ],
@@ -272,66 +283,31 @@ class _UserPartnerStampsPageState extends State<UserPartnerStampsPage> {
   }
 
   Widget _bottomBar() {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-
-    Widget child;
-    if (_checkingWallet) {
-      child = const SizedBox(
-        height: 56,
-        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-      );
-    } else if (_isInWallet) {
-      // Bereits in der Wallet: tonal + deaktiviert.
-      child = Container(
-        height: 56,
-        decoration: BoxDecoration(
-          color: cs.secondaryContainer,
-          borderRadius: BorderRadius.circular(28),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.check_circle_rounded,
-                color: cs.onSecondaryContainer, size: 20),
-            const SizedBox(width: 8),
-            Text(
-              'Du folgst diesem Laden',
-              style: tt.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: cs.onSecondaryContainer,
-              ),
-            ),
-          ],
-        ),
-      );
-    } else {
-      child = SizedBox(
-        height: 56,
-        width: double.infinity,
-        child: FilledButton.icon(
-          onPressed: _adding ? null : _addToWallet,
-          icon: _adding
-              ? const SizedBox.shrink()
-              : const Icon(Icons.add_rounded, size: 20),
-          label: _adding
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                      strokeWidth: 2, color: Colors.white),
-                )
-              : const Text('Zur Wallet hinzufügen'),
-        ),
-      );
-    }
-
+    // Only the follow CTA lives here now (shown until the user follows). The
+    // "already added / following" status is handled per card → no double bar.
     return SafeArea(
       top: false,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(
             AppSpacing.md, AppSpacing.xs, AppSpacing.md, AppSpacing.md),
-        child: child,
+        child: SizedBox(
+          height: 56,
+          width: double.infinity,
+          child: FilledButton.icon(
+            onPressed: _adding ? null : _addToWallet,
+            icon: _adding
+                ? const SizedBox.shrink()
+                : const Icon(Icons.add_rounded, size: 20),
+            label: _adding
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white),
+                  )
+                : const Text('Zur Wallet hinzufügen'),
+          ),
+        ),
       ),
     );
   }
@@ -339,7 +315,9 @@ class _UserPartnerStampsPageState extends State<UserPartnerStampsPage> {
   Widget _header() {
     final tt = Theme.of(context).textTheme;
     return Container(
-      decoration: const BoxDecoration(gradient: AppColors.mintGradient),
+      // Solid system accent — one green, matching the cards & app chrome
+      // (no separate gradient green fighting the system colour).
+      decoration: const BoxDecoration(color: AppColors.accent),
       child: SafeArea(
         bottom: false,
         child: Padding(

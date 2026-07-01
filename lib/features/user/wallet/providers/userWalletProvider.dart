@@ -1,16 +1,31 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:lokka/core/utils/deferredWarmup.dart';
 import '../models/walletCardModel.dart';
 import '../services/userWalletService.dart';
 
 class UserWalletProvider extends ChangeNotifier {
-  UserWalletProvider({required UserWalletService service})
+  /// [tabIndex] lässt den Start verzögern, solange ein anderer Tab aktiv ist
+  /// (siehe [DeferredWarmup]) – null startet sofort (Default/Testverhalten).
+  UserWalletProvider({required UserWalletService service, int? tabIndex})
       : _service = service {
-    _subscribeCards();
+    if (tabIndex == null) {
+      _subscribeCards();
+    } else {
+      DeferredWarmup.schedule(tabIndex, _subscribeCards);
+    }
   }
 
   final UserWalletService _service;
   StreamSubscription<List<WalletCardModel>>? _cardsSub;
+
+  bool _disposed = false;
+
+  @override
+  void notifyListeners() {
+    if (_disposed) return;
+    super.notifyListeners();
+  }
 
   List<WalletCardModel> _cards = [];
   bool _isLoading = true;
@@ -41,6 +56,7 @@ class UserWalletProvider extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
     _cardsSub?.cancel();
     super.dispose();
   }

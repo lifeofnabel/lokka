@@ -26,7 +26,7 @@ class DiscoverFeedItem {
   int get hotScore => post.likesCount + post.opensCount + post.clicksCount;
 }
 
-enum LocationSource { gps, manual, defaultArea }
+enum LocationSource { gps, manual, defaultArea, ipArea }
 
 class UserLocation {
   const UserLocation({
@@ -34,6 +34,7 @@ class UserLocation {
     required this.lng,
     required this.source,
     this.label = '',
+    this.city = '',
   });
 
   final double lat;
@@ -41,10 +42,17 @@ class UserLocation {
   final LocationSource source;
   final String label;
 
+  /// Stadt für den „wir raten"-Hinweis (Default: Frankfurt, IP: erkannte Stadt).
+  final String city;
+
   /// Echter Standort geteilt (GPS) oder selbst getippt → „aktiv".
-  /// Beim Default (Westendplatz) ist es false → Logo durchgestrichen.
-  bool get isShared => source != LocationSource.defaultArea;
-  bool get usedFallback => source == LocationSource.defaultArea;
+  /// Bei Default (Westendplatz) oder IP-Schätzung ist es false → Logo
+  /// durchgestrichen (der Nutzer hat den Standort nicht aktiv freigegeben).
+  bool get isShared =>
+      source == LocationSource.gps || source == LocationSource.manual;
+
+  /// Kein aktiv geteilter Standort → wir raten (Default oder grob per IP).
+  bool get usedFallback => !isShared;
 }
 
 class UserDiscoverService {
@@ -61,6 +69,18 @@ class UserDiscoverService {
   String get _feedCacheKey =>
       'user.discover.feed.${authService.currentUser?.uid ?? 'guest'}';
 
+  String get _interestsCacheKey =>
+      'user.discover.interests.${authService.currentUser?.uid ?? 'guest'}';
+
+  String get _walletIdsCacheKey =>
+      'user.discover.walletIds.${authService.currentUser?.uid ?? 'guest'}';
+
+  /// Kurze TTL statt der Standard-24h: Interessen/Wallet-Mitgliedschaft
+  /// können sich innerhalb einer Session ändern (neuer Follow, Interessen
+  /// bearbeitet), sollen aber einen Feed-Kaltstart nicht jedes Mal mit 2
+  /// weiteren Netzwerk-Reads verzögern.
+  static const _shortTtl = Duration(minutes: 10);
+
   /// Default-Standort, wenn weder GPS noch eine getippte Adresse vorliegt.
   /// Westendplatz 31, Frankfurt (Koordinaten fix hinterlegt – „nicht krank genau").
   static const westendplatz = UserLocation(
@@ -68,13 +88,19 @@ class UserDiscoverService {
     lng: 8.6584,
     source: LocationSource.defaultArea,
     label: 'Westendplatz 31, Frankfurt',
+    city: 'Frankfurt',
   );
 
   String get _manualLocKey =>
       'user.location.manual.${authService.currentUser?.uid ?? 'guest'}';
 
+  /// IP-Schätzung wird pro Gerät zwischengespeichert (IP ändert sich selten) –
+  /// so kostet nicht jeder Feed-Load einen HTTP-Roundtrip.
+  static const _ipLocKey = 'user.location.ip';
+
   /// Auflösung OHNE Permission-Prompt: getippte Adresse > bereits erlaubtes GPS
-  /// > Default Westendplatz. (Der Prompt kommt nur user-initiiert über das Popup.)
+  /// > grobe IP-Verortung > Default Westendplatz. (Der Prompt kommt nur
+  /// user-initiiert über das Popup.)
   Future<UserLocation> resolveLocation() async {
     final manual = await loadManualLocation();
     if (manual != null) return manual;
@@ -96,7 +122,45 @@ class UserDiscoverService {
         );
       }
     } catch (_) {}
-    return westendplatz;
+    // Kein GPS/keine Adresse: grob per IP verorten (v. a. Web), sonst Default.
+    final ip = await _resolveIpLocation();
+    return ip ?? westendplatz;
+  }
+
+  /// Grobe IP-Verortung (aus Cache oder per Geoapify), null bei Misserfolg.
+  Future<UserLocation?> _resolveIpLocation() async {
+    final cached = await cacheService.readMap(_ipLocKey);
+    final clat = (cached?['lat'] as num?)?.toDouble();
+    final clng = (cached?['lng'] as num?)?.toDouble();
+    if (clat != null && clng != null) {
+      final city = (cached?['city'] ?? '').toString();
+      return UserLocation(
+        lat: clat,
+        lng: clng,
+        source: LocationSource.ipArea,
+        label: city.isEmpty ? 'In deiner Nähe' : city,
+        city: city,
+      );
+    }
+    try {
+      final ip = await GeoapifyService().ipLocate();
+      if (ip == null || !ip.hasCoordinates) return null;
+      final city = ip.city.trim();
+      await cacheService.writeMap(_ipLocKey, {
+        'lat': ip.lat,
+        'lng': ip.lng,
+        'city': city,
+      });
+      return UserLocation(
+        lat: ip.lat,
+        lng: ip.lng,
+        source: LocationSource.ipArea,
+        label: city.isEmpty ? 'In deiner Nähe' : city,
+        city: city,
+      );
+    } catch (_) {
+      return null;
+    }
   }
 
   /// User-initiiert (Button im Popup) – darf um Standortfreigabe bitten.
@@ -174,14 +238,26 @@ class UserDiscoverService {
   Future<void> clearManualLocation() => cacheService.remove(_manualLocKey);
 
   Future<({List<String> categories})> loadInterests() async {
+    final cached = await cacheService.readMap(_interestsCacheKey, ttl: _shortTtl);
+    if (cached != null) {
+      final categories = (cached['categories'] as List?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          <String>[];
+      return (categories: categories);
+    }
+    return refreshInterests();
+  }
+
+  Future<({List<String> categories})> refreshInterests() async {
     final uid = authService.currentUser?.uid;
     if (uid == null) return (categories: <String>[]);
     final data = await firestoreService.readDocument(FirebasePaths.user(uid));
-    if (data == null) return (categories: <String>[]);
-    final categories = (data['interestCategories'] as List?)
+    final categories = (data?['interestCategories'] as List?)
             ?.map((e) => e.toString())
             .toList() ??
         <String>[];
+    await cacheService.writeMap(_interestsCacheKey, {'categories': categories});
     return (categories: categories);
   }
 
@@ -202,6 +278,10 @@ class UserDiscoverService {
         (b['isDefault'] == true ? 1 : 0) - (a['isDefault'] == true ? 1 : 0));
     return places;
   }
+
+  /// Alle möglichen Herkünfte/Küchen (chooser/origins) – für den Origin-Filter
+  /// im Filter-Sheet. Der Provider ruft das nur einmal lazy ab und cacht es.
+  Future<List<String>> loadOrigins() => firestoreService.loadChooserOrigins();
 
   Future<List<PublicMerchantUserModel>> loadPublicMerchants() async {
     final cached = await loadCachedPublicMerchants();
@@ -309,19 +389,18 @@ class UserDiscoverService {
       candidates.add((post: post, merchant: merchant));
     }
 
-    // 2) Bewertungen PARALLEL laden (statt sequenziell pro Post → kein Hängen).
-    final ratings = await Future.wait(
-      candidates.map((c) => _averageRating(c.post.postId)),
-    );
-
-    // 3) Items zusammensetzen.
+    // 2) Items OHNE Bewertungen zusammensetzen. Ein Read pro Beitrag (N+1)
+    // würde bei einem Cache-Miss potenziell 50-100+ gleichzeitige Firestore-
+    // Reads auslösen und damit den ersten sichtbaren Feed-Load blockieren —
+    // Bewertungen werden stattdessen fensterweise nachgeladen, siehe
+    // [fetchRatingsFor] (vom Provider für die jeweils sichtbaren Posts genutzt).
     final items = [
-      for (var i = 0; i < candidates.length; i++)
+      for (final c in candidates)
         DiscoverFeedItem(
-          post: candidates[i].post,
-          merchant: candidates[i].merchant,
-          averageRating: ratings[i],
-          isLiked: likedIds.contains(candidates[i].post.postId),
+          post: c.post,
+          merchant: c.merchant,
+          averageRating: null,
+          isLiked: likedIds.contains(c.post.postId),
         ),
     ];
 
@@ -394,6 +473,21 @@ class UserDiscoverService {
     });
   }
 
+  /// Bewertungen für eine GEZIELTE, kleine Menge Beiträge (das aktuell
+  /// sichtbare Fenster) — nicht für den ganzen Feed auf einmal, damit kein
+  /// Burst gleichzeitiger Reads entsteht. Wird vom Provider nach jedem
+  /// Sichtbar-Werden neuer Posts aufgerufen.
+  Future<Map<String, double>> fetchRatingsFor(List<String> postIds) async {
+    if (postIds.isEmpty) return {};
+    final ratings = await Future.wait(postIds.map(_averageRating));
+    final result = <String, double>{};
+    for (var i = 0; i < postIds.length; i++) {
+      final rating = ratings[i];
+      if (rating != null) result[postIds[i]] = rating;
+    }
+    return result;
+  }
+
   Future<double?> _averageRating(String postId) async {
     final snap = await firestoreService
         .collection(FirebasePaths.feedReviews(postId))
@@ -420,7 +514,23 @@ class UserDiscoverService {
   }
 
   /// Partner-IDs, denen der Nutzer folgt (= Merchants in seiner Wallet).
-  Future<Set<String>> loadWalletMerchantIds() => _walletMerchantIds();
+  /// Cache-first (kurze TTL) – der Feed-Kaltstart braucht dafür kein
+  /// zusätzliches Netzwerk-Read; [refreshWalletMerchantIds] holt die
+  /// tatsächlich frischen Daten (genutzt vom Hintergrund-Refresh).
+  Future<Set<String>> loadWalletMerchantIds() async {
+    final cached = await cacheService.readMap(_walletIdsCacheKey, ttl: _shortTtl);
+    if (cached != null) {
+      return (cached['ids'] as List?)?.map((e) => e.toString()).toSet() ??
+          <String>{};
+    }
+    return refreshWalletMerchantIds();
+  }
+
+  Future<Set<String>> refreshWalletMerchantIds() async {
+    final ids = await _walletMerchantIds();
+    await cacheService.writeMap(_walletIdsCacheKey, {'ids': ids.toList()});
+    return ids;
+  }
 
   Future<Set<String>> _walletMerchantIds() async {
     final uid = authService.currentUser?.uid;

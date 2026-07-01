@@ -5,8 +5,13 @@ import '../../../../core/services/languageService.dart';
 import '../../../../core/theme/appSpacing.dart';
 import '../../../stamps/widgets/stampCardVisual.dart';
 import '../../shared/widgets/merchantPremiumUi.dart';
+import '../../tools/widgets/merchantToolUi.dart';
 import '../models/stampCardModel.dart';
 
+/// Eine Stempelkarte in der Übersicht: große Vorschau, Titel + Belohnung,
+/// Status, und wenige große Knöpfe. Der Hauptknopf hängt vom Zustand ab —
+/// „Veröffentlichen" für Entwürfe, „Stempel-Link" für aktive Karten (das, was
+/// der Händler wirklich braucht, um zu stempeln).
 class MerchantStampCard extends StatelessWidget {
   const MerchantStampCard({
     super.key,
@@ -15,6 +20,7 @@ class MerchantStampCard extends StatelessWidget {
     required this.onPublish,
     required this.onPause,
     required this.onDelete,
+    required this.onStick,
   });
 
   final StampCardModel card;
@@ -23,13 +29,21 @@ class MerchantStampCard extends StatelessWidget {
   final VoidCallback onPause;
   final VoidCallback onDelete;
 
+  /// Öffnet den Stempel-Link / Stift-Einrichtung für diese Karte.
+  final VoidCallback onStick;
+
   @override
   Widget build(BuildContext context) {
     final texts = context.watch<LanguageService>();
+    final reward = card.rewardTitle.trim().isEmpty
+        ? card.rewardItemName.trim()
+        : card.rewardTitle.trim();
+
     return MerchantPremiumCard(
       padding: const EdgeInsets.all(AppSpacing.md),
       radius: 30,
-      borderColor: card.isLive ? MerchantPremiumColors.ink : MerchantPremiumColors.line,
+      borderColor:
+          card.isLive ? MerchantPremiumColors.gold : MerchantPremiumColors.line,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -37,39 +51,25 @@ class MerchantStampCard extends StatelessWidget {
           const SizedBox(height: AppSpacing.md),
           Row(
             children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: card.isLive ? MerchantPremiumColors.ink : MerchantPremiumColors.surfaceAlt,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: card.isLive ? MerchantPremiumColors.ink : MerchantPremiumColors.line,
-                  ),
-                ),
-                child: Icon(
-                  card.isLive ? Icons.check_rounded : Icons.more_horiz_rounded,
-                  color: card.isLive ? MerchantPremiumColors.base : MerchantPremiumColors.muted,
-                ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      card.title.isEmpty ? texts.text('merchant.stamps.untitled') : card.title,
+                      card.title.isEmpty
+                          ? texts.text('merchant.stamps.untitled')
+                          : card.title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: MerchantPremiumColors.ink,
-                        fontSize: 19,
+                        fontSize: 20,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
                     const SizedBox(height: 5),
                     Text(
-                      '${card.requiredStamps} ${texts.text('merchant.stamps.stamps')} | ${_conditionLabel(texts, card)}',
+                      '${card.requiredStamps} Stempel · ${reward.isEmpty ? 'Belohnung' : reward}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -80,42 +80,55 @@ class MerchantStampCard extends StatelessWidget {
                   ],
                 ),
               ),
+              const SizedBox(width: AppSpacing.sm),
               _StatusPill(label: _statusLabel(texts, card.status)),
             ],
           ),
+          const SizedBox(height: AppSpacing.md),
+
+          // ── Hauptknopf je nach Zustand ──────────────────────────────────
+          if (card.isLive)
+            MerchantPrimaryButton(
+              label: 'Stempel-Link',
+              icon: Icons.ios_share_rounded,
+              onPressed: onStick,
+            )
+          else
+            MerchantPrimaryButton(
+              label: texts.text('merchant.stamps.publish'),
+              icon: Icons.rocket_launch_rounded,
+              onPressed: onPublish,
+            ),
           const SizedBox(height: AppSpacing.sm),
-          _StickBadge(
-            verified: card.stickVerified,
-            bound: card.hasStick,
-            hasLink: card.hasLink,
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
+
+          // ── Kleinere Aktionen ──────────────────────────────────────────
+          Row(
             children: [
-              _MiniAction(
-                label: texts.text('common.edit'),
-                icon: Icons.edit_rounded,
-                onTap: onEdit,
+              Expanded(
+                child: _CardAction(
+                  label: texts.text('common.edit'),
+                  icon: Icons.edit_rounded,
+                  onTap: onEdit,
+                ),
               ),
-              if (card.isDraft || card.isPaused)
-                _MiniAction(
-                  label: texts.text('merchant.stamps.publish'),
-                  icon: Icons.rocket_launch_rounded,
-                  onTap: onPublish,
+              if (card.isLive) ...[
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _CardAction(
+                    label: texts.text('merchant.stamps.pause'),
+                    icon: Icons.pause_rounded,
+                    onTap: onPause,
+                  ),
                 ),
-              if (card.isLive)
-                _MiniAction(
-                  label: texts.text('merchant.stamps.pause'),
-                  icon: Icons.pause_rounded,
-                  onTap: onPause,
+              ],
+              const SizedBox(width: 8),
+              Expanded(
+                child: _CardAction(
+                  label: texts.text('common.delete'),
+                  icon: Icons.delete_outline_rounded,
+                  isDanger: true,
+                  onTap: onDelete,
                 ),
-              _MiniAction(
-                label: texts.text('common.delete'),
-                icon: Icons.delete_outline_rounded,
-                isDanger: true,
-                onTap: onDelete,
               ),
             ],
           ),
@@ -143,8 +156,8 @@ class MerchantStampPreview extends StatelessWidget {
       StampCardVisual(card: card, compact: compact);
 }
 
-class _MiniAction extends StatelessWidget {
-  const _MiniAction({
+class _CardAction extends StatelessWidget {
+  const _CardAction({
     required this.label,
     required this.icon,
     required this.onTap,
@@ -158,83 +171,37 @@ class _MiniAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ActionChip(
-      avatar: Icon(icon, size: 17, color: isDanger ? Colors.red.shade700 : MerchantPremiumColors.ink),
-      label: Text(label),
+    final color =
+        isDanger ? MerchantPremiumColors.danger : MerchantPremiumColors.ink;
+    return OutlinedButton(
       onPressed: onTap,
-      labelStyle: TextStyle(
-        color: isDanger ? Colors.red.shade700 : MerchantPremiumColors.ink,
-        fontWeight: FontWeight.w800,
+      style: OutlinedButton.styleFrom(
+        foregroundColor: color,
+        side: BorderSide(
+          color: isDanger
+              ? MerchantPremiumColors.danger.withValues(alpha: 0.5)
+              : MerchantPremiumColors.line,
+        ),
+        minimumSize: const Size.fromHeight(48),
+        padding: const EdgeInsets.symmetric(horizontal: 6),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       ),
-      backgroundColor: MerchantPremiumColors.surfaceAlt,
-      side: BorderSide(color: isDanger ? Colors.red.shade100 : MerchantPremiumColors.line),
-    );
-  }
-}
-
-class _StickBadge extends StatelessWidget {
-  const _StickBadge({
-    required this.verified,
-    required this.bound,
-    this.hasLink = false,
-  });
-
-  /// Stick bound AND passed a Test-Tap → "Stift verbunden ✓".
-  final bool verified;
-
-  /// A physical stick is bound but not yet test-tapped → "Test-Tap nötig".
-  final bool bound;
-
-  /// A shareable tap link is prepared → "Link bereit" (no test-tap needed).
-  final bool hasLink;
-
-  @override
-  Widget build(BuildContext context) {
-    final texts = context.watch<LanguageService>();
-    final (labelKey, icon, color) = verified
-        ? (
-            'merchant.stick.connected',
-            Icons.check_circle_rounded,
-            MerchantPremiumColors.gold
-          )
-        : hasLink
-            ? (
-                'merchant.stick.linkReady',
-                Icons.link_rounded,
-                MerchantPremiumColors.gold
-              )
-            : bound
-                ? (
-                    'merchant.stick.testNeeded',
-                    Icons.touch_app_rounded,
-                    MerchantPremiumColors.muted
-                  )
-                : (
-                    'merchant.stick.notConnected',
-                    Icons.link_off_rounded,
-                    MerchantPremiumColors.muted
-                  );
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: color.withValues(alpha: 0.5)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 16, color: color),
-            const SizedBox(width: 6),
-            Text(
-              texts.text(labelKey),
-              style: TextStyle(
-                  color: color, fontWeight: FontWeight.w800, fontSize: 12.5),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 19, color: color),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.w800,
+              fontSize: 12.5,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -266,15 +233,6 @@ class _StatusPill extends StatelessWidget {
   }
 }
 
-String _conditionLabel(LanguageService texts, StampCardModel card) {
-  return switch (card.conditionType) {
-    StampConditionType.minimumAmount => texts.text('merchant.stamps.condition.minimumAmount'),
-    StampConditionType.item => card.requiredItemName.isNotEmpty ? card.requiredItemName : texts.text('merchant.stamps.condition.item'),
-    StampConditionType.custom => texts.text('merchant.stamps.condition.custom'),
-    _ => texts.text('merchant.stamps.condition.visit'),
-  };
-}
-
 String _statusLabel(LanguageService texts, String status) {
   return switch (status) {
     StampCardStatus.active => texts.text('merchant.stamps.status.active'),
@@ -283,4 +241,3 @@ String _statusLabel(LanguageService texts, String status) {
     _ => texts.text('merchant.stamps.status.draft'),
   };
 }
-

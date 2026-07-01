@@ -373,6 +373,7 @@ class _MerchantHeader extends StatelessWidget {
             ),
             Tooltip(
               message: 'Weitere Optionen',
+              triggerMode: TooltipTriggerMode.tap,
               child: IconButton(
                 icon: Icon(Icons.more_vert_rounded,
                     size: 20, color: cs.onSurfaceVariant),
@@ -519,10 +520,10 @@ class _ActionBar extends StatelessWidget {
             onTap: onLikeTap,
           ),
           _ActionButton(
-            icon: Icons.mode_comment_outlined,
+            icon: Icons.rate_review_outlined,
             color: cs.onSurfaceVariant,
             label: commentCount > 0 ? '$commentCount' : null,
-            tooltip: 'Kommentare',
+            tooltip: 'Bewertungen',
             onTap: onCommentTap,
           ),
           _ActionButton(
@@ -534,6 +535,7 @@ class _ActionBar extends StatelessWidget {
           const Spacer(),
           Tooltip(
             message: 'Beitrag öffnen',
+            triggerMode: TooltipTriggerMode.tap,
             child: IconButton(
               onPressed: onOpen,
               icon: Icon(Icons.arrow_forward_rounded,
@@ -567,6 +569,9 @@ class _ActionButton extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     return Tooltip(
       message: tooltip,
+      // Sonst zeigt der Tooltip auf Touch nur bei Long-Press (Default), nicht
+      // bei normalem Tap.
+      triggerMode: TooltipTriggerMode.tap,
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(20),

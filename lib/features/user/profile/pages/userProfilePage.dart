@@ -2,11 +2,8 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
-import 'package:url_launcher/url_launcher.dart';
-import 'package:lokka/core/config/appConfig.dart';
 import 'package:lokka/core/models/appUserModel.dart';
 import 'package:lokka/core/services/uploadService.dart';
-import 'package:lokka/core/theme/appColors.dart';
 import 'package:lokka/core/theme/appRadius.dart';
 import 'package:lokka/core/theme/appSpacing.dart';
 import 'package:lokka/core/widgets/appLoadingState.dart';
@@ -16,6 +13,7 @@ import 'package:lokka/features/user/profile/pages/meinePartnerPage.dart';
 import 'package:lokka/features/user/profile/pages/meinProtokollPage.dart';
 import 'package:lokka/features/user/profile/pages/meineRezensionenPage.dart';
 import 'package:lokka/features/user/profile/pages/profileChangePasswordPage.dart';
+import 'package:lokka/features/user/profile/pages/privacyPolicyPage.dart';
 import 'package:lokka/features/user/profile/pages/profilePersonalDataPage.dart';
 import 'package:lokka/features/user/profile/pages/profilePhoneVerifyPage.dart';
 import 'package:lokka/features/user/profile/providers/userProfileProvider.dart';
@@ -30,15 +28,12 @@ class UserProfilePage extends StatelessWidget {
     return Consumer<UserProfileProvider>(
       builder: (context, provider, _) {
         if (provider.isLoading) {
-          return const Scaffold(
-            backgroundColor: AppColors.surfaceBg,
-            body: AppLoadingState(),
-          );
+          return const Scaffold(body: AppLoadingState());
         }
 
         final user = provider.user;
         return Scaffold(
-          backgroundColor: AppColors.surfaceBg,
+          backgroundColor: Theme.of(context).colorScheme.surfaceContainerLowest,
           body: CustomScrollView(
             slivers: [
               SliverToBoxAdapter(child: _Hero(user: user)),
@@ -65,7 +60,11 @@ class UserProfilePage extends StatelessWidget {
                           if (context.mounted) context.go('/');
                         },
                       ),
-                      const SizedBox(height: 140),
+                      // Reserve space for the floating bottom nav (tracks the
+                      // real safe-area inset instead of a fragile magic number).
+                      SizedBox(
+                          height:
+                              96 + MediaQuery.of(context).viewPadding.bottom),
                     ],
                   ),
                 ),
@@ -121,17 +120,128 @@ class _HeroState extends State<_Hero> {
     }
   }
 
+  /// 20 face emojis (represent people/emotions) for the avatar picker.
+  /// Stored locally in the app — no network fetch.
+  static const _avatarEmojis = <String>[
+    '😀', '😃', '😄', '😁', '😊', '🙂', '😉', '😍', '🥰', '😎',
+    '🤩', '🥳', '😇', '🤗', '🤔', '🤓', '🥸', '🧐', '😜', '😌',
+  ];
+
+  /// Lets the user pick between a gallery photo and an emoji avatar.
+  Future<void> _openAvatarChooser() async {
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_library_rounded),
+              title: const Text('Foto auswählen'),
+              onTap: () => Navigator.pop(ctx, 'photo'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.emoji_emotions_rounded),
+              title: const Text('Emoji wählen'),
+              onTap: () => Navigator.pop(ctx, 'emoji'),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || choice == null) return;
+    if (choice == 'photo') {
+      await _pickAndUpload();
+    } else if (choice == 'emoji') {
+      await _pickEmoji();
+    }
+  }
+
+  Future<void> _pickEmoji() async {
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      // Let the sheet size to its content (past the half-screen cap) instead of
+      // overflowing; the inner scroll view is a safety net for small screens.
+      isScrollControlled: true,
+      builder: (ctx) {
+        final tt = Theme.of(ctx).textTheme;
+        return SafeArea(
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.lg),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Emoji als Profilbild',
+                      style: tt.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w700)),
+                  const SizedBox(height: AppSpacing.md),
+                  GridView.count(
+                    crossAxisCount: 5,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    mainAxisSpacing: 10,
+                    crossAxisSpacing: 10,
+                    children: [
+                      for (final e in _avatarEmojis)
+                        Material(
+                          color:
+                              Theme.of(ctx).colorScheme.surfaceContainerHigh,
+                          borderRadius:
+                              BorderRadius.circular(AppRadius.medium),
+                          clipBehavior: Clip.antiAlias,
+                          child: InkWell(
+                            onTap: () => Navigator.pop(ctx, e),
+                            child: Center(
+                              child: Text(e,
+                                  style: const TextStyle(fontSize: 28)),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+    if (!mounted || picked == null) return;
+    final profileService = context.read<UserProfileProvider>().service;
+    try {
+      await profileService.updateProfileEmoji(picked);
+    } catch (_) {}
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     final user = widget.user;
     final imageUrl = user?.profileImageUrl;
+    final emoji = user?.profileEmoji;
+    final showEmoji =
+        user?.profileImageType == 'emoji' && (emoji?.isNotEmpty ?? false);
     final verified = user?.phoneVerified ?? false;
     final onHero = cs.onPrimary;
+    // Subtle diagonal brand gradient instead of a flat fill — reads more
+    // professional while staying on-brand (theme-aware for light & dark).
+    final coverBottom = Color.lerp(cs.primary, Colors.black, 0.4)!;
 
     return Container(
-      decoration: BoxDecoration(color: cs.primary),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [cs.primary, coverBottom],
+        ),
+      ),
       child: SafeArea(
         bottom: false,
         child: Padding(
@@ -139,26 +249,36 @@ class _HeroState extends State<_Hero> {
               AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, AppSpacing.xl),
           child: Column(
             children: [
-              // Mini activity entry — small, low-priority, top-right of the hero.
+              // Activity entry — a clearly labelled pill (not an unlabelled
+              // icon whose only hint was a tooltip).
               Align(
                 alignment: Alignment.centerRight,
-                child: Tooltip(
-                  message: 'Meine Aktivität',
-                  child: Material(
-                    color: onHero.withValues(alpha: 0.16),
-                    shape: const CircleBorder(),
-                    clipBehavior: Clip.antiAlias,
-                    child: InkWell(
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (_) => const MeinProtokollPage()),
-                      ),
-                      child: SizedBox(
-                        width: 38,
-                        height: 38,
-                        child: Icon(Icons.timeline_rounded,
-                            size: 19, color: onHero),
+                child: Material(
+                  color: onHero.withValues(alpha: 0.16),
+                  borderRadius: BorderRadius.circular(AppRadius.full),
+                  clipBehavior: Clip.antiAlias,
+                  child: InkWell(
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => const MeinProtokollPage()),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.timeline_rounded, size: 16, color: onHero),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Aktivität',
+                            style: tt.labelMedium?.copyWith(
+                              color: onHero,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -171,18 +291,20 @@ class _HeroState extends State<_Hero> {
                     shape: const CircleBorder(),
                     clipBehavior: Clip.antiAlias,
                     child: InkWell(
-                      onTap: _uploading ? null : _pickAndUpload,
+                      onTap: _uploading ? null : _openAvatarChooser,
                       child: SizedBox(
                         width: 84,
                         height: 84,
-                        child: imageUrl != null && imageUrl.isNotEmpty
-                            ? CachedNetworkImage(
-                                imageUrl: imageUrl,
-                                fit: BoxFit.cover,
-                                errorWidget: (context, url, error) =>
-                                    _initialsWidget(),
-                              )
-                            : _initialsWidget(),
+                        child: showEmoji
+                            ? _emojiWidget(emoji!)
+                            : (imageUrl != null && imageUrl.isNotEmpty
+                                ? CachedNetworkImage(
+                                    imageUrl: imageUrl,
+                                    fit: BoxFit.cover,
+                                    errorWidget: (context, url, error) =>
+                                        _initialsWidget(),
+                                  )
+                                : _initialsWidget()),
                       ),
                     ),
                   ),
@@ -194,7 +316,7 @@ class _HeroState extends State<_Hero> {
                       shape: const CircleBorder(),
                       clipBehavior: Clip.antiAlias,
                       child: InkWell(
-                        onTap: _uploading ? null : _pickAndUpload,
+                        onTap: _uploading ? null : _openAvatarChooser,
                         child: SizedBox(
                           width: 28,
                           height: 28,
@@ -291,6 +413,15 @@ class _HeroState extends State<_Hero> {
       ),
     );
   }
+
+  /// Large, centered emoji avatar (fills the 84×84 circle).
+  Widget _emojiWidget(String emoji) {
+    return Container(
+      color: Colors.white,
+      alignment: Alignment.center,
+      child: Text(emoji, style: const TextStyle(fontSize: 46, height: 1.0)),
+    );
+  }
 }
 
 // ── Quick-Actions (2×2 + breite Aktivität) ────────────────────────────────────
@@ -306,7 +437,8 @@ class _QuickActions extends StatelessWidget {
       children: [
         const _SectionLabel('Mein Bereich'),
         const SizedBox(height: AppSpacing.sm),
-        // Four compact shortcuts in one row — like the merchant's quick actions.
+        // 2×2 grid — never squishes long labels ("Rezensionen") on narrow
+        // phones the way four-in-a-row did.
         Row(
           children: [
             Expanded(
@@ -324,7 +456,11 @@ class _QuickActions extends StatelessWidget {
                 onTap: () => _push(context, const MeinePartnerPage()),
               ),
             ),
-            const SizedBox(width: AppSpacing.sm),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Row(
+          children: [
             Expanded(
               child: _Shortcut(
                 icon: Icons.reviews_rounded,
@@ -336,7 +472,7 @@ class _QuickActions extends StatelessWidget {
             Expanded(
               child: _Shortcut(
                 icon: Icons.tune_rounded,
-                label: 'Interessen',
+                label: 'Über mich',
                 onTap: () => _push(
                   context,
                   OnboardingSurveyPage(
@@ -375,16 +511,16 @@ class _Shortcut extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     return Material(
-      color: AppColors.surfaceBg,
-      borderRadius: BorderRadius.circular(20),
+      color: cs.surface,
+      borderRadius: BorderRadius.circular(AppRadius.large),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(AppRadius.large),
         child: Ink(
           padding:
               const EdgeInsets.symmetric(vertical: AppSpacing.md, horizontal: 6),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(AppRadius.large),
             border: Border.all(color: cs.outlineVariant),
           ),
           child: Column(
@@ -394,7 +530,7 @@ class _Shortcut extends StatelessWidget {
                 height: 42,
                 decoration: BoxDecoration(
                   color: cs.secondaryContainer,
-                  borderRadius: BorderRadius.circular(13),
+                  borderRadius: BorderRadius.circular(AppRadius.medium),
                 ),
                 child: Icon(icon, size: 21, color: cs.onSecondaryContainer),
               ),
@@ -425,16 +561,6 @@ class _AccountCard extends StatelessWidget {
   const _AccountCard({required this.user});
   final AppUserModel user;
 
-  Future<void> _openPrivacyPolicy(BuildContext context) async {
-    final uri = Uri.parse(AppConfig.privacyPolicyUrl);
-    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
-    if (!opened && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Link konnte nicht geöffnet werden.')),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -443,7 +569,6 @@ class _AccountCard extends StatelessWidget {
         _LinkTile(
           icon: Icons.badge_outlined,
           label: 'Persönliche Daten',
-          subtitle: 'Name, Kontakt & Adresse',
           onTap: () => Navigator.push(
               context,
               MaterialPageRoute(
@@ -472,7 +597,10 @@ class _AccountCard extends StatelessWidget {
         _LinkTile(
           icon: Icons.privacy_tip_outlined,
           label: 'Datenschutzerklärung',
-          onTap: () => _openPrivacyPolicy(context),
+          onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (_) => const PrivacyPolicyPage())),
         ),
       ],
     );
@@ -588,19 +716,21 @@ class _BottomLinks extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     return Column(
       children: [
-        // Logout — clear presence.
-        SizedBox(
-          width: double.infinity,
-          child: FilledButton.tonalIcon(
+        // Logout — demoted to a quiet, secondary action. It is the least
+        // important thing on the page, so it must not be the boldest element.
+        Center(
+          child: TextButton.icon(
             onPressed: () => _confirmLogout(context),
             icon: const Icon(Icons.logout_rounded, size: 18),
             label: const Text('Ausloggen'),
-            style: FilledButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 14),
+            style: TextButton.styleFrom(
+              foregroundColor: cs.onSurfaceVariant,
+              padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.md, vertical: 10),
             ),
           ),
         ),
-        const SizedBox(height: AppSpacing.xl),
+        const SizedBox(height: AppSpacing.md),
         // Delete — quiet, thin, at the very bottom.
         Center(
           child: TextButton(
@@ -656,7 +786,7 @@ class _Card extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.surfaceBg,
+        color: cs.surface,
         borderRadius: BorderRadius.circular(28),
         border: Border.all(color: cs.outlineVariant),
       ),

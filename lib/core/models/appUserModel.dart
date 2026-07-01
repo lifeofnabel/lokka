@@ -24,6 +24,8 @@ class AppUserModel {
     this.lastAuthProvider,
     this.birthday,
     this.profileImageUrl,
+    this.profileEmoji,
+    this.profileImageType = 'image',
     this.profileCoverGradient = 0,
     this.interestCategories = const [],
     this.interestOrigins = const [],
@@ -54,6 +56,12 @@ class AppUserModel {
   final String? lastAuthProvider;
   final DateTime? birthday;
   final String? profileImageUrl;
+
+  /// Optional emoji used as the avatar when [profileImageType] == 'emoji'.
+  final String? profileEmoji;
+
+  /// 'image' (gallery upload) or 'emoji' — which avatar source to render.
+  final String profileImageType;
   final int profileCoverGradient;
   final List<String> interestCategories;
 
@@ -71,11 +79,36 @@ class AppUserModel {
   final DateTime? updatedAt;
 
   factory AppUserModel.fromMap(Map<String, dynamic> map) {
+    // Name fallback: some user docs store the name under a single field
+    // (`name`/`displayName`/`fullName`) or the merchant-style
+    // `ownerFirstName`/`ownerLastName` instead of `firstName`/`lastName`.
+    // Resolve all shapes so the profile always shows a name.
+    final fn = (map['firstName'] as String? ?? '').trim();
+    final ln = (map['lastName'] as String? ?? '').trim();
+    final ofn = (map['ownerFirstName'] as String? ?? '').trim();
+    final oln = (map['ownerLastName'] as String? ?? '').trim();
+    final rawName = (map['name'] as String? ??
+            map['displayName'] as String? ??
+            map['fullName'] as String? ??
+            '')
+        .trim();
+    final nameParts =
+        rawName.isEmpty ? const <String>[] : rawName.split(RegExp(r'\s+'));
+    final resolvedFirst = fn.isNotEmpty
+        ? fn
+        : ofn.isNotEmpty
+            ? ofn
+            : (nameParts.isNotEmpty ? nameParts.first : '');
+    final resolvedLast = ln.isNotEmpty
+        ? ln
+        : oln.isNotEmpty
+            ? oln
+            : (nameParts.length > 1 ? nameParts.sublist(1).join(' ') : '');
     return AppUserModel(
       uid: map['uid'] as String? ?? '',
       role: UserRole.values.byName(map['role'] as String? ?? UserRole.user.name),
-      firstName: map['firstName'] as String? ?? '',
-      lastName: map['lastName'] as String? ?? '',
+      firstName: resolvedFirst,
+      lastName: resolvedLast,
       email: map['email'] as String? ?? '',
       emailLowercase: map['emailLowercase'] as String? ?? '',
       customerCode: map['customerCode'] as String? ?? '',
@@ -92,6 +125,8 @@ class AppUserModel {
       lastAuthProvider: map['lastAuthProvider'] as String?,
       birthday: _date(map['birthday']),
       profileImageUrl: map['profileImageUrl'] as String?,
+      profileEmoji: map['profileEmoji'] as String?,
+      profileImageType: map['profileImageType'] as String? ?? 'image',
       profileCoverGradient: map['profileCoverGradient'] as int? ?? 0,
       interestCategories: (map['interestCategories'] as List?)
               ?.map((e) => e.toString())
@@ -138,6 +173,8 @@ class AppUserModel {
       'lastAuthProvider': lastAuthProvider,
       'birthday': birthday?.toIso8601String(),
       'profileImageUrl': profileImageUrl,
+      'profileEmoji': profileEmoji,
+      'profileImageType': profileImageType,
       'profileCoverGradient': profileCoverGradient,
       'interestCategories': interestCategories,
       'interestOrigins': interestOrigins,
@@ -170,6 +207,8 @@ class AppUserModel {
     String? lastAuthProvider,
     DateTime? birthday,
     String? profileImageUrl,
+    String? profileEmoji,
+    String? profileImageType,
     int? profileCoverGradient,
     List<String>? interestCategories,
     List<String>? interestOrigins,
@@ -200,6 +239,8 @@ class AppUserModel {
       lastAuthProvider: lastAuthProvider ?? this.lastAuthProvider,
       birthday: birthday ?? this.birthday,
       profileImageUrl: profileImageUrl ?? this.profileImageUrl,
+      profileEmoji: profileEmoji ?? this.profileEmoji,
+      profileImageType: profileImageType ?? this.profileImageType,
       profileCoverGradient: profileCoverGradient ?? this.profileCoverGradient,
       interestCategories: interestCategories ?? this.interestCategories,
       interestOrigins: interestOrigins ?? this.interestOrigins,

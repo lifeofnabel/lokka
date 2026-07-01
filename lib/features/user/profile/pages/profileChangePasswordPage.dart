@@ -23,6 +23,7 @@ class _ProfileChangePasswordPageState
   final _confirmCtrl = TextEditingController();
 
   bool _loading = false;
+  bool _sendingReset = false;
   bool _showCurrent = false;
   bool _showNew = false;
   bool _showConfirm = false;
@@ -85,6 +86,57 @@ class _ProfileChangePasswordPageState
     }
   }
 
+  /// Aktuelles Passwort vergessen → Reset-Link per E-Mail an die
+  /// Konto-Adresse. So kommt man ohne das alte Passwort zu einem neuen.
+  Future<void> _sendReset() async {
+    final email = _authService.currentUser?.email;
+    if (email == null || email.trim().isEmpty) {
+      setState(() => _error =
+          'Für dieses Konto ist keine E-Mail hinterlegt. Reset ist nicht möglich.');
+      return;
+    }
+    setState(() {
+      _sendingReset = true;
+      _error = null;
+    });
+    try {
+      await _authService.sendPasswordResetEmail(email);
+      if (!mounted) return;
+      setState(() => _sendingReset = false);
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          icon: const Icon(Icons.mark_email_read_rounded),
+          title: const Text('E-Mail unterwegs'),
+          content: Text(
+            'Wir haben dir einen Link zum Zurücksetzen an $email geschickt. '
+            'Öffne die E-Mail und vergib dort ein neues Passwort.',
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Verstanden'),
+            ),
+          ],
+        ),
+      );
+    } on FirebaseAuthException catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = _friendly(e);
+          _sendingReset = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _error = 'Reset-E-Mail konnte nicht gesendet werden. Bitte erneut.';
+          _sendingReset = false;
+        });
+      }
+    }
+  }
+
   String _friendly(FirebaseAuthException e) {
     return switch (e.code) {
       'wrong-password' || 'invalid-credential' =>
@@ -104,18 +156,6 @@ class _ProfileChangePasswordPageState
       backgroundColor: AppColors.surfaceBg,
       appBar: AppBar(
         title: const Text('Passwort ändern'),
-        actions: [
-          TextButton(
-            onPressed: _loading ? null : _save,
-            child: _loading
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Text('Speichern'),
-          ),
-        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(AppSpacing.lg),
@@ -153,7 +193,20 @@ class _ProfileChangePasswordPageState
               onToggle: () => setState(() => _showCurrent = !_showCurrent),
               autofocus: true,
             ),
-            const SizedBox(height: AppSpacing.md),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: _sendingReset ? null : _sendReset,
+                child: _sendingReset
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Aktuelles Passwort vergessen?'),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
             const _FieldLabel('Neues Passwort'),
             const SizedBox(height: 6),
             _PasswordField(

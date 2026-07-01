@@ -34,46 +34,40 @@ class MerchantStampsPage extends StatelessWidget {
   }
 }
 
-class _MerchantStampsView extends StatefulWidget {
+class _MerchantStampsView extends StatelessWidget {
   const _MerchantStampsView();
-
-  @override
-  State<_MerchantStampsView> createState() => _MerchantStampsViewState();
-}
-
-class _MerchantStampsViewState extends State<_MerchantStampsView> {
-  // Index of the card visible in the pager — the stick setup targets THIS card.
-  int _index = 0;
 
   @override
   Widget build(BuildContext context) {
     final texts = context.watch<LanguageService>();
     final provider = context.watch<MerchantStampsProvider>();
-    final cards = provider.cards;
-    final clamped = cards.isEmpty ? 0 : _index.clamp(0, cards.length - 1);
-    final targetCard = cards.isEmpty ? null : cards[clamped];
 
     return MerchantToolScaffold(
       title: texts.text('merchant.stamps.title'),
       subtitle: texts.text('merchant.stamps.subtitle'),
       backPath: '/merchant/dashboard',
-      trailing: MerchantInfoTooltip(message: texts.text('merchant.stamps.tooltip')),
+      trailing:
+          MerchantInfoTooltip(message: texts.text('merchant.stamps.tooltip')),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _TopActions(
-            provider: provider,
-            texts: texts,
-            onCreate: () => _create(context, provider),
-            // Setup always targets the currently visible pager card.
-            onSetup: targetCard == null
-                ? null
-                : () => startStickSetup(
-                      context,
-                      card: targetCard,
-                      functions: StampFunctionsService(),
-                      onChanged: provider.load,
-                    ),
+          MerchantPrimaryButton(
+            label: 'Neue Stempelkarte',
+            icon: Icons.add_rounded,
+            isLoading: provider.isSaving,
+            onPressed: () => _create(context, provider),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '${provider.activeCount} von ${MerchantStampsProvider.maxActiveCards} Karten',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: provider.atCap
+                  ? MerchantPremiumColors.danger
+                  : MerchantPremiumColors.muted,
+              fontWeight: FontWeight.w800,
+              fontSize: 13,
+            ),
           ),
           const SizedBox(height: AppSpacing.md),
           if (provider.isLoading)
@@ -90,9 +84,14 @@ class _MerchantStampsViewState extends State<_MerchantStampsView> {
           else
             _StampCarousel(
               cards: provider.cards,
-              onIndexChanged: (i) => setState(() => _index = i),
               onEdit: (card) => context.push('/merchant/stamps/edit/${card.id}'),
-              onPublish: (card) => _publishCapped(context, provider, card),
+              onPublish: (card) => _publish(context, provider, card),
+              onStick: (card) => startStickSetup(
+                context,
+                card: card,
+                functions: StampFunctionsService(),
+                onChanged: provider.load,
+              ),
               onPause: (card) => _confirmAction(
                 context,
                 titleKey: 'merchant.stamps.pauseTitle',
@@ -123,15 +122,8 @@ class _MerchantStampsViewState extends State<_MerchantStampsView> {
     context.push('/merchant/stamps/edit');
   }
 
-  Future<void> _publishCapped(
-      BuildContext context, MerchantStampsProvider provider, StampCardModel card) async {
-    // Publishing a draft does not increase the non-archived count (a draft
-    // already counts), so the cap only blocks NEW cards/duplicates, not publish.
-    await _publish(context, card);
-  }
-
-  Future<void> _publish(BuildContext context, StampCardModel card) async {
-    final provider = context.read<MerchantStampsProvider>();
+  Future<void> _publish(BuildContext context, MerchantStampsProvider provider,
+      StampCardModel card) async {
     await _confirmAction(
       context,
       titleKey: 'merchant.stamps.publishTitle',
@@ -148,123 +140,23 @@ class _MerchantStampsViewState extends State<_MerchantStampsView> {
 const String kStampPublishMessage =
     'Nach der Bestätigung wird die Karte sofort für deine Kundinnen und Kunden aktiv.';
 
-/// Top of the manage screen: the 3-card cap indicator, plus the two actions —
-/// create a card and set up the stamp stick for the visible card.
-class _TopActions extends StatelessWidget {
-  const _TopActions({
-    required this.provider,
-    required this.texts,
-    required this.onCreate,
-    required this.onSetup,
-  });
-
-  final MerchantStampsProvider provider;
-  final LanguageService texts;
-  final VoidCallback onCreate;
-
-  /// Null when there is no card to bind a stick to (disables the button).
-  final VoidCallback? onSetup;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // 3/3 cap — always visible, never hidden.
-        Align(
-          alignment: Alignment.centerLeft,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: provider.atCap
-                  ? MerchantPremiumColors.danger.withValues(alpha: 0.14)
-                  : MerchantPremiumColors.surfaceAlt,
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(
-                color: provider.atCap
-                    ? MerchantPremiumColors.danger.withValues(alpha: 0.5)
-                    : MerchantPremiumColors.line,
-              ),
-            ),
-            child: Text(
-              texts
-                  .text('merchant.stamps.cap')
-                  .replaceFirst('{n}', '${provider.activeCount}')
-                  .replaceFirst('{max}', '${MerchantStampsProvider.maxActiveCards}'),
-              style: TextStyle(
-                color: provider.atCap
-                    ? MerchantPremiumColors.danger
-                    : MerchantPremiumColors.ink,
-                fontWeight: FontWeight.w900,
-                fontSize: 13,
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: AppSpacing.md),
-        MerchantPrimaryButton(
-          label: texts.text('merchant.stamps.create'),
-          icon: Icons.add_rounded,
-          isLoading: provider.isSaving,
-          onPressed: onCreate,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        // Single full-width action: set up the stick for the visible card.
-        _SecondaryButton(
-          label: texts.text('merchant.stick.setup'),
-          icon: Icons.nfc_rounded,
-          onTap: onSetup,
-        ),
-      ],
-    );
-  }
-}
-
-class _SecondaryButton extends StatelessWidget {
-  const _SecondaryButton({
-    required this.label,
-    required this.icon,
-    required this.onTap,
-  });
-
-  final String label;
-  final IconData icon;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return OutlinedButton.icon(
-      onPressed: onTap,
-      icon: Icon(icon, size: 18),
-      label: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
-      style: OutlinedButton.styleFrom(
-        foregroundColor: MerchantPremiumColors.ink,
-        side: const BorderSide(color: MerchantPremiumColors.line),
-        minimumSize: const Size.fromHeight(48),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        textStyle: const TextStyle(fontWeight: FontWeight.w800),
-      ),
-    );
-  }
-}
-
 /// Swipeable one-card-per-screen carousel with a 1/n pager.
 class _StampCarousel extends StatefulWidget {
   const _StampCarousel({
     required this.cards,
     required this.onEdit,
     required this.onPublish,
+    required this.onStick,
     required this.onPause,
     required this.onDelete,
-    required this.onIndexChanged,
   });
 
   final List<StampCardModel> cards;
   final void Function(StampCardModel) onEdit;
   final void Function(StampCardModel) onPublish;
+  final void Function(StampCardModel) onStick;
   final void Function(StampCardModel) onPause;
   final void Function(StampCardModel) onDelete;
-  final void Function(int) onIndexChanged;
 
   @override
   State<_StampCarousel> createState() => _StampCarouselState();
@@ -282,21 +174,18 @@ class _StampCarouselState extends State<_StampCarousel> {
 
   @override
   Widget build(BuildContext context) {
-    // Clamp the index if the list shrank (e.g. after archive/delete).
+    // Clamp the index if the list shrank (e.g. after delete).
     if (_index >= widget.cards.length) {
       _index = widget.cards.length - 1;
     }
     return Column(
       children: [
         SizedBox(
-          height: 560,
+          height: 540,
           child: PageView.builder(
             controller: _controller,
             itemCount: widget.cards.length,
-            onPageChanged: (i) {
-              setState(() => _index = i);
-              widget.onIndexChanged(i);
-            },
+            onPageChanged: (i) => setState(() => _index = i),
             itemBuilder: (context, i) {
               final card = widget.cards[i];
               return SingleChildScrollView(
@@ -305,6 +194,7 @@ class _StampCarouselState extends State<_StampCarousel> {
                   card: card,
                   onEdit: () => widget.onEdit(card),
                   onPublish: () => widget.onPublish(card),
+                  onStick: () => widget.onStick(card),
                   onPause: () => widget.onPause(card),
                   onDelete: () => widget.onDelete(card),
                 ),
@@ -387,8 +277,8 @@ void _showCapReached(BuildContext context, LanguageService texts) {
                 backgroundColor: MerchantPremiumColors.ink,
                 foregroundColor: MerchantPremiumColors.base,
                 minimumSize: const Size.fromHeight(50),
-                shape:
-                    RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(999)),
               ),
               child: Text(texts.text('common.ok')),
             ),
@@ -409,7 +299,8 @@ Future<void> _confirmAction(
   bool isDanger = false,
 }) async {
   final texts = context.read<LanguageService>();
-  final resolvedMessage = message ?? (messageKey != null ? texts.text(messageKey) : '');
+  final resolvedMessage =
+      message ?? (messageKey != null ? texts.text(messageKey) : '');
   final accepted = await showModalBottomSheet<bool>(
     context: context,
     showDragHandle: true,
@@ -448,10 +339,14 @@ Future<void> _confirmAction(
             FilledButton(
               onPressed: () => Navigator.of(sheetContext).pop(true),
               style: FilledButton.styleFrom(
-                backgroundColor: isDanger ? MerchantPremiumColors.danger : MerchantPremiumColors.ink,
-                foregroundColor: isDanger ? Colors.white : MerchantPremiumColors.base,
+                backgroundColor: isDanger
+                    ? MerchantPremiumColors.danger
+                    : MerchantPremiumColors.ink,
+                foregroundColor:
+                    isDanger ? Colors.white : MerchantPremiumColors.base,
                 minimumSize: const Size.fromHeight(54),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(999)),
               ),
               child: Text(texts.text(confirmKey)),
             ),

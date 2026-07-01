@@ -1,36 +1,41 @@
 {
-  "title": "Datenschutzhinweise",
+  "title": "Datenschutzerklärung",
   "shortLabel": "Datenschutz",
-  "updated": "2026-06-12",
-  "intro": "Diese Hinweise erklären, wie Lokka (ein Produkt von Jajehelp) personenbezogene Daten verarbeitet. Bitte ersetze diesen Platzhaltertext vor dem Release durch die finale, rechtlich geprüfte Datenschutzerklärung.",
+  "updated": "2026-06-24",
+  "version": 2,
+  "intro": "Diese Datenschutzerklärung informiert dich gemäß der Datenschutz-Grundverordnung (DSGVO) darüber, welche personenbezogenen Daten wir bei der Nutzung der Lokka-App verarbeiten, zu welchem Zweck und auf welcher Rechtsgrundlage. Hinweis: Die mit [eckigen Klammern] markierten Angaben sind vor dem Livegang durch die tatsächlichen Unternehmensdaten zu ersetzen und rechtlich prüfen zu lassen.",
   "sections": [
     {
       "heading": "1. Verantwortlicher",
-      "body": "Verantwortlich für die Datenverarbeitung ist Jajehelp als Betreiber der Lokka-App. Kontaktdaten werden vor dem Release ergänzt."
+      "body": "Verantwortlicher im Sinne der DSGVO ist der Betreiber der Lokka-App:\n\nLokka (ein Produkt von Jajehelp)\n[Firmenname / Rechtsform]\n[Straße und Hausnummer]\n[PLZ und Ort]\nE-Mail: [datenschutz@…]\n\nEinen Datenschutzbeauftragten haben wir bestellt / nicht bestellt: [ggf. Kontaktdaten des Datenschutzbeauftragten]."
     },
     {
-      "heading": "2. Welche Daten wir verarbeiten",
-      "body": "Bei der Registrierung: Name, E-Mail-Adresse und optional Telefonnummer. Bei der Nutzung: Interessen, Favoriten, gesammelte Stempel/Punkte, Bewertungen sowie technische Daten zur Bereitstellung des Dienstes."
+      "heading": "2. Erhobene Daten & Zweck",
+      "body": "Wir verarbeiten folgende Kategorien personenbezogener Daten:\n\n• Registrierungs- und Kontodaten: Name, E-Mail-Adresse, optional Telefonnummer, Geburtstag, Profilbild bzw. gewähltes Emoji. Zweck: Bereitstellung und Verwaltung deines Nutzerkontos.\n• Nutzungsdaten: Interessen, Favoriten (Likes), gefolgte Partner (Wallet), gesammelte Stempel und Punkte, abgegebene Bewertungen und Kommentare. Zweck: Bereitstellung der Kernfunktionen und personalisierte Anzeige lokaler Angebote.\n• Standortdaten: mit deiner Einwilligung dein ungefährer Standort, um Angebote in deiner Nähe anzuzeigen. Zweck: standortbezogene Entdeckung.\n• Technische Daten: Geräte- und Log-Daten, die zur sicheren und stabilen Bereitstellung des Dienstes erforderlich sind.\n\nDie Bereitstellung der Registrierungsdaten ist für die Nutzung des Kontos erforderlich; die übrigen Angaben sind freiwillig."
     },
     {
-      "heading": "3. Zwecke der Verarbeitung",
-      "body": "Die Daten dienen der Bereitstellung der App, der personalisierten Anzeige lokaler Angebote, der Verwaltung der Wallet sowie der Verbesserung des Dienstes."
+      "heading": "3. Rechtsgrundlage",
+      "body": "Die Verarbeitung erfolgt auf Grundlage von:\n\n• Art. 6 Abs. 1 lit. b DSGVO (Vertragserfüllung) – für die Bereitstellung des Nutzerkontos und der App-Funktionen.\n• Art. 6 Abs. 1 lit. a DSGVO (Einwilligung) – insbesondere für die Verarbeitung von Standortdaten und für optionale Marketing-Kommunikation. Eine erteilte Einwilligung kannst du jederzeit mit Wirkung für die Zukunft widerrufen.\n• Art. 6 Abs. 1 lit. f DSGVO (berechtigtes Interesse) – für die technische Sicherheit, Missbrauchsvermeidung und Verbesserung des Dienstes.\n• Art. 6 Abs. 1 lit. c DSGVO (rechtliche Verpflichtung) – soweit gesetzliche Aufbewahrungs- oder Auskunftspflichten bestehen."
     },
     {
-      "heading": "4. Standortdaten",
-      "body": "Mit deiner Einwilligung verwendet Lokka deinen ungefähren Standort, um Angebote in deiner Nähe anzuzeigen. Die Einwilligung kann jederzeit in den Geräteeinstellungen widerrufen werden."
+      "heading": "4. Speicherdauer",
+      "body": "Wir speichern personenbezogene Daten nur so lange, wie es für die genannten Zwecke erforderlich ist. Kontodaten werden für die Dauer des bestehenden Nutzerkontos gespeichert. Nach einer Löschung deines Kontos werden deine Daten innerhalb einer angemessenen Frist gelöscht, sofern keine gesetzlichen Aufbewahrungspflichten (z. B. handels- oder steuerrechtlicher Art) entgegenstehen. Nach Ablauf solcher Fristen werden die Daten gelöscht oder anonymisiert."
     },
     {
       "heading": "5. Weitergabe an Dritte",
-      "body": "Eine Weitergabe erfolgt nur, soweit zur Erbringung des Dienstes erforderlich (z. B. an teilnehmende Partner bei Einlösung) oder gesetzlich vorgeschrieben."
+      "body": "Eine Weitergabe deiner Daten erfolgt nur, soweit dies zur Erbringung des Dienstes erforderlich oder gesetzlich zulässig ist:\n\n• An teilnehmende Partner (Händler): nur die zur Einlösung von Stempeln, Punkten oder Angeboten erforderlichen Basisinformationen.\n• An technische Dienstleister (Auftragsverarbeiter) auf Grundlage von Verträgen nach Art. 28 DSGVO, insbesondere für Hosting und Infrastruktur (Google Firebase / Google Cloud). Dabei kann eine Verarbeitung auch in Drittländern erfolgen; in diesem Fall bestehen geeignete Garantien (z. B. EU-Standardvertragsklauseln).\n• An Behörden, soweit wir gesetzlich dazu verpflichtet sind.\n\nEin Verkauf deiner Daten findet nicht statt."
     },
     {
-      "heading": "6. Deine Rechte",
-      "body": "Du hast das Recht auf Auskunft, Berichtigung, Löschung, Einschränkung und Datenübertragbarkeit. Dein Konto und deine Daten kannst du jederzeit in der App löschen."
+      "heading": "6. Nutzerrechte (Auskunft, Löschung, Widerruf)",
+      "body": "Dir stehen nach der DSGVO folgende Rechte zu:\n\n• Auskunft über die zu deiner Person gespeicherten Daten (Art. 15).\n• Berichtigung unrichtiger Daten (Art. 16).\n• Löschung deiner Daten (Art. 17) – dein Konto und deine Daten kannst du jederzeit direkt in der App unter „Konto löschen“ löschen lassen.\n• Einschränkung der Verarbeitung (Art. 18).\n• Datenübertragbarkeit (Art. 20).\n• Widerspruch gegen Verarbeitungen auf Grundlage berechtigter Interessen (Art. 21).\n• Widerruf erteilter Einwilligungen mit Wirkung für die Zukunft (Art. 7 Abs. 3).\n\nZur Ausübung deiner Rechte genügt eine formlose Mitteilung an die oben genannte Kontaktadresse."
     },
     {
-      "heading": "7. Speicherdauer",
-      "body": "Daten werden nur so lange gespeichert, wie es für die genannten Zwecke erforderlich ist oder gesetzliche Aufbewahrungspflichten bestehen."
+      "heading": "7. Cookies / Tracking",
+      "body": "Die Lokka-App setzt keine Werbe-Cookies und kein geräteübergreifendes Tracking zu Werbezwecken ein. Zur Bereitstellung des Dienstes werden technisch notwendige Speichermechanismen genutzt (z. B. lokaler Cache zur schnelleren Anzeige sowie ein lokal gespeicherter Anmelde-/Sitzungsstatus). In der Web-Version können vom Infrastruktur-Anbieter technisch erforderliche Speichereinträge gesetzt werden. Es findet kein Profiling zu Werbezwecken statt."
+    },
+    {
+      "heading": "8. Kontakt & Beschwerderecht",
+      "body": "Bei Fragen zum Datenschutz oder zur Ausübung deiner Rechte erreichst du uns unter: [datenschutz@…].\n\nUnabhängig davon hast du das Recht, dich bei einer Datenschutz-Aufsichtsbehörde zu beschweren, wenn du der Ansicht bist, dass die Verarbeitung deiner Daten gegen die DSGVO verstößt. Zuständig ist insbesondere die Aufsichtsbehörde deines gewöhnlichen Aufenthaltsorts oder die für den Verantwortlichen zuständige Behörde: [zuständige Datenschutz-Aufsichtsbehörde]."
     }
   ]
 }

@@ -6,13 +6,12 @@
  * `bootstrapAdmin`, to the hard-coded owner email — so the hidden admin surface
  * can never be reached by a normal user even if they discover the route.
  *
- * Stick-Werkstatt — the owner mass-produces UNBOUND sticks centrally; merchants
- * bind them later themselves:
- *   • Path A (link sticks): adminMintStaticSticks → claim QR `lokka-stick-a:…`.
- *     The merchant scans it (claimStaticStick) to bind a card and receive the
- *     real signed `/s/<token>` redeem link to write onto the tag.
- *   • Path B (NTAG 424): adminDeriveNtagStick → chip keys + QR `lokka-stick:…`.
- *     The merchant binds via the existing setupStick flow.
+ * Stick-Werkstatt — the owner mass-produces link sticks centrally. Each mint
+ * (adminMintStaticSticks) yields a permanent redeem token (the owner writes
+ * `https://<app>/s/<token>` onto the blank tag ONCE) plus a bind-QR
+ * `lokka-stick-a:<id>:<claim>`. A merchant scans that QR (claimStaticStick) to
+ * bind the stick to one of their cards; the NFC link never changes, so
+ * re-pointing to another card needs no rewrite.
  *
  * Region/secret are inherited from the global options + secret set in index.ts.
  */
@@ -21,8 +20,7 @@ import { getAuth } from 'firebase-admin/auth';
 import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
 import { defineSecret } from 'firebase-functions/params';
 
-import { deriveMetaKey, deriveFileKey } from './crypto/ntag424';
-import { provSecret, claimToken } from './crypto/provisioning';
+import { claimToken } from './crypto/provisioning';
 import { newStickId, signStickLink } from './crypto/staticToken';
 
 const masterKeySecret = defineSecret('STAMP_MASTER_KEY');
@@ -128,53 +126,6 @@ export const adminMintStaticSticks = onCall(
     }
     await batch.commit();
     return { sticks };
-  },
-);
-
-// ─────────────────────────────────────────────────────────────────────────────
-//  Stift-Werkstatt — Path B (NTAG 424 secure chips). For a given chip UID it
-//  returns the two keys to program into the chip plus the printed-QR provToken.
-//  Idempotent: re-running for the same UID just re-prints the keys and never
-//  clobbers an existing merchant binding.
-// ─────────────────────────────────────────────────────────────────────────────
-export const adminDeriveNtagStick = onCall(
-  { cors: true, secrets: [masterKeySecret] },
-  async (req) => {
-    requireAdmin(req);
-    const uidHex = String(req.data?.tagUid ?? '')
-      .toLowerCase()
-      .replace(/[^0-9a-f]/g, '');
-    if (uidHex.length < 8) {
-      throw new HttpsError('invalid-argument', 'admin/invalid-uid');
-    }
-    const master = masterKey();
-    const db = getFirestore();
-    const stickRef = db.doc(`sticks/${uidHex}`);
-    const snap = await stickRef.get();
-    const existing = snap.exists ? snap.data() ?? {} : {};
-
-    await stickRef.set(
-      {
-        tagUid: uidHex,
-        type: 'ntag424',
-        inventory: true,
-        bound: existing.bound === true || (!!existing.boundMerchantId && !!existing.boundCardId),
-        counterLast: Number(existing.counterLast) || 0,
-        note: String(req.data?.note ?? existing.note ?? '').slice(0, 80),
-        ...(snap.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
-        updatedAt: FieldValue.serverTimestamp(),
-      },
-      { merge: true },
-    );
-
-    const provToken = provSecret(master, uidHex);
-    return {
-      uid: uidHex,
-      sdmMetaReadKey: deriveMetaKey(master).toString('hex'),
-      sdmFileReadKey: deriveFileKey(master, uidHex).toString('hex'),
-      provToken,
-      qr: `lokka-stick:${uidHex}:${provToken}`,
-    };
   },
 );
 

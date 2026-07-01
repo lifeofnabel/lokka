@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:lokka/core/theme/appRadius.dart';
 import 'package:lokka/core/theme/appSpacing.dart';
 import 'package:lokka/core/widgets/appButton.dart';
 
@@ -38,7 +39,7 @@ class AppErrorState extends StatelessWidget {
               height: 72,
               decoration: BoxDecoration(
                 color: cs.errorContainer,
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(AppRadius.large),
               ),
               child: Icon(icon, size: 34, color: cs.onErrorContainer),
             ),

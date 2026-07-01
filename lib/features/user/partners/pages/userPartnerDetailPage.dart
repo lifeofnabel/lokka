@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -15,12 +17,13 @@ import 'package:lokka/features/user/discover/models/publicMerchantUserModel.dart
 import 'package:lokka/features/user/feed/models/feedPostModel.dart';
 import 'package:lokka/features/stamps/services/stampFunctionsService.dart';
 import 'package:lokka/features/user/feed/services/userFeedService.dart';
-import 'package:lokka/features/user/feed/widgets/commentsSheet.dart';
+import 'package:lokka/features/user/feed/widgets/reviewsSheet.dart';
 import 'package:lokka/features/user/feed/widgets/postCard.dart';
 import 'package:lokka/features/user/feed/widgets/reportSheet.dart';
 import 'package:lokka/features/user/partners/pages/userMenuPage.dart';
 import 'package:lokka/features/user/partners/pages/userPartnerPointsPage.dart';
 import 'package:lokka/features/user/partners/pages/userPartnerStampsPage.dart';
+import 'package:lokka/features/user/partners/services/merchantWarmupCache.dart';
 import 'package:lokka/features/user/shared/widgets/quickActionBar.dart';
 import 'package:lokka/features/user/wallet/services/userWalletService.dart';
 
@@ -92,6 +95,25 @@ class _UserPartnerDetailPageState extends State<UserPartnerDetailPage> {
     );
     _feedService =
         UserFeedService(firestoreService: _firestore, authService: auth);
+
+    // Kam der Nutzer gerade von einem Beitrag dieses Partners, ist das
+    // Profil oft schon warmgelaufen (siehe MerchantWarmupCache) – dann sofort
+    // damit rendern (kein Spinner), statt auf den eigenen Load zu warten.
+    // Die eigenen Loads laufen trotzdem (frischt im Hintergrund auf).
+    final warm = MerchantWarmupCache.peek(widget.merchant.merchantId);
+    if (warm != null) {
+      _isInWallet = warm.isInWallet;
+      _isCheckingWallet = false;
+      _posts = warm.posts
+          .map((post) =>
+              _PartnerPost(post: post, avgRating: null, ratingCount: 0))
+          .toList();
+      _postsLoading = false;
+      _stampsEnabled = warm.stampsEnabled;
+      _pointsEnabled = warm.pointsEnabled;
+      unawaited(_topUpPostRatings());
+    }
+
     _checkWallet();
     _loadPartnerFeed();
     _loadLoyaltyAvailability();
@@ -233,14 +255,34 @@ class _UserPartnerDetailPageState extends State<UserPartnerDetailPage> {
           })
           .map((doc) => FeedPostModel.fromMap({...doc.data(), 'postId': doc.id}))
           .toList();
-
-      final enriched = await Future.wait(posts.map(_loadPostRating));
       if (!mounted) return;
 
+      // Erst OHNE Bewertungen zeigen (sofort) – ein Rating-Read pro Beitrag
+      // würde den ersten Render sonst blockieren. Bewertungen kommen im
+      // zweiten Schritt nach, siehe _topUpPostRatings().
+      setState(() {
+        _posts = posts
+            .map((post) =>
+                _PartnerPost(post: post, avgRating: null, ratingCount: 0))
+            .toList();
+        _postsLoading = false;
+      });
+      unawaited(_topUpPostRatings());
+    } catch (_) {
+      if (mounted) setState(() => _postsLoading = false);
+    }
+  }
+
+  /// Lädt Bewertungen für die bereits sichtbaren Beiträge nach (statt sie vor
+  /// dem ersten Render zu blockieren) und aktualisiert Header-Pille + Liste.
+  Future<void> _topUpPostRatings() async {
+    if (_posts.isEmpty) return;
+    try {
+      final enriched = await Future.wait(_posts.map((e) => _loadPostRating(e.post)));
+      if (!mounted) return;
       final rated = enriched.where((e) => e.avgRating != null).toList();
       setState(() {
         _posts = enriched;
-        _postsLoading = false;
         _ratingCount = enriched.fold<int>(0, (sum, e) => sum + e.ratingCount);
         _avgRating = rated.isEmpty
             ? null
@@ -248,7 +290,7 @@ class _UserPartnerDetailPageState extends State<UserPartnerDetailPage> {
                 rated.length;
       });
     } catch (_) {
-      if (mounted) setState(() => _postsLoading = false);
+      // Best-effort – Bewertungen bleiben einfach aus, kein Nutzer-Fehler nötig.
     }
   }
 
@@ -491,7 +533,7 @@ class _UserPartnerDetailPageState extends State<UserPartnerDetailPage> {
     if (links.isEmpty) return;
     showPartnerPopout(
       context,
-      icon: Icons.alternate_email_rounded,
+      icon: Icons.public_rounded,
       title: 'Social Media',
       child: _PopoutColumn(
         children: [
@@ -580,12 +622,12 @@ class _UserPartnerDetailPageState extends State<UserPartnerDetailPage> {
       ),
       QuickAction(
         icon: Icons.restaurant_menu_rounded,
-        label: 'Karte',
+        label: 'Speisekarte',
         enabled: m.hasMenu,
         onTap: m.hasMenu ? _openMenu : null,
       ),
       QuickAction(
-        icon: Icons.alternate_email_rounded,
+        icon: Icons.public_rounded,
         label: 'Social',
         enabled: hasSocial,
         onTap: hasSocial ? _openSocial : null,
@@ -629,21 +671,22 @@ class _UserPartnerDetailPageState extends State<UserPartnerDetailPage> {
 
   @override
   Widget build(BuildContext context) {
+    final topPad = MediaQuery.of(context).padding.top;
+    final hasCover = widget.merchant.coverUrl.isNotEmpty;
     return Scaffold(
       backgroundColor: AppColors.surfaceBg,
-      body: ResponsiveContentWidth(
-        child: CustomScrollView(
+      body: Stack(
+        children: [
+          ResponsiveContentWidth(
+            child: CustomScrollView(
         slivers: [
           SliverToBoxAdapter(
             child: _CenteredHero(
               merchant: widget.merchant,
               avgRating: _avgRating,
               ratingCount: _ratingCount,
-              onBack: () => Navigator.pop(context),
               onGallery:
                   widget.merchant.galleryImages.isNotEmpty ? _openGallery : null,
-              onZoom:
-                  widget.merchant.coverUrl.isNotEmpty ? _openCoverZoom : null,
             ),
           ),
           SliverToBoxAdapter(
@@ -672,7 +715,29 @@ class _UserPartnerDetailPageState extends State<UserPartnerDetailPage> {
             ),
           ),
         ],
-        ),
+            ),
+          ),
+          // Schwebende Steuerung: begleitet die Seite beim Scrollen.
+          Positioned(
+            top: topPad + 10,
+            left: 10,
+            child: _CoverCircleButton(
+              icon: Icons.arrow_back_rounded,
+              tooltip: 'Zurück',
+              onTap: () => Navigator.pop(context),
+            ),
+          ),
+          if (hasCover)
+            Positioned(
+              top: topPad + 10,
+              right: 10,
+              child: _CoverCircleButton(
+                icon: Icons.fullscreen_rounded,
+                tooltip: 'Vergrößern',
+                onTap: _openCoverZoom,
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -697,6 +762,9 @@ class _UserPartnerDetailPageState extends State<UserPartnerDetailPage> {
               message: _showExpired
                   ? 'Abgelaufene ausblenden'
                   : 'Abgelaufene anzeigen',
+              // Sonst zeigt der Tooltip auf Touch nur bei Long-Press (Default),
+              // nicht bei normalem Tap.
+              triggerMode: TooltipTriggerMode.tap,
               child: IconButton(
                 onPressed: () => setState(() => _showExpired = !_showExpired),
                 icon: const Icon(Icons.history_toggle_off_rounded, size: 22),
@@ -768,17 +836,13 @@ class _UserPartnerDetailPageState extends State<UserPartnerDetailPage> {
 class _CenteredHero extends StatelessWidget {
   const _CenteredHero({
     required this.merchant,
-    required this.onBack,
     this.onGallery,
-    this.onZoom,
     this.avgRating,
     this.ratingCount = 0,
   });
 
   final PublicMerchantUserModel merchant;
-  final VoidCallback onBack;
   final VoidCallback? onGallery;
-  final VoidCallback? onZoom;
   final double? avgRating;
   final int ratingCount;
 
@@ -826,45 +890,18 @@ class _CenteredHero extends StatelessWidget {
                   ),
                 ),
               ),
-              // Floating-Back-Button auf dem Cover
-              Positioned(
-                top: 0,
-                left: 0,
-                child: SafeArea(
-                  bottom: false,
-                  child: Padding(
-                    padding: const EdgeInsets.all(10),
-                    child: _CoverCircleButton(
-                      icon: Icons.arrow_back_rounded,
-                      tooltip: 'Zurück',
-                      onTap: onBack,
-                    ),
+              // Galerie unten rechts (Back + Vergrößern schweben auf Seiten-
+              // Ebene, siehe build()).
+              if (onGallery != null)
+                Positioned(
+                  right: 12,
+                  bottom: 12,
+                  child: _CoverCircleButton(
+                    icon: Icons.photo_library_rounded,
+                    tooltip: 'Mehr Bilder',
+                    onTap: onGallery!,
                   ),
                 ),
-              ),
-              // Galerie + Zoom unten rechts
-              Positioned(
-                right: 12,
-                bottom: 12,
-                child: Row(
-                  children: [
-                    if (onGallery != null) ...[
-                      _CoverCircleButton(
-                        icon: Icons.photo_library_rounded,
-                        tooltip: 'Mehr Bilder',
-                        onTap: onGallery!,
-                      ),
-                      const SizedBox(width: 8),
-                    ],
-                    if (onZoom != null)
-                      _CoverCircleButton(
-                        icon: Icons.fullscreen_rounded,
-                        tooltip: 'Vergrößern',
-                        onTap: onZoom!,
-                      ),
-                  ],
-                ),
-              ),
               Positioned(
                 bottom: -46,
                 child: Container(
@@ -981,6 +1018,9 @@ class _CoverCircleButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Tooltip(
       message: tooltip,
+      // Sonst zeigt der Tooltip auf Touch nur bei Long-Press (Default), nicht
+      // bei normalem Tap.
+      triggerMode: TooltipTriggerMode.tap,
       child: Material(
         color: Colors.black.withValues(alpha: 0.45),
         shape: const CircleBorder(),
@@ -1278,7 +1318,6 @@ class _ProfilePostCard extends StatelessWidget {
           post: post,
           isLiked: isLiked,
           isExpired: isExpired,
-          commentCount: post.commentsCount,
           // We are already on this merchant's profile → header is inert.
           enableProfileNavigation: false,
           onTap: onOpen,
@@ -1287,10 +1326,11 @@ class _ProfilePostCard extends StatelessWidget {
               await feedService.toggleLike(post.postId, isLiked);
             } catch (_) {}
           },
-          onCommentTap: () => showCommentsSheet(
+          onCommentTap: () => showReviewsSheet(
             context,
             feedService: feedService,
             postId: post.postId,
+            merchantId: post.merchantId,
           ),
           onShareTap: () => ShareUtils.shareFeedPost(
             title: post.title,

@@ -2,11 +2,13 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:lokka/core/services/geoapifyService.dart';
+import 'package:lokka/core/utils/deferredWarmup.dart';
 import 'package:lokka/core/utils/locationUtils.dart';
 
 import 'package:flutter/foundation.dart';
 import 'package:lokka/features/user/discover/models/publicMerchantUserModel.dart';
 import 'package:lokka/features/user/discover/services/userDiscoverService.dart';
+import 'package:lokka/features/user/feed/utils/feedTypeLabels.dart';
 
 enum DiscoverSort { forYou, hottest, newest, mostLiked }
 
@@ -14,30 +16,64 @@ enum DiscoverSort { forYou, hottest, newest, mostLiked }
 enum DiscoverFeedMode { forYou, following, nearMe }
 
 class UserDiscoverProvider extends ChangeNotifier {
-  UserDiscoverProvider({required UserDiscoverService service}) : _service = service {
-    load();
+  /// [tabIndex] lässt den Start verzögern, solange ein anderer Tab aktiv ist
+  /// (siehe [DeferredWarmup]) – null startet sofort (Default/Testverhalten).
+  UserDiscoverProvider({required UserDiscoverService service, int? tabIndex})
+      : _service = service {
+    if (tabIndex == null) {
+      load();
+    } else {
+      DeferredWarmup.schedule(tabIndex, load);
+    }
   }
 
   final UserDiscoverService _service;
+
+  // Firestore-Reads lassen sich nicht abbrechen – async Arbeit (Ratings-
+  // Nachladen, Hintergrund-Refresh) kann daher erst NACH dispose() (Hot
+  // Restart, schneller Tab-/Seitenwechsel) fertig werden. ChangeNotifier
+  // wirft dann bei notifyListeners() „used after disposed". Zentraler Guard
+  // statt jeden einzelnen async-Callsite manuell abzusichern.
+  bool _disposed = false;
+
+  @override
+  void notifyListeners() {
+    if (_disposed) return;
+    super.notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
 
   List<PublicMerchantUserModel> _merchants = [];
   List<DiscoverFeedItem> _allItems = [];
   List<DiscoverFeedItem> _visibleItems = [];
   UserLocation _location = UserDiscoverService.westendplatz;
   bool _isLoading = true;
-  final bool _isLoadingMore = false;
+  bool _isLoadingMore = false;
   String? _error;
+  // Post-IDs, für die schon ein Bewertungs-Read versucht wurde (Erfolg oder
+  // „keine Bewertungen") – verhindert wiederholtes Nachfragen bei jedem
+  // _slice()-Aufruf.
+  final Set<String> _ratingsFetched = {};
   String? _shopType;
-  String _city = 'Frankfurt';
+  Set<String> _dealTypes = {};
+  Set<String> _origins = {};
   String _radius = 'Egal';
   bool _openNow = false;
   DiscoverSort _sort = DiscoverSort.forYou;
   DiscoverFeedMode _mode = DiscoverFeedMode.forYou;
   String _search = '';
-  int _limit = 6;
+  int _limit = 5;
   Set<String> _interestCategories = {};
   Set<String> _followingMerchantIds = {};
   List<DiscoverFeedItem> _orderedAll = [];
+  // Lazy geladen (nur beim ersten Öffnen des Filter-Sheets) + gecacht, damit
+  // nicht jeder Sheet-Öffnen einen neuen Firestore-Read auslöst.
+  List<String>? _originsCache;
   // Stabiler Seed pro App-Session → die „Für dich"-Reihenfolge würfelt sich
   // NICHT bei jedem Rebuild/Refresh/Like neu (das war das sichtbare Ruckeln),
   // variiert aber von Session zu Session.
@@ -51,17 +87,57 @@ class UserDiscoverProvider extends ChangeNotifier {
   bool get usedFallbackLocation => _location.usedFallback;
   UserLocation get location => _location;
 
+  /// Stadt für den „wir raten"-Hinweis (IP-erkannte Stadt oder „Frankfurt").
+  String get fallbackCity =>
+      _location.city.trim().isEmpty ? 'Frankfurt' : _location.city.trim();
+
+  bool _noticeDismissed = false;
+
+  /// Hinweis „Standort nicht aktiv …" nur zeigen, solange geraten wird UND der
+  /// Nutzer ihn nicht per X weggeklickt hat (bleibt für die Session weg).
+  bool get showLocationNotice => _location.usedFallback && !_noticeDismissed;
+
+  void dismissLocationNotice() {
+    if (_noticeDismissed) return;
+    _noticeDismissed = true;
+    notifyListeners();
+  }
+
   /// true = echter Standort (GPS/getippt) → Logo normal; false = Default
   /// (Westendplatz) → Logo durchgestrichen.
   bool get hasSharedLocation => _location.isShared;
   String get locationLabel =>
       _location.label.isEmpty ? 'Standort wählen' : _location.label;
   String? get shopType => _shopType;
-  String get city => _city;
+  Set<String> get dealTypes => _dealTypes;
+  Set<String> get origins => _origins;
   String get radius => _radius;
   bool get openNow => _openNow;
   DiscoverSort get sort => _sort;
   DiscoverFeedMode get mode => _mode;
+
+  /// Menschenlesbare Liste der gerade aktiven Filter – für den Hinweis im
+  /// Feed selbst (#„aha, ein Filter ist an", statt sich über wenige Treffer
+  /// zu wundern).
+  List<String> get activeFilterLabels {
+    final labels = <String>[];
+    if (_radius != 'Egal') labels.add(_radius);
+    if (_shopType != null) labels.add(_shopType!);
+    labels.addAll(_dealTypes.map(feedTypeLabel));
+    labels.addAll(_origins);
+    if (_openNow) labels.add('Jetzt geöffnet');
+    return labels;
+  }
+
+  bool get hasActiveFilters => activeFilterLabels.isNotEmpty;
+
+  /// Alle möglichen Herkünfte/Küchen – lazy geladen fürs Filter-Sheet.
+  Future<List<String>> loadOrigins() async {
+    if (_originsCache != null) return _originsCache!;
+    final list = await _service.loadOrigins();
+    _originsCache = list;
+    return list;
+  }
 
   /// Folgt der Nutzer überhaupt jemandem (= Partner in der Wallet)?
   bool get hasFollowing => _followingMerchantIds.isNotEmpty;
@@ -78,12 +154,21 @@ class UserDiscoverProvider extends ChangeNotifier {
     _error = null;
     notifyListeners();
     try {
-      _location = await _service.resolveLocation();
-      final interests = await _service.loadInterests();
+      // Alle voneinander unabhängigen Schritte gleichzeitig anstoßen (nicht
+      // sequenziell awaiten) – die kritische Pfadlänge ist danach nur noch der
+      // langsamste einzelne Schritt, nicht die Summe aller vier.
+      final locationFuture = _service.resolveLocation();
+      final interestsFuture = _service.loadInterests();
+      final merchantsFuture = _service.loadPublicMerchants();
+      final walletFuture = _service.loadWalletMerchantIds();
+
+      _location = await locationFuture;
+      final interests = await interestsFuture;
       _interestCategories = interests.categories.toSet();
-      _merchants = await _service.loadPublicMerchants();
+      _merchants = await merchantsFuture;
+      _followingMerchantIds = await walletFuture;
+      // Braucht _merchants, kann daher nicht mit den anderen 4 parallel starten.
       _allItems = await _service.loadFeedItems(_merchants);
-      _followingMerchantIds = await _service.loadWalletMerchantIds();
       _applyFilters(resetLimit: true);
       unawaited(_refreshFreshData());
     } catch (error) {
@@ -159,32 +244,36 @@ class UserDiscoverProvider extends ChangeNotifier {
   }
 
   void applyFilters({
-    String? city,
     String? radius,
     String? shopType,
+    Set<String>? dealTypes,
+    Set<String>? origins,
     bool? openNow,
     DiscoverSort? sort,
   }) {
-    _city = city?.trim().isEmpty ?? true ? 'Frankfurt' : city!.trim();
     _radius = radius ?? _radius;
     _shopType = shopType?.isEmpty ?? true ? null : shopType;
+    _dealTypes = dealTypes ?? _dealTypes;
+    _origins = origins ?? _origins;
     _openNow = openNow ?? _openNow;
     _sort = sort ?? _sort;
     _applyFilters(resetLimit: true);
   }
 
   void resetFilters() {
-    _city = 'Frankfurt';
     _radius = 'Egal';
     _shopType = null;
+    _dealTypes = {};
+    _origins = {};
     _openNow = false;
     _sort = DiscoverSort.forYou;
     _applyFilters(resetLimit: true);
   }
 
   void loadMore() {
-    _limit += 7;
+    _limit += 5;
     _slice(); // nur mehr anzeigen, NICHT neu ordnen
+    unawaited(_topUpRatings(showLoadingIndicator: true));
   }
 
   Future<void> toggleLike(DiscoverFeedItem item) async {
@@ -222,7 +311,7 @@ class UserDiscoverProvider extends ChangeNotifier {
       final items = await _service.refreshFeedItems(merchants);
       _merchants = merchants;
       _allItems = items;
-      _followingMerchantIds = await _service.loadWalletMerchantIds();
+      _followingMerchantIds = await _service.refreshWalletMerchantIds();
       _applyFilters(resetLimit: false);
     } catch (_) {}
   }
@@ -230,14 +319,56 @@ class UserDiscoverProvider extends ChangeNotifier {
   void _applyFilters({required bool resetLimit}) {
     // Reihenfolge EINMAL stabil berechnen (deterministisch dank Session-Seed).
     _orderedAll = _filteredSortedItems();
-    if (resetLimit) _limit = 6;
+    if (resetLimit) _limit = 5;
     _slice();
+    unawaited(_topUpRatings());
   }
 
   /// Nur den sichtbaren Ausschnitt neu schneiden – ohne Neuordnung.
   void _slice() {
     _visibleItems = _orderedAll.take(_limit).toList();
     notifyListeners();
+  }
+
+  /// Holt Bewertungen NUR für die aktuell sichtbaren, noch nicht angefragten
+  /// Beiträge nach (statt für den ganzen Feed) – kein Burst, dafür „poppen"
+  /// die Sterne kurz nach dem ersten Render nach. [showLoadingIndicator]
+  /// steuert [isLoadingMore] (für den "Mehr laden"-Button/Auto-Scroll-Trigger).
+  Future<void> _topUpRatings({bool showLoadingIndicator = false}) async {
+    final missingIds = _visibleItems
+        .map((item) => item.post.postId)
+        .where((id) => !_ratingsFetched.contains(id))
+        .toList();
+    if (missingIds.isEmpty) return;
+    _ratingsFetched.addAll(missingIds);
+    if (showLoadingIndicator) {
+      _isLoadingMore = true;
+      notifyListeners();
+    }
+    try {
+      final ratings = await _service.fetchRatingsFor(missingIds);
+      if (ratings.isNotEmpty) {
+        for (final list in [_allItems, _orderedAll]) {
+          for (var i = 0; i < list.length; i++) {
+            final item = list[i];
+            final rating = ratings[item.post.postId];
+            if (rating != null) {
+              list[i] = DiscoverFeedItem(
+                post: item.post,
+                merchant: item.merchant,
+                averageRating: rating,
+                isLiked: item.isLiked,
+              );
+            }
+          }
+        }
+      }
+    } catch (_) {
+      // Best-effort – Sterne bleiben einfach aus, kein Nutzer-Fehler nötig.
+    } finally {
+      if (showLoadingIndicator) _isLoadingMore = false;
+      _slice(); // aktualisiert _visibleItems + notifyListeners
+    }
   }
 
   List<DiscoverFeedItem> _filteredSortedItems() {
@@ -262,6 +393,14 @@ class UserDiscoverProvider extends ChangeNotifier {
     }
     if (_shopType != null) {
       items = items.where((item) => item.merchant.shopType == _shopType).toList();
+    }
+    if (_dealTypes.isNotEmpty) {
+      items = items.where((item) => _dealTypes.contains(item.post.type)).toList();
+    }
+    if (_origins.isNotEmpty) {
+      items = items
+          .where((item) => item.merchant.origins.any(_origins.contains))
+          .toList();
     }
     if (_openNow) {
       items = items.where((item) => _isOpenNow(item.merchant.openingHours)).toList();

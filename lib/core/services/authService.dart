@@ -126,33 +126,69 @@ class AuthService {
     await user.updatePassword(newPassword);
   }
 
-  /// Sends an SMS verification code to [phoneNumber].
-  /// Mobile only (iOS + Android). No reCAPTCHA needed.
+  /// Starts SMS verification for [phoneNumber] and reports a
+  /// [PhoneVerificationSession] via [onCodeSent].
+  ///
+  /// Web and mobile use different Firebase APIs: on **web** phone auth requires
+  /// a reCAPTCHA app-verifier — we use `linkWithPhoneNumber`/`signInWithPhoneNumber`
+  /// (invisible reCAPTCHA, auto-created by FlutterFire) instead of the
+  /// mobile-only `verifyPhoneNumber`, which produces "invalid application
+  /// verifier / reCAPTCHA token invalid" on web.
   Future<void> sendPhoneVerificationCode({
     required String phoneNumber,
-    required void Function(String verificationId, int? resendToken) onCodeSent,
+    required void Function(PhoneVerificationSession session) onCodeSent,
     required void Function(FirebaseAuthException e) onVerificationFailed,
     void Function(PhoneAuthCredential credential)? onAutoVerified,
   }) async {
+    if (kIsWeb) {
+      try {
+        final user = currentUser;
+        final ConfirmationResult confirmation = user != null
+            ? await user.linkWithPhoneNumber(phoneNumber)
+            : await _firebaseAuth.signInWithPhoneNumber(phoneNumber);
+        onCodeSent(PhoneVerificationSession._(confirmation: confirmation));
+      } on FirebaseAuthException catch (e) {
+        onVerificationFailed(e);
+      }
+      return;
+    }
+
+    // Mobile (iOS/Android): native flow, no reCAPTCHA needed.
     await _firebaseAuth.verifyPhoneNumber(
       phoneNumber: phoneNumber,
-      verificationCompleted: (credential) {
-        onAutoVerified?.call(credential);
-      },
+      verificationCompleted: (credential) => onAutoVerified?.call(credential),
       verificationFailed: onVerificationFailed,
-      codeSent: (verificationId, resendToken) {
-        onCodeSent(verificationId, resendToken);
-      },
+      codeSent: (verificationId, _) =>
+          onCodeSent(PhoneVerificationSession._(verificationId: verificationId)),
       codeAutoRetrievalTimeout: (_) {},
     );
   }
 
-  /// Links the current user's account with the phone credential.
-  /// Handles the case where the phone is already linked (re-auth).
-  Future<void> verifyPhoneCode({
-    required String verificationId,
+  /// Confirms [smsCode] for [session] and links the phone to the current user.
+  /// Works on both web (ConfirmationResult) and mobile (verificationId).
+  Future<void> confirmPhoneCode({
+    required PhoneVerificationSession session,
     required String smsCode,
   }) async {
+    // Web: complete the linkWithPhoneNumber / signInWithPhoneNumber flow.
+    final confirmation = session.confirmation;
+    if (confirmation != null) {
+      try {
+        await confirmation.confirm(smsCode);
+      } on FirebaseAuthException catch (e) {
+        if (e.code != 'provider-already-linked') rethrow;
+      }
+      return;
+    }
+
+    // Mobile: build the credential and link it (re-auth if already linked).
+    final verificationId = session.verificationId;
+    if (verificationId == null) {
+      throw FirebaseAuthException(
+        code: 'invalid-verification-session',
+        message: 'Keine aktive Verifizierung.',
+      );
+    }
     final user = currentUser;
     if (user == null) {
       throw FirebaseAuthException(
@@ -194,4 +230,13 @@ class AuthService {
       password: password,
     );
   }
+}
+
+/// An in-progress phone verification. Holds either a mobile [verificationId]
+/// (native flow) or a web [confirmation] (reCAPTCHA flow) — never both.
+class PhoneVerificationSession {
+  const PhoneVerificationSession._({this.verificationId, this.confirmation});
+
+  final String? verificationId;
+  final ConfirmationResult? confirmation;
 }

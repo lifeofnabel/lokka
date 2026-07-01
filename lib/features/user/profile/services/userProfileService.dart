@@ -96,7 +96,25 @@ class UserProfileService {
     if (uid == null) return;
     await firestoreService.updateDocument(
       FirebasePaths.user(uid),
-      {'profileImageUrl': imageUrl, 'updatedAt': FieldValue.serverTimestamp()},
+      {
+        'profileImageUrl': imageUrl,
+        'profileImageType': 'image',
+        'updatedAt': FieldValue.serverTimestamp(),
+      },
+    );
+  }
+
+  /// Sets a Unicode emoji as the avatar (profileImageType == 'emoji').
+  Future<void> updateProfileEmoji(String emoji) async {
+    final uid = _uid;
+    if (uid == null) return;
+    await firestoreService.updateDocument(
+      FirebasePaths.user(uid),
+      {
+        'profileEmoji': emoji,
+        'profileImageType': 'emoji',
+        'updatedAt': FieldValue.serverTimestamp(),
+      },
     );
   }
 

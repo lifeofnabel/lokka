@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -8,29 +6,16 @@ import 'package:provider/provider.dart';
 
 import '../../../core/services/authService.dart';
 import '../../../core/services/languageService.dart';
-import '../../../core/services/localCacheService.dart';
 import '../../../core/theme/appSpacing.dart';
 import '../services/stampFunctionsService.dart';
-import '../services/stampQueueService.dart';
 
-/// Landing page for an NFC tap (or QR fallback). Two link shapes resolve here:
-///   • Path B (NTAG 424): `/stamp?picc=…&cmac=…` → `redeemStampTap`
-///   • Path A (static):    `/s/<token>`          → `redeemStaticStamp`
-/// The page signs the customer in (anonymous if needed), forwards to the right
-/// callable and celebrates the new stamp. NTAG taps are queued+retried offline.
+/// Landing page for a stamp-stick tap. The tag holds `/s/<token>` — the fixed,
+/// owner-written link. The page signs the customer in (anonymous if needed),
+/// calls `redeemStaticStamp` and celebrates the new stamp.
 class StampTapPage extends StatefulWidget {
-  const StampTapPage({
-    super.key,
-    this.picc = '',
-    this.cmac = '',
-    this.token = '',
-  });
+  const StampTapPage({super.key, required this.token});
 
-  final String picc;
-  final String cmac;
-
-  /// Path A static-stick token (from `/s/:token`). When set, the NTAG params
-  /// are ignored.
+  /// Static-stick token from `/s/:token`.
   final String token;
 
   @override
@@ -45,6 +30,9 @@ class _StampTapPageState extends State<StampTapPage> {
   StampTapResult? _result;
   String _errorKey = '';
   String _errorCode = '';
+  // Set by "update location & retry" on the geofence error → forwarded to the
+  // next redeem call so a fresh fix overrides the stale one.
+  (double, double)? _forcedLocation;
 
   @override
   void initState() {
@@ -52,13 +40,11 @@ class _StampTapPageState extends State<StampTapPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _run());
   }
 
-  bool get _isStatic => widget.token.isNotEmpty;
-
   Future<void> _run() async {
     setState(() => _state = _TapState.working);
     final auth = context.read<AuthService>();
 
-    if (!_isStatic && (widget.picc.isEmpty || widget.cmac.isEmpty)) {
+    if (widget.token.isEmpty) {
       setState(() {
         _state = _TapState.error;
         _errorKey = 'merchant.stampScan.err.invalid-tag';
@@ -77,63 +63,41 @@ class _StampTapPageState extends State<StampTapPage> {
     }
 
     try {
-      final res = _isStatic
-          ? await _fn.redeemStaticStamp(token: widget.token)
-          : await _fn.redeemStampTap(picc: widget.picc, cmac: widget.cmac);
+      final res = await _fn.redeemStaticStamp(
+          token: widget.token, location: _forcedLocation);
       HapticFeedback.mediumImpact();
       if (!mounted) return;
       setState(() {
         _result = res;
         _state = _TapState.success;
       });
-      // We're online — opportunistically drain any taps queued while offline.
-      unawaited(StampQueueService(
-        cache: context.read<LocalCacheService>(),
-        functions: _fn,
-      ).flush());
     } on FirebaseFunctionsException catch (e) {
-      // Only the NTAG path has an offline queue (idempotent via the chip
-      // counter). A static link has no counter, so we never auto-replay it
-      // blind — show retry instead.
-      if (!_isStatic && _isTransient(e)) {
-        await _queue();
-      } else {
-        if (!mounted) return;
-        setState(() {
-          _state = _TapState.error;
-          _errorKey = stampErrorKey(e);
-          _errorCode = stampErrorCode(e);
-        });
-      }
+      if (!mounted) return;
+      setState(() {
+        _state = _TapState.error;
+        _errorKey = stampErrorKey(e);
+        _errorCode = stampErrorCode(e);
+      });
     } catch (e) {
-      if (_isStatic) {
-        if (!mounted) return;
-        setState(() {
-          _state = _TapState.error;
-          _errorKey = 'merchant.stampScan.err.offline';
-          _errorCode = e.runtimeType.toString();
-        });
-      } else {
-        await _queue();
-      }
+      if (!mounted) return;
+      setState(() {
+        _state = _TapState.error;
+        _errorKey = 'merchant.stampScan.err.offline';
+        _errorCode = e.runtimeType.toString();
+      });
     }
   }
 
-  bool _isTransient(FirebaseFunctionsException e) =>
-      e.code == 'unavailable' ||
-      e.code == 'deadline-exceeded' ||
-      e.code == 'internal';
-
-  Future<void> _queue() async {
-    try {
-      final queue = StampQueueService(
-        cache: context.read<LocalCacheService>(),
-        functions: _fn,
-      );
-      await queue.enqueue(picc: widget.picc, cmac: widget.cmac);
-    } catch (_) {}
+  /// "Too far" error → grab a FRESH device location (prompting permission if
+  /// needed) and retry immediately. Lets a merchant who just stepped into range
+  /// re-stamp without reloading.
+  Future<void> _updateLocationAndRetry() async {
     if (!mounted) return;
-    setState(() => _state = _TapState.queued);
+    setState(() => _state = _TapState.working);
+    final loc = await _fn.requestFreshLocation();
+    if (!mounted) return;
+    _forcedLocation = loc; // may be null (denied) → server then skips geofence
+    await _run();
   }
 
   @override
@@ -157,7 +121,11 @@ class _StampTapPageState extends State<StampTapPage> {
                       texts: texts,
                       messageKey: _errorKey,
                       code: _errorCode,
-                      onRetry: _run),
+                      onRetry: _run,
+                      onUpdateLocation:
+                          _errorKey == 'merchant.stampScan.err.too-far'
+                              ? _updateLocationAndRetry
+                              : null),
               },
             ),
           ),
@@ -353,11 +321,13 @@ class _Error extends StatelessWidget {
     required this.messageKey,
     required this.onRetry,
     this.code = '',
+    this.onUpdateLocation,
   });
   final LanguageService texts;
   final String messageKey;
   final String code;
   final VoidCallback onRetry;
+  final VoidCallback? onUpdateLocation;
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -384,6 +354,19 @@ class _Error extends StatelessWidget {
                   color: cs.onSurfaceVariant)),
         ],
         const SizedBox(height: AppSpacing.xl),
+        if (onUpdateLocation != null) ...[
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: onUpdateLocation,
+              icon: const Icon(Icons.my_location_rounded),
+              label: Text(texts.text('stampTap.updateLocation')),
+              style: FilledButton.styleFrom(
+                  minimumSize: const Size.fromHeight(52)),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+        ],
         Row(
           children: [
             Expanded(

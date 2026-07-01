@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'appColors.dart';
+import 'appRadius.dart';
 
 /// Chromium Experience – Google Material 3 Theme.
 /// Lokka-Grün als Seed; Google-Surfaces (#FFFFFF/#F8F9FA), Inter als
@@ -9,11 +10,16 @@ import 'appColors.dart';
 class AppTheme {
   const AppTheme._();
 
-  static ThemeData get lightTheme {
-    final scheme = ColorScheme.fromSeed(
+  static ThemeData get lightTheme => _userTheme(_lightScheme());
+
+  static ColorScheme _lightScheme() {
+    return ColorScheme.fromSeed(
       seedColor: AppColors.seedGreen,
       brightness: Brightness.light,
     ).copyWith(
+      // Akzent exakt auf Deep-Green pinnen (CTAs/Fokus/aktiv).
+      primary: AppColors.accent,
+      onPrimary: Colors.white,
       surface: AppColors.surfaceBg,
       onSurface: AppColors.onSurfaceDark,
       onSurfaceVariant: AppColors.onSurfaceMuted,
@@ -25,8 +31,13 @@ class AppTheme {
       outlineVariant: const Color(0xFFE8EAED),
       error: AppColors.googleRed,
     );
+  }
 
-    final base = ThemeData(useMaterial3: true, brightness: Brightness.light);
+  /// Single light theme builder — driven by the [ColorScheme] + central
+  /// [AppRadius] tokens. (The app is light-only; the merchant area uses its own
+  /// fixed dark theme via [merchantDark], which is not a user-toggled mode.)
+  static ThemeData _userTheme(ColorScheme scheme) {
+    final base = ThemeData(useMaterial3: true, brightness: scheme.brightness);
     final textTheme = GoogleFonts.interTextTheme(base.textTheme).apply(
       bodyColor: scheme.onSurface,
       displayColor: scheme.onSurface,
@@ -34,14 +45,14 @@ class AppTheme {
 
     return base.copyWith(
       colorScheme: scheme,
-      scaffoldBackgroundColor: AppColors.surfaceBg,
+      scaffoldBackgroundColor: scheme.surfaceContainerLowest,
       textTheme: _tunedTypography(textTheme),
       splashFactory: InkSparkle.splashFactory,
 
       appBarTheme: AppBarTheme(
         elevation: 0,
         scrolledUnderElevation: 0.5,
-        backgroundColor: AppColors.surfaceBg,
+        backgroundColor: scheme.surface,
         surfaceTintColor: Colors.transparent,
         foregroundColor: scheme.onSurface,
         centerTitle: false,
@@ -52,12 +63,12 @@ class AppTheme {
       ),
 
       cardTheme: CardThemeData(
-        color: AppColors.surfaceBg,
+        color: scheme.surface,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(AppRadius.large),
           side: BorderSide(color: scheme.outlineVariant),
         ),
       ),
@@ -75,7 +86,7 @@ class AppTheme {
           minimumSize: const Size.fromHeight(52),
           padding: const EdgeInsets.symmetric(horizontal: 24),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(100),
+            borderRadius: BorderRadius.circular(AppRadius.full),
           ),
           textStyle: textTheme.labelLarge?.copyWith(
             fontWeight: FontWeight.w600,
@@ -91,7 +102,7 @@ class AppTheme {
           elevation: 0,
           minimumSize: const Size.fromHeight(52),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(100),
+            borderRadius: BorderRadius.circular(AppRadius.full),
           ),
         ),
       ),
@@ -102,7 +113,7 @@ class AppTheme {
           minimumSize: const Size.fromHeight(52),
           side: BorderSide(color: scheme.outline),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(100),
+            borderRadius: BorderRadius.circular(AppRadius.full),
           ),
           textStyle: textTheme.labelLarge?.copyWith(
             fontWeight: FontWeight.w600,
@@ -121,11 +132,11 @@ class AppTheme {
       ),
 
       chipTheme: ChipThemeData(
-        backgroundColor: AppColors.surfaceGray,
+        backgroundColor: scheme.surfaceContainerLow,
         selectedColor: scheme.secondaryContainer,
         side: BorderSide(color: scheme.outlineVariant),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(100),
+          borderRadius: BorderRadius.circular(AppRadius.full),
         ),
         labelStyle: textTheme.labelLarge,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -133,19 +144,19 @@ class AppTheme {
 
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: AppColors.surfaceGray,
+        fillColor: scheme.surfaceContainerLow,
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(AppRadius.medium),
           borderSide: BorderSide(color: scheme.outlineVariant),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(AppRadius.medium),
           borderSide: BorderSide(color: scheme.outlineVariant),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(AppRadius.medium),
           borderSide: BorderSide(color: scheme.primary, width: 2),
         ),
         hintStyle: textTheme.bodyMedium?.copyWith(
@@ -154,7 +165,7 @@ class AppTheme {
       ),
 
       navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: AppColors.surfaceBg,
+        backgroundColor: scheme.surface,
         surfaceTintColor: Colors.transparent,
         indicatorColor: scheme.secondaryContainer,
         elevation: 1,
@@ -163,29 +174,32 @@ class AppTheme {
         ),
       ),
 
-      bottomSheetTheme: const BottomSheetThemeData(
-        backgroundColor: AppColors.surfaceBg,
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: scheme.surface,
         surfaceTintColor: Colors.transparent,
         showDragHandle: true,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        shape: const RoundedRectangleBorder(
+          borderRadius:
+              BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
         ),
       ),
 
       dialogTheme: DialogThemeData(
-        backgroundColor: AppColors.surfaceBg,
+        backgroundColor: scheme.surface,
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(28),
+          borderRadius: BorderRadius.circular(AppRadius.xl),
         ),
       ),
 
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
-        backgroundColor: const Color(0xFF202124),
-        contentTextStyle: textTheme.bodyMedium?.copyWith(color: Colors.white),
+        backgroundColor: scheme.inverseSurface,
+        contentTextStyle:
+            textTheme.bodyMedium?.copyWith(color: scheme.onInverseSurface),
+        actionTextColor: scheme.inversePrimary,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(AppRadius.medium),
         ),
       ),
     );

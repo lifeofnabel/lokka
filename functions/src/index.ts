@@ -20,8 +20,6 @@ import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https
 import { setGlobalOptions, logger } from 'firebase-functions/v2';
 import { defineSecret } from 'firebase-functions/params';
 
-import { verifySun } from './crypto/ntag424';
-import { provSecret } from './crypto/provisioning';
 import {
   newStickId,
   signStaticToken,
@@ -86,65 +84,7 @@ function guard<T>(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  Door 1 — NFC tap (the physical stamp stick). The chip's SUN URL opens the web
-//  app at /stamp; the app (with the logged-in customer) forwards the SUN params
-//  here. CMAC + counter prove "real tag, fresh tap"; geofence is best-effort.
-// ─────────────────────────────────────────────────────────────────────────────
-export const redeemStampTap = onCall(
-  { cors: true, secrets: [masterKeySecret] },
-  async (req) => {
-    const uid = requireAuth(req);
-    const { picc, cmac, lat, lng } = req.data ?? {};
-    if (typeof picc !== 'string' || typeof cmac !== 'string') {
-      throw new HttpsError('invalid-argument', 'stamp/invalid-tag');
-    }
-
-    // 1. Verify the tag signature (CMAC) and recover UID + tap counter.
-    let uidHex: string;
-    let counter: number;
-    try {
-      const r = verifySun(masterKey(), { picc, cmac });
-      uidHex = r.uid;
-      counter = r.counter;
-    } catch {
-      throw new HttpsError('permission-denied', 'stamp/invalid-tag');
-    }
-
-    const db = getFirestore();
-    const stickRef = db.doc(`sticks/${uidHex}`);
-
-    // 2. Counter dedup + binding check (transaction → kills replay/copied URLs).
-    const binding = await db.runTransaction(async (tx) => {
-      const snap = await tx.get(stickRef);
-      if (!snap.exists) throw new HttpsError('not-found', 'stamp/stick-unknown');
-      const s = snap.data() ?? {};
-      const merchantId = s.boundMerchantId as string | undefined;
-      const cardId = s.boundCardId as string | undefined;
-      if (!merchantId || !cardId) {
-        throw new HttpsError('failed-precondition', 'stamp/stick-unbound');
-      }
-      const last = Number(s.counterLast) || 0;
-      if (counter <= last) {
-        throw new HttpsError('already-exists', 'stamp/replay');
-      }
-      tx.update(stickRef, {
-        counterLast: counter,
-        lastTapAt: FieldValue.serverTimestamp(),
-      });
-      return { merchantId, cardId };
-    });
-
-    // 3. Card must be live; geofence + opening-hours best-effort; then stamp.
-    const card = await loadLiveCard(binding.merchantId, binding.cardId);
-    await assertWithinStore(binding.merchantId, lat, lng);
-    await assertWithinOpeningHours(binding.merchantId);
-    const result = await applyStamps(uid, card, 1, 'nfc');
-    return { ...result, merchantId: binding.merchantId, cardId: binding.cardId };
-  },
-);
-
-// ─────────────────────────────────────────────────────────────────────────────
-//  Door 2 — Merchant scans the customer's wallet QR and adds stamps.
+//  Merchant scans the customer's wallet QR and adds stamps.
 // ─────────────────────────────────────────────────────────────────────────────
 export const merchantStampCustomer = onCall({ cors: true }, async (req) => {
   const merchantId = requireAuth(req);
@@ -243,90 +183,7 @@ export const userRemoveStamp = onCall({ cors: true }, async (req) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  Stick setup — merchant scans the stick's printed QR ("lokka-stick:UID:TOKEN")
-//  and binds it to one of their cards. provToken is derived from master+UID, so
-//  only the holder of a genuine printed stick can register it; no pre-provision
-//  Firestore write is required.
-// ─────────────────────────────────────────────────────────────────────────────
-export const setupStick = onCall({ cors: true, secrets: [masterKeySecret] }, async (req) => {
-  const merchantId = requireAuth(req);
-  const { tagUid, provToken, cardId } = req.data ?? {};
-  if (
-    typeof tagUid !== 'string' ||
-    typeof provToken !== 'string' ||
-    typeof cardId !== 'string'
-  ) {
-    throw new HttpsError('invalid-argument', 'stamp/invalid-request');
-  }
-  const uidHex = tagUid.toLowerCase().replace(/[^0-9a-f]/g, '');
-  if (uidHex.length < 8) throw new HttpsError('invalid-argument', 'stamp/invalid-stick');
-
-  // Authenticate the physical stick via the derived provisioning secret.
-  if (provSecret(masterKey(), uidHex) !== provToken.toLowerCase()) {
-    throw new HttpsError('permission-denied', 'stamp/invalid-stick');
-  }
-
-  // The card must belong to the caller and exist.
-  const db = getFirestore();
-  const cardRef = db.doc(`merchants/${merchantId}/stampCards/${cardId}`);
-  const stickRef = db.doc(`sticks/${uidHex}`);
-
-  await db.runTransaction(async (tx) => {
-    const cardSnap = await tx.get(cardRef);
-    if (!cardSnap.exists) throw new HttpsError('not-found', 'stamp/card-not-found');
-
-    const stickSnap = await tx.get(stickRef);
-    const existing = stickSnap.exists ? stickSnap.data() ?? {} : {};
-    const owner = existing.boundMerchantId as string | undefined;
-    if (owner && owner !== merchantId) {
-      // Cross-merchant transfer is blocked (physical theft protection).
-      throw new HttpsError('permission-denied', 'stamp/stick-owned-by-other');
-    }
-
-    // If this merchant had the stick on another card, detach that card's badge.
-    const prevCardId = existing.boundCardId as string | undefined;
-    if (prevCardId && prevCardId !== cardId) {
-      tx.set(
-        db.doc(`merchants/${merchantId}/stampCards/${prevCardId}`),
-        { boundStickId: '', updatedAt: FieldValue.serverTimestamp() },
-        { merge: true },
-      );
-    }
-
-    tx.set(
-      stickRef,
-      {
-        tagUid: uidHex,
-        type: 'ntag424',
-        boundMerchantId: merchantId,
-        boundCardId: cardId,
-        counterLast: Number(existing.counterLast) || 0,
-        verifiedAt: existing.verifiedAt ?? null,
-        createdAt: existing.createdAt ?? FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
-      },
-      { merge: true },
-    );
-    // Mirror badge state onto the client-readable card. stickVerifiedAt resets on
-    // every (re)bind so the "Stift verbunden ✓" badge only appears after a fresh
-    // successful Test-Tap (verifyStickBinding).
-    tx.set(
-      cardRef,
-      {
-        boundStickId: uidHex,
-        stickType: 'ntag424',
-        stickVerifiedAt: null,
-        updatedAt: FieldValue.serverTimestamp(),
-      },
-      { merge: true },
-    );
-  });
-
-  return { ok: true, stickId: uidHex };
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-//  Path A — create a static (browser-written) stick for a card. Returns a signed
+//  Create a static stick for a card. Returns a signed
 //  token the merchant writes onto a blank NFC tag via Web NFC as
 //  `https://<app>/s/<token>`. Reuses the card's existing static stick so running
 //  setup twice yields the same token (no orphan sticks).
@@ -436,85 +293,6 @@ export const redeemStaticStamp = onCall(
     const result = await applyStamps(uid, card, 1, 'nfc-static');
     await stickRef.set({ lastTapAt: FieldValue.serverTimestamp() }, { merge: true });
     return { ...result, merchantId, cardId };
-  },
-);
-
-// ─────────────────────────────────────────────────────────────────────────────
-//  Test-Tap — the merchant taps the just-written/bound stick. Resolve the token
-//  (static) or SUN params (ntag424), confirm it points at THIS merchant's THIS
-//  card, then mark it verified (badge flips to "Stift verbunden ✓").
-// ─────────────────────────────────────────────────────────────────────────────
-export const verifyStickBinding = onCall(
-  { cors: true, secrets: [masterKeySecret] },
-  async (req) => {
-    const merchantId = requireAuth(req);
-    const { cardId, token, picc, cmac, tagUid, provToken } = req.data ?? {};
-    if (typeof cardId !== 'string' || !cardId) {
-      throw new HttpsError('invalid-argument', 'stamp/invalid-request');
-    }
-    const db = getFirestore();
-    const master = masterKey();
-
-    let stickId = '';
-    let type = '';
-    if (typeof token === 'string' && token) {
-      // Path A — static link token (read from the tag via Web NFC).
-      const parsed = parseStaticToken(token);
-      if (!parsed) throw new HttpsError('permission-denied', 'stamp/invalid-tag');
-      if (!verifyStaticToken(master, parsed.stickId, merchantId, cardId, parsed.sig)) {
-        throw new HttpsError('failed-precondition', 'stamp/wrong-card');
-      }
-      stickId = parsed.stickId;
-      type = 'static';
-    } else if (typeof picc === 'string' && typeof cmac === 'string') {
-      // Path B — a live NTAG SUN tap (read from the tag via Web NFC).
-      try {
-        stickId = verifySun(master, { picc, cmac }).uid;
-      } catch {
-        throw new HttpsError('permission-denied', 'stamp/invalid-tag');
-      }
-      type = 'ntag424';
-    } else if (typeof tagUid === 'string' && typeof provToken === 'string') {
-      // Path B fallback — re-scan the stick's printed QR (no Web NFC, e.g.
-      // iPhone/desktop). Proves the physical stick ↔ card binding via provToken.
-      const uidHex = tagUid.toLowerCase().replace(/[^0-9a-f]/g, '');
-      if (uidHex.length < 8 || provSecret(master, uidHex) !== provToken.toLowerCase()) {
-        throw new HttpsError('permission-denied', 'stamp/invalid-stick');
-      }
-      stickId = uidHex;
-      type = 'ntag424';
-    } else {
-      throw new HttpsError('invalid-argument', 'stamp/invalid-request');
-    }
-
-    const stickRef = db.doc(`sticks/${stickId}`);
-    await db.runTransaction(async (tx) => {
-      const snap = await tx.get(stickRef);
-      if (!snap.exists) throw new HttpsError('not-found', 'stamp/stick-unknown');
-      const s = snap.data() ?? {};
-      if (s.boundMerchantId !== merchantId || s.boundCardId !== cardId) {
-        // The stick resolves, but it is bound to a different card (or merchant).
-        throw new HttpsError('failed-precondition', 'stamp/wrong-card');
-      }
-      tx.set(
-        stickRef,
-        {
-          verifiedAt: FieldValue.serverTimestamp(),
-          updatedAt: FieldValue.serverTimestamp(),
-        },
-        { merge: true },
-      );
-      tx.set(
-        db.doc(`merchants/${merchantId}/stampCards/${cardId}`),
-        {
-          stickVerifiedAt: FieldValue.serverTimestamp(),
-          stickType: type,
-          updatedAt: FieldValue.serverTimestamp(),
-        },
-        { merge: true },
-      );
-    });
-    return { ok: true, type, cardId };
   },
 );
 
@@ -674,7 +452,6 @@ export const userUnfollowMerchant = onCall({ cors: true }, async (req) => {
 export {
   bootstrapAdmin,
   adminMintStaticSticks,
-  adminDeriveNtagStick,
   adminListSticks,
   claimStaticStick,
 } from './admin';

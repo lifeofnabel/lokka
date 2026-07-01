@@ -121,6 +121,43 @@ class GeoapifyService {
     return _fetch(uri);
   }
 
+  /// Grobe Verortung anhand der Anfrage-IP (Geoapify IP-Geolocation).
+  /// Kein Permission-Prompt, keine Adresse nötig – liefert Stadt + ungefähre
+  /// Koordinaten. Nur so genau wie die IP (Stadt-/Provider-Ebene). Liefert null
+  /// ohne Key oder bei Fehler (Aufrufer fällt auf Default zurück).
+  Future<GeoResult?> ipLocate() async {
+    if (!isConfigured) return null;
+    final uri = Uri.parse('https://api.geoapify.com/v1/ipinfo')
+        .replace(queryParameters: {'apiKey': _apiKey, 'lang': 'de'});
+    try {
+      final res = await _client.get(uri).timeout(const Duration(seconds: 6));
+      if (res.statusCode != 200) return null;
+      final body = jsonDecode(res.body) as Map<String, dynamic>;
+      final loc = body['location'] as Map<String, dynamic>?;
+      final lat = (loc?['latitude'] as num?)?.toDouble();
+      final lng = (loc?['longitude'] as num?)?.toDouble();
+      if (lat == null || lng == null) return null;
+      final city = (body['city'] as Map<String, dynamic>?)?['name']?.toString() ??
+          (body['state'] as Map<String, dynamic>?)?['name']?.toString() ??
+          '';
+      final country =
+          (body['country'] as Map<String, dynamic>?)?['name']?.toString() ?? '';
+      return GeoResult(
+        lat: lat,
+        lng: lng,
+        formatted: city,
+        street: '',
+        houseNumber: '',
+        postalCode: '',
+        city: city,
+        country: country,
+        district: '',
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Koordinaten → strukturierte Adresse (für Anzeige des User-Standorts).
   Future<GeoResult?> reverseGeocode(double lat, double lng) async {
     if (!isConfigured) return null;

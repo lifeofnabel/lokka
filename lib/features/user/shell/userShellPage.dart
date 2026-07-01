@@ -5,20 +5,17 @@ import 'package:provider/provider.dart';
 import 'package:lokka/core/services/authService.dart';
 import 'package:lokka/core/services/firestoreService.dart';
 import 'package:lokka/core/services/localCacheService.dart';
-import 'package:lokka/core/theme/appColors.dart';
+import 'package:lokka/core/theme/appRadius.dart';
+import 'package:lokka/core/utils/deferredWarmup.dart';
 import 'package:lokka/core/widgets/responsiveContentWidth.dart';
 import 'package:lokka/core/widgets/appLoadingState.dart';
-import 'package:lokka/features/user/discover/pages/userDiscoverPage.dart';
 import 'package:lokka/features/user/discover/providers/userDiscoverProvider.dart';
 import 'package:lokka/features/user/discover/services/userDiscoverService.dart';
-import 'package:lokka/features/user/explore/pages/userExplorePage.dart';
 import 'package:lokka/features/user/onboarding/pages/onboardingSurveyPage.dart';
 import 'package:lokka/features/user/partners/providers/userPartnersProvider.dart';
 import 'package:lokka/features/user/partners/services/userPartnersService.dart';
-import 'package:lokka/features/user/profile/pages/userProfilePage.dart';
 import 'package:lokka/features/user/profile/providers/userProfileProvider.dart';
 import 'package:lokka/features/user/profile/services/userProfileService.dart';
-import 'package:lokka/features/user/wallet/pages/userWalletPage.dart';
 import 'package:lokka/features/user/wallet/providers/userWalletProvider.dart';
 import 'package:lokka/features/user/wallet/services/userWalletService.dart';
 import 'package:lokka/features/user/notifications/providers/userNotificationProvider.dart';
@@ -26,16 +23,19 @@ import 'package:lokka/features/user/notifications/services/userNotificationServi
 import 'package:lokka/features/user/notifications/services/userPushService.dart';
 
 class UserShellPage extends StatefulWidget {
-  const UserShellPage({super.key, required this.initialIndex});
+  const UserShellPage({super.key, required this.navigationShell});
 
-  final int initialIndex;
+  /// Verwaltet die 4 Tab-Branches (siehe StatefulShellRoute in appRouter.dart)
+  /// — hält beim Wechseln jeden Branch-Navigator inkl. State am Leben, statt
+  /// wie zuvor bei jedem Tab-Tap eine komplett neue Shell (und damit alle
+  /// Provider) zu disposen und neu zu bauen.
+  final StatefulNavigationShell navigationShell;
 
   @override
   State<UserShellPage> createState() => _UserShellPageState();
 }
 
 class _UserShellPageState extends State<UserShellPage> {
-  late int _index = widget.initialIndex;
   bool _showToolbar = true;
   UserPushService? _pushService;
   bool _pushInited = false;
@@ -43,6 +43,11 @@ class _UserShellPageState extends State<UserShellPage> {
   @override
   void initState() {
     super.initState();
+    // Der Tab, mit dem diese Shell startet, bekommt sofortige Ladepriorität –
+    // die übrigen 3 Tabs (+ tab-lose Provider) laden verzögert nach (siehe
+    // DeferredWarmup), damit sie nicht um dieselbe Firestore-Verbindung
+    // konkurrieren, bevor überhaupt etwas sichtbar ist.
+    TabPriority.activeIndex.value = widget.navigationShell.currentIndex;
     _pushService = UserPushService(
       firestoreService: context.read<FirestoreService>(),
       authService: context.read<AuthService>(),
@@ -76,13 +81,6 @@ class _UserShellPageState extends State<UserShellPage> {
     (label: 'Profil', icon: Icons.person_outline_rounded, activeIcon: Icons.person_rounded),
   ];
 
-  static const _paths = [
-    '/user/discover',
-    '/user/explore',
-    '/user/wallet',
-    '/user/profile',
-  ];
-
   @override
   Widget build(BuildContext context) {
     final firestoreService = context.read<FirestoreService>();
@@ -98,11 +96,14 @@ class _UserShellPageState extends State<UserShellPage> {
               authService: authService,
               cacheService: cacheService,
             ),
+            tabIndex: 0,
           ),
         ),
+        // Kein eigener Tab mehr – bekommt die Priorität des Start-Tabs.
         ChangeNotifierProvider<UserPartnersProvider>(
           create: (_) => UserPartnersProvider(
             service: UserPartnersService(firestoreService: firestoreService),
+            tabIndex: widget.navigationShell.currentIndex,
           ),
         ),
         ChangeNotifierProvider<UserWalletProvider>(
@@ -112,8 +113,11 @@ class _UserShellPageState extends State<UserShellPage> {
               authService: authService,
               cacheService: cacheService,
             ),
+            tabIndex: 2,
           ),
         ),
+        // Gated den gesamten Shell-Build (siehe Consumer unten) – muss immer
+        // sofort laufen, kein Deferred.
         ChangeNotifierProvider<UserProfileProvider>(
           create: (_) => UserProfileProvider(
             service: UserProfileService(
@@ -123,12 +127,14 @@ class _UserShellPageState extends State<UserShellPage> {
             ),
           ),
         ),
+        // Kein eigener Tab – bekommt die Priorität des Start-Tabs.
         ChangeNotifierProvider<UserNotificationProvider>(
           create: (_) => UserNotificationProvider(
             service: UserNotificationService(
               firestoreService: firestoreService,
               authService: authService,
             ),
+            tabIndex: widget.navigationShell.currentIndex,
           ),
         ),
       ],
@@ -138,10 +144,7 @@ class _UserShellPageState extends State<UserShellPage> {
             final user = profile.user;
             // Profil lädt noch → kurzer Ladezustand statt Tab-Flackern.
             if (profile.isLoading && user == null) {
-              return const Scaffold(
-                backgroundColor: AppColors.background,
-                body: AppLoadingState(),
-              );
+              return const Scaffold(body: AppLoadingState());
             }
             // Onboarding-Gate: einmalig Pflicht, bis Interessen gespeichert sind.
             if (user != null && !user.onboardingCompleted) {
@@ -150,7 +153,6 @@ class _UserShellPageState extends State<UserShellPage> {
             WidgetsBinding.instance
                 .addPostFrameCallback((_) => _initPushOnce());
             return Scaffold(
-              backgroundColor: AppColors.background,
               extendBody: true,
               body: NotificationListener<UserScrollNotification>(
                 onNotification: (notification) {
@@ -161,15 +163,11 @@ class _UserShellPageState extends State<UserShellPage> {
                 },
                 child: ResponsiveContentWidth(
                   maxWidth: 720,
-                  child: IndexedStack(
-                    index: _index,
-                    children: const [
-                      UserDiscoverPage(),
-                      UserExplorePage(),
-                      UserWalletPage(),
-                      UserProfilePage(),
-                    ],
-                  ),
+                  // navigationShell übernimmt die IndexedStack-artige
+                  // Umschaltung bereits selbst (siehe StatefulShellRoute in
+                  // appRouter.dart) — inkl. eigenem Navigator pro Branch, der
+                  // beim Wechseln NICHT disposed wird.
+                  child: widget.navigationShell,
                 ),
               ),
               // Beim Runterscrollen schrumpft die Toolbar (verschwindet nicht),
@@ -194,14 +192,14 @@ class _UserShellPageState extends State<UserShellPage> {
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
       child: Material(
-        color: AppColors.surfaceBg,
+        color: cs.surface,
         elevation: 3,
         shadowColor: Colors.black.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(AppRadius.xxl),
         child: Container(
           decoration: BoxDecoration(
-            color: AppColors.surfaceBg,
-            borderRadius: BorderRadius.circular(28),
+            color: cs.surface,
+            borderRadius: BorderRadius.circular(AppRadius.xxl),
             border: Border.all(color: cs.outlineVariant),
           ),
           child: SafeArea(
@@ -213,15 +211,21 @@ class _UserShellPageState extends State<UserShellPage> {
                 child: Row(
                   children: List.generate(_tabs.length, (i) {
                     final tab = _tabs[i];
-                    final isActive = _index == i;
+                    final isActive = widget.navigationShell.currentIndex == i;
                     return Expanded(
                       flex: isActive ? 2 : 1,
                       child: _NavTab(
                         tab: tab,
                         isActive: isActive,
                         onTap: () {
-                          setState(() => _index = i);
-                          context.go(_paths[i]);
+                          TabPriority.activeIndex.value = i;
+                          // goBranch wechselt den sichtbaren Branch, OHNE die
+                          // anderen zu disposen — Provider/State bleiben warm.
+                          widget.navigationShell.goBranch(
+                            i,
+                            initialLocation:
+                                i == widget.navigationShell.currentIndex,
+                          );
                         },
                       ),
                     );
@@ -265,8 +269,11 @@ class _NavTab extends StatelessWidget {
               vertical: 9,
             ),
             decoration: BoxDecoration(
-              color: isActive ? cs.secondaryContainer : Colors.transparent,
-              borderRadius: BorderRadius.circular(999),
+              // Active tab reads as the deep-green accent (not mint).
+              color: isActive
+                  ? cs.primary.withValues(alpha: 0.14)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(AppRadius.full),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -274,9 +281,7 @@ class _NavTab extends StatelessWidget {
                 Icon(
                   isActive ? tab.activeIcon : tab.icon,
                   size: 22,
-                  color: isActive
-                      ? cs.onSecondaryContainer
-                      : cs.onSurfaceVariant,
+                  color: isActive ? cs.primary : cs.onSurfaceVariant,
                 ),
                 if (isActive) ...[
                   const SizedBox(width: 8),
@@ -287,8 +292,8 @@ class _NavTab extends StatelessWidget {
                       softWrap: false,
                       overflow: TextOverflow.ellipsis,
                       style: tt.labelLarge?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: cs.onSecondaryContainer,
+                        fontWeight: FontWeight.w700,
+                        color: cs.primary,
                       ),
                     ),
                   ),

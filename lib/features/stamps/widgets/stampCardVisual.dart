@@ -138,6 +138,13 @@ class StampCardVisual extends StatelessWidget {
                           if (card.description.trim().isNotEmpty)
                             Tooltip(
                               message: card.description,
+                              // Ohne das hier: Tooltip löst auf Touch nur bei
+                              // Long-Press (Default), nicht bei normalem Tap –
+                              // fühlt sich auf dem Handy/Touchscreen kaputt an.
+                              // Tap-Trigger wie beim geteilten
+                              // MerchantInfoTooltip.
+                              triggerMode: TooltipTriggerMode.tap,
+                              showDuration: const Duration(seconds: 6),
                               child: Icon(
                                 Icons.info_outline_rounded,
                                 color: fg.withValues(alpha: 0.78),

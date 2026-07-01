@@ -1,18 +1,37 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:lokka/core/utils/deferredWarmup.dart';
 import 'package:lokka/features/user/notifications/models/userNotificationModel.dart';
 import 'package:lokka/features/user/notifications/services/userNotificationService.dart';
 
 class UserNotificationProvider extends ChangeNotifier {
-  UserNotificationProvider({required UserNotificationService service})
+  /// [tabIndex] lässt den Start verzögern, solange ein anderer Tab aktiv ist
+  /// (siehe [DeferredWarmup]) – null startet sofort (Default/Testverhalten).
+  UserNotificationProvider({required UserNotificationService service, int? tabIndex})
       : _service = service {
-    _subscribe();
-    // Best-effort Nudges beim Start (kostenlos, ohne Server).
-    unawaited(_service.generateNudges());
+    void start() {
+      _subscribe();
+      // Best-effort Nudges beim Start (kostenlos, ohne Server).
+      unawaited(_service.generateNudges());
+    }
+
+    if (tabIndex == null) {
+      start();
+    } else {
+      DeferredWarmup.schedule(tabIndex, start);
+    }
   }
 
   final UserNotificationService _service;
   StreamSubscription<List<UserNotificationModel>>? _sub;
+
+  bool _disposed = false;
+
+  @override
+  void notifyListeners() {
+    if (_disposed) return;
+    super.notifyListeners();
+  }
 
   List<UserNotificationModel> _items = [];
   bool _isLoading = true;
@@ -43,6 +62,7 @@ class UserNotificationProvider extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
     _sub?.cancel();
     super.dispose();
   }

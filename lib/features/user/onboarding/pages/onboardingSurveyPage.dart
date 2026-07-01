@@ -243,7 +243,7 @@ class _OnboardingSurveyPageState extends State<OnboardingSurveyPage> {
               elevation: 0,
               scrolledUnderElevation: 0,
               title: Text(
-                'Interessen anpassen',
+                'Über mich anpassen',
                 style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w600),
               ),
             )

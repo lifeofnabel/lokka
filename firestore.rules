@@ -70,6 +70,9 @@ service cloud.firestore {
     // ---- Öffentliche Referenzdaten ----------------------------------------
     match /system/{doc=**}    { allow read: if true; allow write: if false; }
     match /shopTypes/{doc=**} { allow read: if true; allow write: if false; }
+    // Rechtstexte (z. B. legal/privacyPolicy): öffentlich lesbar (Anzeige im
+    // Profil, auch ohne Login). Schreiben nur via Admin (Godmode-Override oben).
+    match /legal/{doc=**}     { allow read: if true; allow write: if false; }
     // chooser/*: öffentlich lesbar; eingeloggte Nutzer/Merchants dürfen eigene
     // Werte anhängen (FirestoreService.addChooserValue → arrayUnion auf 'name',
     // z. B. eigene Kategorie/Herkunft). TODO: später auf arrayUnion-only /

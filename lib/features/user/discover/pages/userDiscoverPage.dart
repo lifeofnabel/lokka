@@ -12,9 +12,13 @@ import '../../../../core/utils/locationUtils.dart';
 import '../../../../core/utils/shareUtils.dart';
 import '../../../../core/widgets/appEmptyState.dart';
 import '../../../../core/widgets/appErrorState.dart';
+import '../../../../core/widgets/appPillSwitch.dart';
 import '../../../../core/widgets/appSearchField.dart';
-import '../../notifications/pages/userInboxPage.dart';
-import '../../notifications/providers/userNotificationProvider.dart';
+import '../../../../core/services/authService.dart';
+import '../../../../core/services/firestoreService.dart';
+import '../../feed/services/userFeedService.dart';
+import '../../feed/utils/feedTypeLabels.dart';
+import '../../feed/widgets/reviewsSheet.dart';
 import '../providers/userDiscoverProvider.dart';
 import '../services/userDiscoverService.dart';
 
@@ -56,38 +60,83 @@ class _UserDiscoverPageState extends State<UserDiscoverPage> {
     final idx = ((offset - 60) / 470).floor().clamp(0, 100000);
     if (idx != _topIndex) setState(() => _topIndex = idx);
     _lastOffset = offset;
+
+    // Automatisches Nachladen: sobald der Nutzer nah am Ende des geladenen
+    // Fensters ist, holt der Provider die nächsten Beiträge – kein Tap auf
+    // „Mehr laden" nötig. canLoadMore/isLoadingMore machen Mehrfachauslösen
+    // ungefährlich (stoppt von selbst, sobald alles geladen ist).
+    final provider = context.read<UserDiscoverProvider>();
+    if (idx >= provider.visibleItems.length - 2 &&
+        provider.canLoadMore &&
+        !provider.isLoadingMore) {
+      provider.loadMore();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<UserDiscoverProvider>();
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: Stack(
-        children: [
-          RefreshIndicator(
-            onRefresh: provider.load,
-            child: CustomScrollView(
-              controller: _scrollController,
-              slivers: [
-                SliverAppBar(
-                  floating: true,
-                  snap: true,
-                  centerTitle: true,
-                  titleSpacing: 4,
-                  backgroundColor: AppColors.background,
-                  title: _FeedModeToggle(
-                    mode: provider.mode,
-                    onChanged: provider.setMode,
+    // Kein eigenes Scaffold mehr – die Shell stellt schon eines. Kopfbereich
+    // (Umschalter-Padding) jetzt IDENTISCH zu Suche/Wallet positioniert
+    // (kSwitcherPadding), statt in eine eigene SliverAppBar mit eigenem
+    // Hintergrundton/Floating-Verhalten verpackt zu sein – das ließ den
+    // oberen Bereich trotz gleichem Umschalter-Widget leicht anders wirken.
+    return Stack(
+      children: [
+        RefreshIndicator(
+          onRefresh: provider.load,
+          child: CustomScrollView(
+            controller: _scrollController,
+            slivers: [
+              SliverToBoxAdapter(
+                child: SafeArea(
+                  bottom: false,
+                  child: Padding(
+                    padding: kSwitcherPadding,
+                    // Gleicher Pill-Stil wie Deals/Partner auf der Suche-Seite
+                    // (EINE Quelle: AppPillSwitch) – volle Breite, Icon + Label.
+                    child: AppPillSwitch<DiscoverFeedMode>(
+                      value: provider.mode,
+                      onChanged: provider.setMode,
+                      expand: true,
+                      segments: const [
+                        (
+                          value: DiscoverFeedMode.forYou,
+                          label: 'Für dich',
+                          icon: Icons.auto_awesome_rounded
+                        ),
+                        (
+                          value: DiscoverFeedMode.following,
+                          label: 'Folge ich',
+                          icon: Icons.storefront_rounded
+                        ),
+                        (
+                          value: DiscoverFeedMode.nearMe,
+                          label: 'Neben mir',
+                          icon: Icons.near_me_rounded
+                        ),
+                      ],
+                    ),
                   ),
-                  actions: [
-                    _LocationButton(provider: provider),
-                    const _InboxBell(),
-                  ],
                 ),
-                if (provider.usedFallbackLocation)
-                  const SliverToBoxAdapter(child: _LocationNotice()),
+              ),
+              if (provider.showLocationNotice)
+                  SliverToBoxAdapter(
+                    child: _LocationNotice(
+                      city: provider.fallbackCity,
+                      onDismiss: provider.dismissLocationNotice,
+                    ),
+                  ),
+                // Sichtbar, sobald ein Filter aktiv ist – sonst wirkt ein
+                // dünner Feed wie ein Fehler statt wie eine bewusste Wahl.
+                if (provider.hasActiveFilters)
+                  SliverToBoxAdapter(
+                    child: _ActiveFilterBanner(
+                      labels: provider.activeFilterLabels,
+                      onClear: provider.resetFilters,
+                    ),
+                  ),
                 if (provider.isLoading)
                   const SliverToBoxAdapter(child: _FeedSkeleton())
                 else if (provider.error != null)
@@ -132,8 +181,20 @@ class _UserDiscoverPageState extends State<UserDiscoverPage> {
                       separatorBuilder: (_, _) => const SizedBox(height: 18),
                       itemBuilder: (context, index) {
                         if (index >= provider.visibleItems.length) {
+                          if (provider.isLoadingMore) {
+                            return const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 8),
+                              child: Center(
+                                child: SizedBox(
+                                  width: 22,
+                                  height: 22,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                ),
+                              ),
+                            );
+                          }
                           return FilledButton(
-                            onPressed: provider.isLoadingMore ? null : provider.loadMore,
+                            onPressed: provider.loadMore,
                             child: const Text('Mehr laden'),
                           );
                         }
@@ -188,6 +249,10 @@ class _UserDiscoverPageState extends State<UserDiscoverPage> {
               scale: _showActions ? 1.0 : 0.55,
               child: Column(
                 children: [
+                  // Standort war vorher in der AppBar neben der Glocke – jetzt
+                  // Teil der schwebenden Button-Gruppe (Glocke ist ganz weg).
+                  _LocationButton(provider: provider),
+                  const SizedBox(height: 10),
                   FloatingActionButton.small(
                     heroTag: 'discoverSearch',
                     onPressed: () => setState(() => _showSearch = !_showSearch),
@@ -204,8 +269,7 @@ class _UserDiscoverPageState extends State<UserDiscoverPage> {
             ),
           ),
         ],
-      ),
-    );
+      );
   }
 }
 
@@ -264,7 +328,7 @@ class _FeedSkeletonState extends State<_FeedSkeleton>
     return Container(
       decoration: BoxDecoration(
         color: cs.surface,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(AppRadius.large),
         border: Border.all(color: cs.outlineVariant),
       ),
       clipBehavior: Clip.antiAlias,
@@ -310,73 +374,13 @@ class _FeedSkeletonState extends State<_FeedSkeleton>
   }
 }
 
-/// Oberer Umschalter „Für dich ↔ Folge ich" – ruhige M3-Pill.
-class _FeedModeToggle extends StatelessWidget {
-  const _FeedModeToggle({required this.mode, required this.onChanged});
+// Der Für-dich/Folge-ich/Neben-mir-Umschalter nutzt jetzt den geteilten
+// AppPillSwitch (siehe SliverAppBar oben) – gleicher Stil wie Deals/Partner
+// auf der Suche-Seite. Der frühere lokale _FeedModeToggle ist entfallen.
 
-  final DiscoverFeedMode mode;
-  final ValueChanged<DiscoverFeedMode> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return FittedBox(
-      fit: BoxFit.scaleDown,
-      child: Container(
-        padding: const EdgeInsets.all(4),
-        decoration: BoxDecoration(
-          color: AppColors.surfaceGray,
-          borderRadius: BorderRadius.circular(999),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _segment(context, 'Für dich', DiscoverFeedMode.forYou, cs),
-            _segment(context, 'Folge ich', DiscoverFeedMode.following, cs),
-            _segment(context, 'Neben mir', DiscoverFeedMode.nearMe, cs),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _segment(
-    BuildContext context,
-    String label,
-    DiscoverFeedMode value,
-    ColorScheme cs,
-  ) {
-    final active = mode == value;
-    final tt = Theme.of(context).textTheme;
-    return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(999),
-      child: InkWell(
-        onTap: () => onChanged(value),
-        borderRadius: BorderRadius.circular(999),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOut,
-          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
-          decoration: BoxDecoration(
-            color: active ? cs.surface : Colors.transparent,
-            borderRadius: BorderRadius.circular(999),
-          ),
-          child: Text(
-            label,
-            style: tt.labelLarge?.copyWith(
-              fontWeight: active ? FontWeight.w600 : FontWeight.w500,
-              color: active ? cs.onSurface : cs.onSurfaceVariant,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Standort-Button neben der Glocke. Durchgestrichenes Pin-Logo, wenn kein
-/// echter Standort geteilt ist (Default Westendplatz).
+/// Standort-Button, Teil der schwebenden Button-Gruppe (Suche/Filter).
+/// Durchgestrichenes Pin-Icon, wenn kein echter Standort geteilt ist (Default
+/// Westendplatz).
 class _LocationButton extends StatelessWidget {
   const _LocationButton({required this.provider});
 
@@ -386,13 +390,14 @@ class _LocationButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final active = provider.hasSharedLocation;
-    return IconButton(
+    return FloatingActionButton.small(
+      heroTag: 'discoverLocation',
       tooltip: provider.locationLabel,
       onPressed: () => showDialog<void>(
         context: context,
         builder: (_) => _LocationSheet(provider: provider),
       ),
-      icon: Icon(
+      child: Icon(
         active ? Icons.location_on_rounded : Icons.location_off_rounded,
         color: active ? cs.primary : cs.onSurfaceVariant,
       ),
@@ -512,7 +517,8 @@ class _LocationSheetState extends State<_LocationSheet> {
     final tt = Theme.of(context).textTheme;
     return Dialog(
       insetPadding: const EdgeInsets.all(24),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.xl)),
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
@@ -696,7 +702,7 @@ class _FeedCard extends StatelessWidget {
 
     return Material(
       color: cs.surface,
-      borderRadius: BorderRadius.circular(28),
+      borderRadius: BorderRadius.circular(AppRadius.large),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: () async {
@@ -707,7 +713,7 @@ class _FeedCard extends StatelessWidget {
         },
         child: Ink(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(28),
+            borderRadius: BorderRadius.circular(AppRadius.large),
             border: Border.all(color: cs.outlineVariant),
           ),
           child: Column(
@@ -848,11 +854,51 @@ class _FeedCard extends StatelessWidget {
                       ],
                     ),
                   ),
-                  Positioned(
-                    bottom: 12,
-                    right: 12,
-                    child: _LikeButton(
-                      liked: item.isLiked,
+                ],
+              ),
+              // Optional meta line (distance + rating) — calm, above the actions.
+              if (distanceKm != null || item.averageRating != null)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                  child: Row(
+                    children: [
+                      if (distanceKm != null) ...[
+                        Icon(Icons.near_me_rounded, size: 15, color: cs.primary),
+                        const SizedBox(width: 4),
+                        Text(
+                          LocationUtils.distanceLabel(distanceKm),
+                          style: tt.labelLarge?.copyWith(
+                              fontWeight: FontWeight.w600, color: cs.primary),
+                        ),
+                        const SizedBox(width: 14),
+                      ],
+                      if (item.averageRating != null) ...[
+                        const Icon(Icons.star_rounded,
+                            size: 18, color: AppColors.googleYellow),
+                        const SizedBox(width: 4),
+                        Text(
+                          item.averageRating!.toStringAsFixed(1),
+                          style: tt.labelLarge
+                              ?.copyWith(fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              // Single, unified action bar: Like · Kommentar · Teilen.
+              Padding(
+                padding: const EdgeInsets.fromLTRB(6, 2, 8, 6),
+                child: Row(
+                  children: [
+                    _FeedAction(
+                      icon: item.isLiked
+                          ? Icons.favorite_rounded
+                          : Icons.favorite_border_rounded,
+                      color: item.isLiked
+                          ? AppColors.googleRed
+                          : cs.onSurfaceVariant,
+                      label: post.likesCount > 0 ? '${post.likesCount}' : null,
+                      tooltip: 'Gefällt mir',
                       onTap: () async {
                         final messenger = ScaffoldMessenger.of(context);
                         try {
@@ -864,52 +910,85 @@ class _FeedCard extends StatelessWidget {
                         }
                       },
                     ),
-                  ),
-                ],
-              ),
-              // Eine ruhige Meta-Zeile (Titel liegt auf dem Bild)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
-                child: Row(
-                  children: [
-                    if (distanceKm != null) ...[
-                      Icon(Icons.near_me_rounded, size: 15, color: cs.primary),
-                      const SizedBox(width: 4),
-                      Text(
-                        LocationUtils.distanceLabel(distanceKm),
-                        style: tt.labelLarge?.copyWith(
-                            fontWeight: FontWeight.w600, color: cs.primary),
+                    _FeedAction(
+                      icon: Icons.rate_review_outlined,
+                      color: cs.onSurfaceVariant,
+                      tooltip: 'Bewertungen',
+                      onTap: () {
+                        final svc = UserFeedService(
+                          firestoreService: context.read<FirestoreService>(),
+                          authService: context.read<AuthService>(),
+                        );
+                        showReviewsSheet(context,
+                            feedService: svc,
+                            postId: post.postId,
+                            merchantId: post.merchantId);
+                      },
+                    ),
+                    _FeedAction(
+                      icon: Icons.share_outlined,
+                      color: cs.onSurfaceVariant,
+                      tooltip: 'Teilen',
+                      onTap: () => ShareUtils.shareFeedPost(
+                        title: post.title,
+                        merchantName: merchant.shopName,
                       ),
-                      const SizedBox(width: 14),
-                    ],
-                    if (item.averageRating != null) ...[
-                      const Icon(Icons.star_rounded,
-                          size: 18, color: AppColors.googleYellow),
-                      const SizedBox(width: 4),
-                      Text(
-                        item.averageRating!.toStringAsFixed(1),
-                        style: tt.labelLarge
-                            ?.copyWith(fontWeight: FontWeight.w600),
-                      ),
-                    ] else
-                      Text('Neu',
-                          style: tt.labelMedium
-                              ?.copyWith(color: cs.onSurfaceVariant)),
-                    if (post.likesCount > 0) ...[
-                      const SizedBox(width: 14),
-                      Icon(Icons.favorite_rounded,
-                          size: 15, color: cs.primary),
-                      const SizedBox(width: 4),
-                      Text('${post.likesCount}',
-                          style: tt.labelMedium
-                              ?.copyWith(color: cs.onSurfaceVariant)),
-                    ],
+                    ),
                     const Spacer(),
                     Icon(Icons.chevron_right_rounded,
                         color: cs.onSurfaceVariant, size: 22),
+                    const SizedBox(width: 8),
                   ],
                 ),
               ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Compact action-bar item (icon + optional count) for the Explore feed card.
+class _FeedAction extends StatelessWidget {
+  const _FeedAction({
+    required this.icon,
+    required this.color,
+    required this.tooltip,
+    required this.onTap,
+    this.label,
+  });
+
+  final IconData icon;
+  final Color color;
+  final String tooltip;
+  final VoidCallback onTap;
+  final String? label;
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
+    return Tooltip(
+      message: tooltip,
+      // Sonst zeigt der Tooltip auf Touch nur bei Long-Press (Default), nicht
+      // bei normalem Tap.
+      triggerMode: TooltipTriggerMode.tap,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          child: Row(
+            children: [
+              Icon(icon, size: 22, color: color),
+              if (label != null) ...[
+                const SizedBox(width: 6),
+                Text(label!,
+                    style: tt.labelLarge?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: cs.onSurfaceVariant)),
+              ],
             ],
           ),
         ),
@@ -941,12 +1020,18 @@ class _SearchPanel extends StatelessWidget {
   }
 }
 
+/// Filter-Sheet: kein Standort-Bezug mehr (Ort-Anzeige entfernt). Keine
+/// „Für dich/Beliebt/Neu"-Sortierung mehr (überschnitt sich mit dem
+/// Für-dich/Folge-ich/Neben-mir-Umschalter oben – zwei Sortier-Konzepte
+/// übereinander war verwirrend).
 void _showFilters(BuildContext context, UserDiscoverProvider provider) {
-  final city = TextEditingController(text: provider.city);
   var radius = provider.radius;
   var shopType = provider.shopType;
+  final dealTypes = Set<String>.of(provider.dealTypes);
+  final origins = Set<String>.of(provider.origins);
   var openNow = provider.openNow;
-  var sort = provider.sort;
+  // EINMAL angefragt (gecacht im Provider) – nicht bei jedem Sheet-Rebuild.
+  final originsFuture = provider.loadOrigins();
 
   showModalBottomSheet<void>(
     context: context,
@@ -954,7 +1039,8 @@ void _showFilters(BuildContext context, UserDiscoverProvider provider) {
     showDragHandle: true,
     builder: (context) => StatefulBuilder(
       builder: (context, setState) => Padding(
-        padding: EdgeInsets.fromLTRB(20, 0, 20, 20 + MediaQuery.of(context).viewInsets.bottom),
+        padding:
+            EdgeInsets.fromLTRB(20, 4, 20, 20 + MediaQuery.of(context).viewInsets.bottom),
         child: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -965,39 +1051,61 @@ void _showFilters(BuildContext context, UserDiscoverProvider provider) {
                       fontWeight: FontWeight.w600,
                     ),
               ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: city,
-                decoration: const InputDecoration(labelText: 'Ort'),
-              ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 18),
               _ChipGroup(
                 title: 'Umkreis',
                 options: const ['1 km', '3 km', '5 km', '10 km', '25 km', 'Egal'],
-                selected: radius,
-                onSelected: (value) => setState(() => radius = value),
+                isSelected: (value) => value == radius,
+                onToggle: (value) => setState(() => radius = value),
               ),
               _ChipGroup(
                 title: 'Kategorie',
                 options: provider.shopTypes,
-                selected: shopType,
-                onSelected: (value) => setState(() => shopType = value == shopType ? null : value),
+                isSelected: (value) => value == shopType,
+                onToggle: (value) =>
+                    setState(() => shopType = value == shopType ? null : value),
               ),
-              SwitchListTile(
+              // Mehrfachauswahl: ein Beitrag kann zu mehreren gewählten Typen
+              // passen. Nur Typen, die ein Merchant beim Posten wirklich
+              // wählen kann (kein Deal-Typ mehr, da auch allgemeine Beiträge
+              // wie „Team gesucht" dabei sind).
+              _ChipGroup(
+                title: 'Beitragstyp',
+                options: feedPostTypeOptions,
+                isSelected: dealTypes.contains,
+                onToggle: (value) => setState(() {
+                  dealTypes.contains(value)
+                      ? dealTypes.remove(value)
+                      : dealTypes.add(value);
+                }),
+                collapsedCount: 6,
+                labelOf: feedTypeLabel,
+              ),
+              FutureBuilder<List<String>>(
+                future: originsFuture,
+                builder: (context, snapshot) {
+                  final allOrigins = snapshot.data ?? const <String>[];
+                  if (allOrigins.isEmpty) return const SizedBox.shrink();
+                  // Mehrfachauswahl; nicht nur Essen – „Richtung" passt auch
+                  // für Beauty/Barber/Fitness usw.
+                  return _ChipGroup(
+                    title: 'Richtung',
+                    options: allOrigins,
+                    isSelected: origins.contains,
+                    onToggle: (value) => setState(() {
+                      origins.contains(value)
+                          ? origins.remove(value)
+                          : origins.add(value);
+                    }),
+                    collapsedCount: 4,
+                  );
+                },
+              ),
+              _OpenNowTile(
                 value: openNow,
                 onChanged: (value) => setState(() => openNow = value),
-                title: const Text('Jetzt geöffnet'),
               ),
-              SegmentedButton<DiscoverSort>(
-                segments: const [
-                  ButtonSegment(value: DiscoverSort.forYou, label: Text('Für dich')),
-                  ButtonSegment(value: DiscoverSort.hottest, label: Text('Beliebt')),
-                  ButtonSegment(value: DiscoverSort.newest, label: Text('Neu')),
-                ],
-                selected: {sort},
-                onSelectionChanged: (value) => setState(() => sort = value.first),
-              ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 22),
               Row(
                 children: [
                   Expanded(
@@ -1014,11 +1122,11 @@ void _showFilters(BuildContext context, UserDiscoverProvider provider) {
                     child: FilledButton(
                       onPressed: () {
                         provider.applyFilters(
-                          city: city.text,
                           radius: radius,
                           shopType: shopType,
+                          dealTypes: dealTypes,
+                          origins: origins,
                           openNow: openNow,
-                          sort: sort,
                         );
                         context.pop();
                       },
@@ -1035,29 +1143,102 @@ void _showFilters(BuildContext context, UserDiscoverProvider provider) {
   );
 }
 
-class _ChipGroup extends StatelessWidget {
+/// „Jetzt geöffnet"-Umschalter im gleichen ruhigen Karten-Stil wie die
+/// Chip-Gruppen darüber – statt der vorherigen nackten SwitchListTile, die stilistisch
+/// aus der Reihe fiel.
+class _OpenNowTile extends StatelessWidget {
+  const _OpenNowTile({required this.value, required this.onChanged});
+
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    return Container(
+      padding: const EdgeInsets.only(left: 14, right: 6),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceGray,
+        borderRadius: BorderRadius.circular(AppRadius.large),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              'Jetzt geöffnet',
+              style: tt.bodyLarge?.copyWith(fontWeight: FontWeight.w600),
+            ),
+          ),
+          Switch(value: value, onChanged: onChanged),
+        ],
+      ),
+    );
+  }
+}
+
+/// Chip-Gruppe für den Filter, optional einklappbar: [collapsedCount] = null
+/// zeigt immer alle Optionen (Umkreis, Kategorie – kurze Listen); gesetzt
+/// (z. B. 4) zeigt nur die ersten N + „Mehr anzeigen (+N)" (Beitragstyp,
+/// Richtung – potenziell lange Listen). Ausgewählte Chips bleiben IMMER
+/// sichtbar, auch außerhalb der ersten N (wichtig bei Mehrfachauswahl).
+///
+/// [isSelected]/[onToggle] sind bewusst callback-basiert statt eines
+/// einzelnen `selected`-Werts – so trägt DIESE eine Komponente sowohl
+/// Einfachauswahl (Umkreis, Kategorie) als auch Mehrfachauswahl
+/// (Beitragstyp, Richtung), je nachdem, was der Aufrufer in den Callbacks tut.
+class _ChipGroup extends StatefulWidget {
   const _ChipGroup({
     required this.title,
     required this.options,
-    required this.selected,
-    required this.onSelected,
+    required this.isSelected,
+    required this.onToggle,
+    this.collapsedCount,
+    this.labelOf,
   });
 
   final String title;
   final List<String> options;
-  final String? selected;
-  final ValueChanged<String> onSelected;
+  final bool Function(String option) isSelected;
+  final ValueChanged<String> onToggle;
+  final int? collapsedCount;
+
+  /// Optionale Anzeige-Übersetzung (z. B. Beitragstyp-Schlüssel → Label).
+  /// [isSelected]/[onToggle] arbeiten weiterhin mit dem rohen Wert.
+  final String Function(String)? labelOf;
+
+  @override
+  State<_ChipGroup> createState() => _ChipGroupState();
+}
+
+class _ChipGroupState extends State<_ChipGroup> {
+  bool _expanded = false;
 
   @override
   Widget build(BuildContext context) {
-    if (options.isEmpty) return const SizedBox.shrink();
+    if (widget.options.isEmpty) return const SizedBox.shrink();
+    final limit = widget.collapsedCount;
+    var visible = widget.options;
+    var hiddenCount = 0;
+    if (limit != null && !_expanded && widget.options.length > limit) {
+      // Alle aktuell ausgewählten Chips bleiben sichtbar (bei Mehrfachauswahl
+      // können das mehrere sein), Rest der Slots mit unausgewählten Optionen
+      // in Original-Reihenfolge auffüllen.
+      final selectedOptions = widget.options.where(widget.isSelected).toList();
+      final remainingSlots = (limit - selectedOptions.length).clamp(0, limit);
+      final unselectedHead = widget.options
+          .where((o) => !widget.isSelected(o))
+          .take(remainingSlots)
+          .toList();
+      visible = [...selectedOptions, ...unselectedHead];
+      hiddenCount = widget.options.length - visible.length;
+    }
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            title,
+            widget.title,
             style: Theme.of(context).textTheme.titleSmall?.copyWith(
                   fontWeight: FontWeight.w600,
                 ),
@@ -1066,15 +1247,24 @@ class _ChipGroup extends StatelessWidget {
           Wrap(
             spacing: 8,
             runSpacing: 8,
-            children: options
-                .map(
-                  (option) => ChoiceChip(
-                    label: Text(option),
-                    selected: selected == option,
-                    onSelected: (_) => onSelected(option),
-                  ),
-                )
-                .toList(),
+            children: [
+              for (final option in visible)
+                ChoiceChip(
+                  label: Text(widget.labelOf?.call(option) ?? option),
+                  selected: widget.isSelected(option),
+                  onSelected: (_) => widget.onToggle(option),
+                ),
+              if (hiddenCount > 0)
+                ActionChip(
+                  label: Text('Mehr anzeigen (+$hiddenCount)'),
+                  onPressed: () => setState(() => _expanded = true),
+                ),
+              if (_expanded && limit != null && widget.options.length > limit)
+                ActionChip(
+                  label: const Text('Weniger anzeigen'),
+                  onPressed: () => setState(() => _expanded = false),
+                ),
+            ],
           ),
         ],
       ),
@@ -1220,37 +1410,18 @@ class _Badge extends StatelessWidget {
   }
 }
 
-class _LikeButton extends StatelessWidget {
-  const _LikeButton({required this.liked, required this.onTap});
-
-  final bool liked;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return IconButton.filled(
-      onPressed: onTap,
-      style: IconButton.styleFrom(
-        backgroundColor: cs.surface.withValues(alpha: 0.92),
-      ),
-      icon: Icon(
-        liked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-        color: liked ? AppColors.googleRed : cs.onSurface,
-      ),
-    );
-  }
-}
-
 class _LocationNotice extends StatelessWidget {
-  const _LocationNotice();
+  const _LocationNotice({required this.city, required this.onDismiss});
+
+  final String city;
+  final VoidCallback onDismiss;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+      padding: const EdgeInsets.fromLTRB(16, 8, 8, 4),
       child: Row(
         children: [
           Icon(Icons.location_off_rounded,
@@ -1258,8 +1429,17 @@ class _LocationNotice extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              'Standort nicht aktiv. Wir zeigen dir Frankfurt.',
+              'Standort nicht aktiv. Wir zeigen dir $city.',
               style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+            ),
+          ),
+          InkResponse(
+            onTap: onDismiss,
+            radius: 18,
+            child: Padding(
+              padding: const EdgeInsets.all(6),
+              child: Icon(Icons.close_rounded,
+                  size: 16, color: cs.onSurfaceVariant),
             ),
           ),
         ],
@@ -1268,25 +1448,54 @@ class _LocationNotice extends StatelessWidget {
   }
 }
 
-class _InboxBell extends StatelessWidget {
-  const _InboxBell();
+/// Grün getönter Hinweis, solange ein Filter aktiv ist – sichtbar direkt im
+/// Feed, damit klar ist „aha, ein Filter ist an", statt sich über einen
+/// dünnen Feed zu wundern (#Edge-Case „wenig Treffer wirkt wie ein Fehler").
+class _ActiveFilterBanner extends StatelessWidget {
+  const _ActiveFilterBanner({required this.labels, required this.onClear});
+
+  final List<String> labels;
+  final VoidCallback onClear;
 
   @override
   Widget build(BuildContext context) {
-    final unread = context.watch<UserNotificationProvider>().unreadCount;
     final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
     return Padding(
-      padding: const EdgeInsets.only(right: 6),
-      child: IconButton(
-        onPressed: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const UserInboxPage()),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: AppColors.mintSoft,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: AppColors.greenLine),
         ),
-        icon: Badge(
-          isLabelVisible: unread > 0,
-          label: Text('$unread'),
-          child: Icon(Icons.notifications_none_rounded,
-              color: cs.onSurfaceVariant),
+        child: Row(
+          children: [
+            Icon(Icons.filter_alt_rounded, size: 16, color: cs.primary),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                labels.join(' · '),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: tt.bodySmall
+                    ?.copyWith(color: cs.primary, fontWeight: FontWeight.w600),
+              ),
+            ),
+            InkResponse(
+              onTap: onClear,
+              radius: 18,
+              child: Padding(
+                padding: const EdgeInsets.all(4),
+                child: Text(
+                  'Zurücksetzen',
+                  style: tt.labelSmall
+                      ?.copyWith(color: cs.primary, fontWeight: FontWeight.w700),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -1300,24 +1509,3 @@ String _initials(String value) {
   return '${parts.first.characters.first}${parts.last.characters.first}'.toUpperCase();
 }
 
-String feedTypeLabel(String type) {
-  const labels = {
-    'offer': 'Angebot',
-    'onePlusOneFree': '1+1 Gratis',
-    'buyOneGetOneFree': 'Kauf 1, bekomme 1',
-    'twoPlusOneFree': '2+1 Gratis',
-    'buyTwoGetOneFree': 'Kauf 2, bekomme 1',
-    'categoryDiscountPercent': 'Prozent-Rabatt',
-    'categoryDiscountFixed': 'Rabatt',
-    'happyHour': 'Happy Hour',
-    'quickSell': 'Schnell weg',
-    'rescueMe': 'Rette mich',
-    'news': 'Neuigkeit',
-    'newProduct': 'Neue Ware',
-    'info': 'Info',
-    'communityEvent': 'Event',
-    'hiring': 'Team gesucht',
-    'sponsoredSpot': 'Sponsored',
-  };
-  return labels[type] ?? type;
-}

@@ -941,3 +941,21 @@ Vorheriges Vollbild-Boarding-Pass-Karussell (v1) hatte einen sichtbaren Bug: die
 
 ## Bekannter, transparent kommunizierter Trade-off
 Der Cover-Ausschnitt ist "exakt wie im Profil" nur soweit garantiert, wie die Container-BREITE der Wallet-Hauptkarte der Profilseiten-Breite entspricht (beide sind aber Mobile-Only, i. d. R. na­hezu Vollbreite abzüglich kleiner Margins) — bei `BoxFit.cover` bestimmt das Breite:Höhe-Verhältnis den sichtbaren Ausschnitt, nicht die absolute Pixelgröße. Gleiche Höhe (220) + ähnliche Breite ⇒ praktisch identischer Ausschnitt.
+
+---
+
+# Stempelstift — Path-B-Löschung abgeschlossen + Scan-Bug „Partner statt Stempeln" (2026-07-01)
+
+## Path B (NTAG 424) vollständig entfernt
+- **Backend:** `redeemStampTap`, `setupStick`, `verifyStickBinding`, `adminDeriveNtagStick` weg; `crypto/ntag424.ts`, `crypto/aesCmac.ts`, `scripts/deriveKeys.ts` gelöscht; `provisioning.ts` schlank (nur `claimToken`); `index.ts`-Re-Exports bereinigt; `selfTest.js` → 11/11 (nur Identitäts-Token + Claim-Token).
+- **Client:** `stickSetupFlow.dart` radikal vereinfacht → EIN Weg „QR scannen → verbunden" (kein NFC-Schreiben/Test-Tap/Link-Kopieren); `nfcService*.dart` + `stampQueueService.dart` gelöscht; Gateway ohne `redeemStampTap/setupStick/createStaticStick/verifyStickBinding`; `stampTapPage.dart` static-only; `/stamp?picc&cmac`-Route entfernt; `merchantStampsProvider.ensureStaticLink` weg.
+
+## Scan-Bug: Tap → Partner-Seite statt Stempeln (root cause + fix)
+- **Ursache:** Der NFC-Link enthielt ein **leeres redeemToken** → URL `…/s/` → normalisiert zu `/s` (ein Segment) → fällt in die `/:handle`-Catch-all-Route → öffnet das Merchant-**Partner-Profil** (mit „Route"-Button). Leeres Token = `adminMintStaticSticks` liefert (noch) kein `redeemToken`, d. h. **die neuen Functions sind nicht deployt**.
+- **Fix (Robustheit, damit es klar scheitert statt „Partner"):**
+  1. Router: neue Route `path: '/s'` (leeres Token) → `StampTapPage(token:'')` → zeigt „Ungültiger Link" statt Partner-Seite (steht VOR `/:handle`).
+  2. Werkstatt: `MintedStick.redeemToken` leer → rote Warnung „Cloud Functions neu deployen" statt kaputtem `/s/`-Link.
+- **ECHTER Fix beim User:** `firebase deploy --only functions` (+ Hosting neu bauen/deployen). Danach liefert die Werkstatt einen echten `…/s/<stickId>.<sig>`-Link → Tap stempelt.
+
+## Verifikation (Gesamtstand, parallel-Agent + diese Fixes)
+`cd functions && npm run build` (tsc grün) · `npm test` **11/11** · `flutter analyze` **0/0/0** · `flutter build web --release` **√**.

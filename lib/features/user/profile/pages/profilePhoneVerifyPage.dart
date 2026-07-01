@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:lokka/core/models/appUserModel.dart';
 import 'package:lokka/core/services/authService.dart';
@@ -29,7 +30,7 @@ class _ProfilePhoneVerifyPageState extends State<ProfilePhoneVerifyPage> {
   bool _codeSent = false;
   bool _loading = false;
   String? _error;
-  String? _verificationId;
+  PhoneVerificationSession? _session;
 
   @override
   void initState() {
@@ -40,9 +41,24 @@ class _ProfilePhoneVerifyPageState extends State<ProfilePhoneVerifyPage> {
       authService: _authService,
       cacheService: context.read<LocalCacheService>(),
     );
-    // Pre-fill phone if already set
-    _phoneCtrl.text = widget.user.phone ?? '';
+    // Nur deutsche Nummern: das Feld hält NUR den nationalen Teil (nach +49).
+    // Bestehende Nummer entsprechend vorbelegen (+49 / führende 0 entfernen).
+    final existing = (widget.user.phone ?? '').replaceAll(RegExp(r'\s'), '');
+    if (existing.startsWith('+49')) {
+      _phoneCtrl.text = existing.substring(3);
+    } else if (existing.startsWith('0')) {
+      _phoneCtrl.text = existing.replaceFirst(RegExp(r'^0+'), '');
+    } else {
+      _phoneCtrl.text = existing.replaceAll(RegExp(r'[^0-9]'), '');
+    }
   }
+
+  /// Nationaler Teil (nur Ziffern, ohne führende 0).
+  String get _national =>
+      _phoneCtrl.text.replaceAll(RegExp(r'[^0-9]'), '').replaceFirst(RegExp(r'^0+'), '');
+
+  /// Volle Nummer im E.164-Format, immer mit +49.
+  String get _fullPhone => '+49$_national';
 
   @override
   void dispose() {
@@ -52,19 +68,20 @@ class _ProfilePhoneVerifyPageState extends State<ProfilePhoneVerifyPage> {
   }
 
   Future<void> _sendCode() async {
-    final phone = _phoneCtrl.text.trim();
-    if (phone.isEmpty) {
-      setState(() => _error = 'Bitte Telefonnummer eingeben.');
+    final national = _national;
+    if (national.length < 6 || national.length > 12) {
+      setState(() =>
+          _error = 'Bitte eine gültige deutsche Handynummer eingeben.');
       return;
     }
     setState(() { _loading = true; _error = null; });
 
     await _authService.sendPhoneVerificationCode(
-      phoneNumber: phone,
-      onCodeSent: (verificationId, _) {
+      phoneNumber: _fullPhone,
+      onCodeSent: (session) {
         if (mounted) {
           setState(() {
-            _verificationId = verificationId;
+            _session = session;
             _codeSent = true;
             _loading = false;
           });
@@ -86,17 +103,14 @@ class _ProfilePhoneVerifyPageState extends State<ProfilePhoneVerifyPage> {
 
   Future<void> _verifyCode() async {
     final code = _codeCtrl.text.trim();
-    if (code.length != 6 || _verificationId == null) {
+    if (code.length != 6 || _session == null) {
       setState(() => _error = 'Bitte 6-stelligen Code eingeben.');
       return;
     }
     setState(() { _loading = true; _error = null; });
     try {
-      await _authService.verifyPhoneCode(
-        verificationId: _verificationId!,
-        smsCode: code,
-      );
-      await _profileService.updatePhoneVerified(_phoneCtrl.text.trim());
+      await _authService.confirmPhoneCode(session: _session!, smsCode: code);
+      await _profileService.updatePhoneVerified(_fullPhone);
       if (mounted) Navigator.pop(context);
     } on FirebaseAuthException catch (e) {
       if (mounted) {
@@ -118,7 +132,7 @@ class _ProfilePhoneVerifyPageState extends State<ProfilePhoneVerifyPage> {
           if (e.code != 'provider-already-linked') rethrow;
         }
       }
-      await _profileService.updatePhoneVerified(_phoneCtrl.text.trim());
+      await _profileService.updatePhoneVerified(_fullPhone);
       if (mounted) Navigator.pop(context);
     } catch (_) {
       if (mounted) setState(() { _loading = false; });
@@ -131,6 +145,14 @@ class _ProfilePhoneVerifyPageState extends State<ProfilePhoneVerifyPage> {
       'too-many-requests' => 'Zu viele Versuche. Bitte warte einen Moment.',
       'invalid-verification-code' => 'Falscher Code. Bitte erneut versuchen.',
       'session-expired' => 'Code abgelaufen. Bitte neuen Code anfordern.',
+      'captcha-check-failed' ||
+      'invalid-app-credential' =>
+        'Sicherheitsprüfung fehlgeschlagen. Bitte Seite neu laden und erneut '
+            'versuchen (Domain muss in Firebase autorisiert sein).',
+      'credential-already-in-use' =>
+        'Diese Nummer ist bereits mit einem anderen Konto verknüpft.',
+      'quota-exceeded' || 'billing-not-enabled' =>
+        'SMS-Kontingent erschöpft oder Abrechnung nicht aktiv.',
       _ => 'Fehler: ${e.message ?? e.code}',
     };
   }
@@ -165,20 +187,24 @@ class _ProfilePhoneVerifyPageState extends State<ProfilePhoneVerifyPage> {
             const SizedBox(height: 6),
             Text(
               _codeSent
-                  ? 'Wir haben einen 6-stelligen Code an ${_phoneCtrl.text} gesendet.'
-                  : 'Wir senden dir per SMS einen Code zur Verifizierung.',
+                  ? 'Wir haben einen 6-stelligen Code an $_fullPhone gesendet.'
+                  : 'Wir senden dir per SMS einen Code zur Verifizierung. Aktuell sind nur deutsche Nummern (+49) möglich.',
               style: tt.bodyMedium
                   ?.copyWith(color: cs.onSurfaceVariant, height: 1.4),
             ),
             const SizedBox(height: AppSpacing.xl),
             if (!_codeSent) ...[
-              const _FieldLabel('Telefonnummer (mit Ländercode, z.B. +49...)'),
+              const _FieldLabel('Deutsche Handynummer'),
               const SizedBox(height: 6),
               TextField(
                 controller: _phoneCtrl,
                 keyboardType: TextInputType.phone,
                 autofocus: true,
-                decoration: const InputDecoration(hintText: '+49 123 456789'),
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                decoration: const InputDecoration(
+                  prefixText: '+49 ',
+                  hintText: '151 23456789',
+                ),
               ),
               const SizedBox(height: AppSpacing.xl),
               SizedBox(

@@ -13,6 +13,14 @@ class UserProfileProvider extends ChangeNotifier {
   final UserProfileService _service;
   StreamSubscription<AppUserModel?>? _sub;
 
+  bool _disposed = false;
+
+  @override
+  void notifyListeners() {
+    if (_disposed) return;
+    super.notifyListeners();
+  }
+
   AppUserModel? _user;
   bool _isLoading = true;
   String? _error;
@@ -59,6 +67,7 @@ class UserProfileProvider extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
     _sub?.cancel();
     super.dispose();
   }

@@ -1,8 +1,12 @@
+import 'dart:async';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:lokka/core/services/externalLinkService.dart';
+import 'package:lokka/core/services/localCacheService.dart';
 import 'package:lokka/core/theme/appColors.dart';
 import 'package:lokka/core/theme/appRadius.dart';
 import 'package:lokka/core/widgets/responsiveContentWidth.dart';
@@ -11,10 +15,12 @@ import 'package:lokka/core/utils/shareUtils.dart';
 import 'package:lokka/features/user/discover/models/publicMerchantUserModel.dart';
 import 'package:lokka/features/user/feed/models/feedPostModel.dart';
 import 'package:lokka/features/user/feed/services/userFeedService.dart';
-import 'package:lokka/features/user/feed/widgets/commentsSheet.dart';
+import 'package:lokka/features/user/feed/widgets/reviewsSheet.dart';
 import 'package:lokka/features/user/partners/pages/userPartnerDetailPage.dart';
+import 'package:lokka/features/user/partners/services/merchantWarmupCache.dart';
 import 'package:lokka/features/user/reviews/widgets/ratingSection.dart';
 import 'package:lokka/features/user/shared/widgets/quickActionBar.dart';
+import 'package:lokka/features/user/wallet/services/userWalletService.dart';
 
 /// Beitrag-Detail („post-detail") — User-Bereich, helles Material 3.
 ///
@@ -57,6 +63,24 @@ class _UserFeedDetailPageState extends State<UserFeedDetailPage> {
     super.initState();
     _trackView();
     _loadMerchant();
+    _warmMerchantProfile();
+  }
+
+  /// Stößt das Vorab-Laden der Partner-Profilseite an (Wallet-Status, eigene
+  /// Beiträge, Treue-Verfügbarkeit) – die wahrscheinlichsten nächsten Schritte
+  /// von hier sind "zurück" oder "Profil ansehen", also lohnt es sich, dessen
+  /// Daten schon zu holen, während der Nutzer noch diesen Beitrag liest.
+  void _warmMerchantProfile() {
+    if (_post.merchantId.isEmpty) return;
+    unawaited(MerchantWarmupCache.warm(
+      _post.merchantId,
+      firestoreService: _service.firestoreService,
+      walletService: UserWalletService(
+        firestoreService: _service.firestoreService,
+        authService: _service.authService,
+        cacheService: context.read<LocalCacheService>(),
+      ),
+    ));
   }
 
   Future<void> _trackView() async {
@@ -88,9 +112,11 @@ class _UserFeedDetailPageState extends State<UserFeedDetailPage> {
     return count < 0 ? 0 : count;
   }
 
-  void _openComments() {
-    showCommentsSheet(context,
-        feedService: _service, postId: _post.postId);
+  void _openReviews() {
+    showReviewsSheet(context,
+        feedService: _service,
+        postId: _post.postId,
+        merchantId: _post.merchantId);
   }
 
   void _share() {
@@ -273,18 +299,17 @@ class _UserFeedDetailPageState extends State<UserFeedDetailPage> {
   @override
   Widget build(BuildContext context) {
     final post = _post;
+    final topPad = MediaQuery.of(context).padding.top;
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: ResponsiveContentWidth(
-        child: ListView(
+      body: Stack(
+        children: [
+          ResponsiveContentWidth(
+            child: ListView(
         padding: EdgeInsets.zero,
         children: [
-          // 1 — Bild-Hero (zentriert, ohne Overlay)
-          _HeroImage(
-            post: post,
-            onBack: () => Navigator.pop(context),
-            onZoom: post.imageUrl.isEmpty ? null : _openFullscreenImage,
-          ),
+          // 1 — Bild-Hero (nur Bild)
+          _HeroImage(post: post),
           Padding(
             padding: const EdgeInsets.fromLTRB(
                 AppSpacing.md, AppSpacing.md, AppSpacing.md, 0),
@@ -303,10 +328,10 @@ class _UserFeedDetailPageState extends State<UserFeedDetailPage> {
                     return _SocialActionBar(
                       liked: liked,
                       likeCount: _likeCount(liked),
-                      commentCount: post.commentsCount,
+                      commentCount: 0,
                       publishedAt: post.publishedAt ?? post.createdAt,
                       onLike: () => _toggleLike(liked),
-                      onComment: _openComments,
+                      onComment: _openReviews,
                       onShare: _share,
                     );
                   },
@@ -347,6 +372,23 @@ class _UserFeedDetailPageState extends State<UserFeedDetailPage> {
           ),
         ],
       ),
+          ),
+          // Schwebende Steuerung: bleibt beim Scrollen sichtbar.
+          Positioned(
+            top: topPad + 8,
+            left: 12,
+            child: _CircleIconButton(
+                icon: Icons.arrow_back_rounded,
+                onTap: () => Navigator.pop(context)),
+          ),
+          if (post.imageUrl.isNotEmpty)
+            Positioned(
+              top: topPad + 8,
+              right: 12,
+              child: _CircleIconButton(
+                  icon: Icons.fullscreen_rounded, onTap: _openFullscreenImage),
+            ),
+        ],
       ),
     );
   }
@@ -372,7 +414,7 @@ class _UserFeedDetailPageState extends State<UserFeedDetailPage> {
           onTap: hasPhone ? _call : null,
         ),
         QuickAction(
-          icon: Icons.alternate_email_rounded,
+          icon: Icons.public_rounded,
           label: 'Social',
           enabled: hasSocial,
           onTap: hasSocial ? _openSocial : null,
@@ -382,62 +424,40 @@ class _UserFeedDetailPageState extends State<UserFeedDetailPage> {
   }
 }
 
-// ── 1 · Bild-Hero (ohne Overlay) ──────────────────────────────────────────────
+// ── 1 · Bild-Hero (nur Bild; Back/Zoom schweben auf Seiten-Ebene) ─────────────
 
 class _HeroImage extends StatelessWidget {
-  const _HeroImage({required this.post, required this.onBack, this.onZoom});
+  const _HeroImage({required this.post});
 
   final FeedPostModel post;
-  final VoidCallback onBack;
-  final VoidCallback? onZoom;
 
   @override
   Widget build(BuildContext context) {
-    final topPad = MediaQuery.of(context).padding.top;
     return ClipRRect(
       borderRadius:
           const BorderRadius.vertical(bottom: Radius.circular(AppRadius.xl)),
-      child: Stack(
-        children: [
-          AspectRatio(
-            aspectRatio: 1.05,
-            child: post.imageUrl.isNotEmpty
-                ? CachedNetworkImage(
-                    imageUrl: post.imageUrl,
-                    fit: BoxFit.cover,
-                    placeholder: (_, _) => Container(color: AppColors.gray100),
-                    errorWidget: (_, _, _) => Container(
-                      color: AppColors.gray100,
-                      child: const Center(
-                        child: Icon(Icons.broken_image_rounded,
-                            size: 48, color: AppColors.gray300),
-                      ),
-                    ),
-                  )
-                : Container(
-                    color: AppColors.greenTint,
-                    child: const Center(
-                      child: Icon(Icons.storefront_rounded,
-                          size: 56, color: AppColors.mintStrong),
-                    ),
+      child: AspectRatio(
+        aspectRatio: 1.05,
+        child: post.imageUrl.isNotEmpty
+            ? CachedNetworkImage(
+                imageUrl: post.imageUrl,
+                fit: BoxFit.cover,
+                placeholder: (_, _) => Container(color: AppColors.gray100),
+                errorWidget: (_, _, _) => Container(
+                  color: AppColors.gray100,
+                  child: const Center(
+                    child: Icon(Icons.broken_image_rounded,
+                        size: 48, color: AppColors.gray300),
                   ),
-          ),
-          // Back (oben links)
-          Positioned(
-            top: topPad + 8,
-            left: 12,
-            child:
-                _CircleIconButton(icon: Icons.arrow_back_rounded, onTap: onBack),
-          ),
-          // Zoom (oben rechts)
-          if (onZoom != null)
-            Positioned(
-              top: topPad + 8,
-              right: 12,
-              child: _CircleIconButton(
-                  icon: Icons.fullscreen_rounded, onTap: onZoom!),
-            ),
-        ],
+                ),
+              )
+            : Container(
+                color: AppColors.greenTint,
+                child: const Center(
+                  child: Icon(Icons.storefront_rounded,
+                      size: 56, color: AppColors.mintStrong),
+                ),
+              ),
       ),
     );
   }
@@ -551,10 +571,10 @@ class _SocialActionBar extends StatelessWidget {
           onTap: onLike,
         ),
         _BarButton(
-          icon: Icons.mode_comment_outlined,
+          icon: Icons.rate_review_outlined,
           color: AppColors.onSurfaceMuted,
           label: commentCount > 0 ? '$commentCount' : null,
-          tooltip: 'Kommentare',
+          tooltip: 'Bewertungen',
           onTap: onComment,
         ),
         _BarButton(
@@ -610,6 +630,9 @@ class _BarButton extends StatelessWidget {
     final tt = Theme.of(context).textTheme;
     return Tooltip(
       message: tooltip,
+      // Sonst zeigt der Tooltip auf Touch nur bei Long-Press (Default), nicht
+      // bei normalem Tap.
+      triggerMode: TooltipTriggerMode.tap,
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(20),

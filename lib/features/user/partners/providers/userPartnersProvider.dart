@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:lokka/core/utils/deferredWarmup.dart';
 import 'package:lokka/core/utils/locationUtils.dart';
 import 'package:flutter/foundation.dart';
 import 'package:lokka/features/user/discover/models/publicMerchantUserModel.dart';
@@ -6,13 +7,30 @@ import 'package:lokka/features/user/reviews/models/merchantRating.dart';
 import '../services/userPartnersService.dart';
 
 class UserPartnersProvider extends ChangeNotifier {
-  UserPartnersProvider({required UserPartnersService service})
+  /// [tabIndex] lässt den Start verzögern, solange ein anderer Tab aktiv ist
+  /// (siehe [DeferredWarmup]) – null startet sofort (Default/Testverhalten).
+  UserPartnersProvider({required UserPartnersService service, int? tabIndex})
       : _service = service {
-    _subscribe();
+    if (tabIndex == null) {
+      _subscribe();
+    } else {
+      DeferredWarmup.schedule(tabIndex, _subscribe);
+    }
   }
 
   final UserPartnersService _service;
   StreamSubscription<List<PublicMerchantUserModel>>? _sub;
+
+  // loadExtras()/_loadRatings() sind Futures ohne Cancel – können erst nach
+  // dispose() (Hot Restart, schneller Tab-Wechsel) fertig werden. Zentraler
+  // Guard statt jeden async-Callsite einzeln abzusichern.
+  bool _disposed = false;
+
+  @override
+  void notifyListeners() {
+    if (_disposed) return;
+    super.notifyListeners();
+  }
 
   // Raw data
   List<PublicMerchantUserModel> _allPartners = [];
@@ -218,6 +236,7 @@ class UserPartnersProvider extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
     _sub?.cancel();
     super.dispose();
   }

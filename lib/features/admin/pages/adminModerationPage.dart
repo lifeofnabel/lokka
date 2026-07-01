@@ -43,7 +43,11 @@ class _PostsTabState extends State<_PostsTab> {
     _reload();
   }
 
-  void _reload() => setState(() => _future = widget.data.recentPosts());
+  Future<void> _reload() {
+    final f = widget.data.recentPosts();
+    setState(() => _future = f);
+    return f;
+  }
 
   Future<void> _togglePause(AdminDoc p) async {
     final active = p.data['isActive'] != false;
@@ -97,7 +101,7 @@ class _PostsTabState extends State<_PostsTab> {
         }
         final posts = snap.data!;
         return RefreshIndicator(
-          onRefresh: () async => _reload(),
+          onRefresh: _reload,
           child: ListView.builder(
             padding: const EdgeInsets.all(12),
             itemCount: posts.length,
@@ -167,7 +171,11 @@ class _ReportsTabState extends State<_ReportsTab> {
     _reload();
   }
 
-  void _reload() => setState(() => _future = widget.data.recentReports());
+  Future<void> _reload() {
+    final f = widget.data.recentReports();
+    setState(() => _future = f);
+    return f;
+  }
 
   String? _targetPath(Map<String, dynamic> d) {
     final tp = (d['targetPath'] ?? d['path'] ?? '').toString();
@@ -209,7 +217,7 @@ class _ReportsTabState extends State<_ReportsTab> {
           ]);
         }
         return RefreshIndicator(
-          onRefresh: () async => _reload(),
+          onRefresh: _reload,
           child: ListView.builder(
             padding: const EdgeInsets.all(12),
             itemCount: reports.length,

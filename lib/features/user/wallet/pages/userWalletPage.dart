@@ -1,23 +1,34 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:lokka/core/constants/firebasePaths.dart';
 import 'package:lokka/core/services/authService.dart';
 import 'package:lokka/core/services/firestoreService.dart';
 import 'package:lokka/core/services/localCacheService.dart';
-import 'package:lokka/core/theme/appColors.dart';
 import 'package:lokka/core/theme/appSpacing.dart';
 import 'package:lokka/core/utils/locationUtils.dart';
 import 'package:lokka/core/widgets/appEmptyState.dart';
 import 'package:lokka/core/widgets/appErrorState.dart';
 import 'package:lokka/core/widgets/appLoadingState.dart';
+import 'package:lokka/core/widgets/appPillSwitch.dart';
+import 'package:lokka/core/widgets/appSearchField.dart';
 import 'package:lokka/features/user/discover/services/userDiscoverService.dart';
 import 'package:lokka/features/user/wallet/models/walletCardModel.dart';
+import 'package:lokka/features/user/wallet/models/walletSort.dart';
 import 'package:lokka/features/user/wallet/providers/userWalletProvider.dart';
-import 'package:lokka/features/user/wallet/widgets/walletCardStack.dart';
-import 'package:lokka/features/user/wallet/widgets/walletDeck.dart';
+import 'package:lokka/features/user/wallet/services/userWalletService.dart';
+import 'package:lokka/features/user/wallet/services/walletStoreWarmupCache.dart';
+import 'package:lokka/features/user/wallet/theme/walletDesignTokens.dart';
+import 'package:lokka/features/user/wallet/widgets/walletStoreDeck.dart';
 
-enum WalletSort { latest, nearest }
-
+/// The Wallet home — laid out exactly like the Suche/Explore page:
+///   1) a segmented toggle ("Zuletzt benutzt" / "Nähste von mir")
+///   2) a search field
+///   3) a "current / total" counter
+///   4) the store carousel: one store fills the screen at a time (swipe
+///      left/right between stores); within a store, swipe UP through its
+///      stamp/points cards, which peek in from below one at a time.
 class UserWalletPage extends StatefulWidget {
   const UserWalletPage({super.key});
 
@@ -28,11 +39,16 @@ class UserWalletPage extends StatefulWidget {
 class _UserWalletPageState extends State<UserWalletPage> {
   late final FirestoreService _firestore;
   late final UserDiscoverService _discover;
+  late final UserWalletService _walletService;
+  final _storeCtrl = PageController();
 
   WalletSort _sort = WalletSort.latest;
   UserLocation? _userLoc;
   final Map<String, (double, double)> _coords = {};
   bool _preparing = false;
+  String _query = '';
+  int _storeIndex = 0;
+  List<WalletCardModel> _currentFiltered = const [];
 
   @override
   void initState() {
@@ -43,18 +59,74 @@ class _UserWalletPageState extends State<UserWalletPage> {
       authService: context.read<AuthService>(),
       cacheService: context.read<LocalCacheService>(),
     );
+    _walletService = UserWalletService(
+      firestoreService: _firestore,
+      authService: context.read<AuthService>(),
+      cacheService: context.read<LocalCacheService>(),
+    );
+    _storeCtrl.addListener(() {
+      final p = _storeCtrl.page?.round() ?? 0;
+      if (p != _storeIndex) {
+        setState(() => _storeIndex = p);
+        _prefetchNeighbors();
+      }
+    });
   }
 
-  void _onSortSelected(WalletSort s) {
+  /// Lädt die Store-Karte(n) links/rechts vom aktuellen Index im Hintergrund
+  /// vor (siehe [WalletStoreWarmupCache]), damit Weiterswipen sofort fertig
+  /// ist statt jedes Mal kalt (3 sequenzielle Reads + Spinner) neu zu laden.
+  /// Sicher, mehrfach für dieselbe Karte aufzurufen — der Cache dedupliziert.
+  void _prefetchNeighbors() {
+    for (final i in [_storeIndex - 1, _storeIndex + 1]) {
+      if (i < 0 || i >= _currentFiltered.length) continue;
+      unawaited(WalletStoreWarmupCache.warm(
+        _currentFiltered[i].merchantId,
+        service: _walletService,
+      ));
+    }
+  }
+
+  @override
+  void dispose() {
+    _storeCtrl.dispose();
+    super.dispose();
+  }
+
+  /// Jumps back to the first store whenever the visible set reshuffles (new
+  /// search, new sort) so the user is never left on a stale index.
+  void _resetToStart() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_storeCtrl.hasClients) _storeCtrl.jumpToPage(0);
+    });
+    setState(() => _storeIndex = 0);
+  }
+
+  List<WalletCardModel> _filter(List<WalletCardModel> cards) {
+    final q = _query.trim().toLowerCase();
+    if (q.isEmpty) return cards;
+    return cards
+        .where((c) =>
+            c.merchantName.toLowerCase().contains(q) ||
+            c.merchantCity.toLowerCase().contains(q) ||
+            c.merchantShopType.toLowerCase().contains(q))
+        .toList();
+  }
+
+  void _onQueryChanged(String q) {
+    setState(() => _query = q);
+    _resetToStart();
+  }
+
+  void _onSortChanged(WalletSort s) {
+    if (s == _sort) return;
     setState(() => _sort = s);
+    _resetToStart();
     if (s == WalletSort.nearest) {
       _ensureNearestData(context.read<UserWalletProvider>().cards);
     }
   }
 
-  /// Resolve the user's location (manual address → allowed GPS → Westendplatz)
-  /// and fill in any missing merchant coordinates so the distance sort works
-  /// even for cards followed before coords were denormalised.
   Future<void> _ensureNearestData(List<WalletCardModel> cards) async {
     setState(() => _preparing = true);
     _userLoc ??= await _discover.resolveLocation();
@@ -71,14 +143,18 @@ class _UserWalletPageState extends State<UserWalletPage> {
         final lng = (doc?['lng'] as num?)?.toDouble();
         if (lat != null && lng != null) _coords[c.merchantId] = (lat, lng);
       } catch (_) {
-        // ignore — card just sorts to the end without coords
+        // card just sorts to the end without coords
       }
     }
     if (mounted) setState(() => _preparing = false);
   }
 
   List<WalletCardModel> _sortedCards(List<WalletCardModel> cards) {
-    if (_sort == WalletSort.latest) return cards; // stream order = newest first
+    if (_sort == WalletSort.latest) {
+      DateTime used(WalletCardModel c) =>
+          c.lastActivityAt ?? c.joinedAt ?? DateTime(2000);
+      return [...cards]..sort((a, b) => used(b).compareTo(used(a)));
+    }
     final loc = _userLoc;
     double dist(WalletCardModel c) {
       final co = _coords[c.merchantId];
@@ -91,165 +167,163 @@ class _UserWalletPageState extends State<UserWalletPage> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
     final uid = context.read<AuthService>().currentUser?.uid ?? '';
-    final deckHeight = MediaQuery.sizeOf(context).height * 0.70;
 
     return Consumer<UserWalletProvider>(
       builder: (context, provider, _) {
-        final count = provider.cards.length;
-        final subtitle = provider.isLoading
-            ? 'Deine Karten an einem Ort'
-            : count == 0
-                ? 'Deine Partner-Karten an einem Ort'
-                : '$count ${count == 1 ? 'Karte' : 'Karten'} gespeichert';
         final hasCards = !provider.isLoading &&
             provider.error == null &&
             provider.cards.isNotEmpty;
-        return CustomScrollView(
-          slivers: [
-            SliverToBoxAdapter(
-              child: SafeArea(
-                bottom: false,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(AppSpacing.md,
-                      AppSpacing.md, AppSpacing.md, AppSpacing.sm),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(
-                          gradient: AppColors.mintGradient,
-                          borderRadius: BorderRadius.circular(15),
-                        ),
-                        child: const Icon(
-                            Icons.account_balance_wallet_rounded,
-                            color: Colors.white,
-                            size: 24),
+        final filtered = hasCards
+            ? _sortedCards(_filter(provider.cards))
+            : const <WalletCardModel>[];
+
+        return SafeArea(
+          // Umschalter/Suche/Zähler nutzen bewusst die VOLLE Breite (wie Feed/
+          // Suche, kein eigenes Max-Width-Limit) – nur das Karten-Deck darunter
+          // bleibt auf Telefon-Breite gekapselt ("wie ein Handy auf dem Tisch").
+          // Vorher lagen Umschalter UND Karten im selben 420px-Käfig, wodurch
+          // der Wallet-Umschalter auf breiteren Screens schmaler/anders
+          // positioniert war als der auf Feed/Suche.
+          child: Column(
+            children: [
+              if (hasCards) ...[
+                Padding(
+                  padding: kSwitcherPadding,
+                  child: AppPillSwitch<WalletSort>(
+                    value: _sort,
+                    expand: true,
+                    onChanged: _onSortChanged,
+                    segments: const [
+                      (
+                        value: WalletSort.latest,
+                        label: 'Zuletzt benutzt',
+                        icon: Icons.history_rounded,
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Wallet',
-                              style: tt.headlineMedium?.copyWith(
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: -0.5,
-                                color: cs.onSurface,
-                              ),
-                            ),
-                            Text(
-                              subtitle,
-                              style: tt.bodyMedium
-                                  ?.copyWith(color: cs.onSurfaceVariant),
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (hasCards) _SortChip(
-                        sort: _sort,
-                        busy: _preparing,
-                        onSelected: _onSortSelected,
+                      (
+                        value: WalletSort.nearest,
+                        label: 'Nähste von mir',
+                        icon: Icons.near_me_rounded,
                       ),
                     ],
                   ),
                 ),
-              ),
-            ),
-            if (provider.isLoading)
-              const SliverFillRemaining(child: AppLoadingState())
-            else if (provider.error != null)
-              const SliverFillRemaining(
-                child: AppErrorState(
-                  message: 'Wallet konnte nicht geladen werden',
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.md, 0, AppSpacing.md, AppSpacing.xs),
+                  child: AppSearchField(
+                    hintText: 'Karte suchen…',
+                    onChanged: _onQueryChanged,
+                    onClear: () => _onQueryChanged(''),
+                  ),
                 ),
-              )
-            else if (provider.cards.isEmpty)
-              const SliverFillRemaining(
-                child: AppEmptyState(
-                  icon: Icons.wallet_outlined,
-                  title: 'Noch keine Karten gespeichert',
-                  message:
-                      'Besuche einen Partner und füge ihn zu deiner Wallet hinzu.',
-                ),
-              )
-            else
-              SliverToBoxAdapter(
-                child: SizedBox(
-                  height: deckHeight,
-                  child: WalletDeck(
-                    cards: _sortedCards(provider.cards),
-                    onOpen: (card) => openWalletCardStack(context, card, uid),
+                if (_preparing)
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: AppSpacing.xs),
+                    child: _PreparingRow(),
+                  ),
+                if (filtered.length > 1)
+                  _CounterRow(index: _storeIndex, count: filtered.length),
+              ],
+              Expanded(
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(
+                        maxWidth: WalletTokens.maxContentWidth),
+                    child: _body(context, provider, filtered, uid),
                   ),
                 ),
               ),
-          ],
+            ],
+          ),
         );
       },
     );
   }
+
+  Widget _body(
+    BuildContext context,
+    UserWalletProvider provider,
+    List<WalletCardModel> filtered,
+    String uid,
+  ) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    if (provider.isLoading) return const AppLoadingState();
+    if (provider.error != null) {
+      return const AppErrorState(message: 'Wallet konnte nicht geladen werden');
+    }
+    if (provider.cards.isEmpty) {
+      return const AppEmptyState(
+        icon: Icons.wallet_outlined,
+        title: 'Noch keine Karten gespeichert',
+        message: 'Besuche einen Merchant und scanne deine erste Karte.',
+      );
+    }
+    if (filtered.isEmpty) {
+      return Center(
+        child: Text('Keine Karte gefunden',
+            style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant)),
+      );
+    }
+    _currentFiltered = filtered;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _prefetchNeighbors());
+    return PageView.builder(
+      controller: _storeCtrl,
+      itemCount: filtered.length,
+      itemBuilder: (context, i) => WalletStoreDeck(
+        key: ValueKey(filtered[i].merchantId),
+        card: filtered[i],
+        uid: uid,
+      ),
+    );
+  }
 }
 
-/// Compact "Nächste / Letzte" sort control, top-right of the wallet header.
-class _SortChip extends StatelessWidget {
-  const _SortChip({
-    required this.sort,
-    required this.busy,
-    required this.onSelected,
-  });
+/// "2 / 5" — which store, out of how many, in the horizontal carousel.
+class _CounterRow extends StatelessWidget {
+  const _CounterRow({required this.index, required this.count});
 
-  final WalletSort sort;
-  final bool busy;
-  final ValueChanged<WalletSort> onSelected;
+  final int index;
+  final int count;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    return PopupMenuButton<WalletSort>(
-      tooltip: 'Sortieren',
-      initialValue: sort,
-      position: PopupMenuPosition.under,
-      onSelected: onSelected,
-      itemBuilder: (_) => const [
-        PopupMenuItem(value: WalletSort.nearest, child: Text('Nähste')),
-        PopupMenuItem(value: WalletSort.latest, child: Text('Letzte')),
-      ],
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-        decoration: BoxDecoration(
-          color: AppColors.surfaceGray,
-          borderRadius: BorderRadius.circular(100),
-          border: Border.all(color: cs.outlineVariant),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (busy)
-              const SizedBox(
-                width: 14,
-                height: 14,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            else
-              Icon(sort == WalletSort.nearest
-                  ? Icons.near_me_rounded
-                  : Icons.schedule_rounded,
-                  size: 15, color: cs.onSurfaceVariant),
-            const SizedBox(width: 6),
-            Text(
-              sort == WalletSort.nearest ? 'Nähste' : 'Letzte',
-              style: tt.labelMedium?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            Icon(Icons.arrow_drop_down_rounded,
-                size: 18, color: cs.onSurfaceVariant),
-          ],
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+      child: Text(
+        '${index.clamp(0, count - 1) + 1} / $count',
+        style: tt.labelMedium?.copyWith(
+          fontWeight: WalletTokens.wBold,
+          color: cs.onSurfaceVariant,
         ),
       ),
+    );
+  }
+}
+
+class _PreparingRow extends StatelessWidget {
+  const _PreparingRow();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          width: 14,
+          height: 14,
+          child: CircularProgressIndicator(
+              strokeWidth: 2, color: cs.onSurfaceVariant),
+        ),
+        const SizedBox(width: 8),
+        Text('Standort wird ermittelt…',
+            style: tt.labelMedium?.copyWith(color: cs.onSurfaceVariant)),
+      ],
     );
   }
 }

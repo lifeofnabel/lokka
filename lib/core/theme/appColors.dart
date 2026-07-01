@@ -8,7 +8,10 @@ class AppColors {
   static const background = Color(0xFFFAFBF7);
   static const surface = Color(0xFFFEFFFC);
   static const mint = Color(0xFF9CE8CF);
-  static const mintStrong = Color(0xFF45C9A4);
+  // Demoted: „mintStrong" war früher die Aufmerksamkeitsfarbe. Es zeigt jetzt
+  // auf den Deep-Green-Akzent, damit alle bisherigen Mint-CTAs/Akzente in den
+  // User-Widgets ohne Einzeledits zu tiefem Grün werden. Mint bleibt nur Fläche.
+  static const mintStrong = accent;
   static const mintSoft = Color(0xFFE9FAF3);
   static const gray50 = Color(0xFFF5F6F2);
   static const gray100 = Color(0xFFEDEDED);
@@ -18,16 +21,18 @@ class AppColors {
   static const gray700 = Color(0xFF4A4A4A);
   static const gray900 = Color(0xFF1A1A1A);
 
-  // ── Grün/Mint – User-Bereich-Theme (Profil-Redesign) ──────────────────────
+  // ── Deep-Green – User-Bereich-Akzent (Akzent führt, Mint beruhigt) ─────────
+  /// Der EINE Akzent: tiefes Grün (Header-Grün). Aktiv/CTA/Fokus/ausgewählt.
+  static const accent = Color(0xFF1E7A5F);
   static const greenDeep = Color(0xFF0E4034); // dunkles Grün (Text/Verläufe)
-  static const green = Color(0xFF1FA97E); // kräftiges Grün (Akzente)
+  static const green = accent; // Alias: bisheriger Akzent → Deep-Green
   static const greenTint = Color(0xFFEFFBF6); // sehr helle Mint-Fläche (Karten/BG)
   static const greenLine = Color(0xFFCFEFE2); // grünliche Trennlinie/Border
 
   static const LinearGradient mintGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [Color(0xFF3FD1A7), Color(0xFF12835F)],
+    colors: [Color(0xFF2E9173), Color(0xFF0E4034)],
   );
 
   static const LinearGradient mintGradientSoft = LinearGradient(
@@ -38,7 +43,7 @@ class AppColors {
 
   // ── Chromium Experience – Google Material 3 Tokens ────────────────────────
   // Lokka-Grün ist der M3-Seed; diese Semantikfarben folgen der Google-Palette.
-  static const seedGreen = Color(0xFF1FA97E); // Marke = M3-Seed/Primary
+  static const seedGreen = accent; // Marke = M3-Seed/Primary (Deep-Green)
   static const googleBlue = Color(0xFF1A73E8); // Info/Links (sekundär)
   static const googleGreen = Color(0xFF1E8E3E); // Success
   static const googleYellow = Color(0xFFF9AB00); // Warning

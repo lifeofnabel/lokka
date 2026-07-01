@@ -63,6 +63,8 @@ class FirebasePaths {
   static const contentReports = 'contentReports';
   static const notifications = 'notifications';
   static const merchantRatings = 'merchantRatings';
+  static const legal = 'legal';
+  static const legalPrivacyPolicy = 'privacyPolicy';
 
   static String user(String uid) => '$users/$uid';
   static String merchant(String merchantId) => '$merchants/$merchantId';
@@ -77,6 +79,7 @@ class FirebasePaths {
   static String contentReport(String reportId) => '$contentReports/$reportId';
   static String devCheck(String checkId) => '$devChecks/$checkId';
   static String chooserDocument(String documentId) => '$chooser/$documentId';
+  static String legalDocument(String documentId) => '$legal/$documentId';
 
   static String userWalletCards(String uid) => '${user(uid)}/$walletCards';
   static String userWalletCard(String uid, String cardId) =>

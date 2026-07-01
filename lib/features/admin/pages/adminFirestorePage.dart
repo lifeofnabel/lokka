@@ -34,6 +34,9 @@ class _AdminFirestorePageState extends State<AdminFirestorePage> {
   String? _loadedDocPath; // non-null when a document is loaded
   String _preview = '';
   List<String>? _collectionIds; // non-null when a collection is loaded
+  // The editable (pure-JSON) fields as loaded — diffed on save so removing a key
+  // from the JSON actually deletes the field (merge-set alone never can).
+  Map<String, dynamic> _originalEditable = {};
 
   @override
   void initState() {
@@ -69,23 +72,30 @@ class _AdminFirestorePageState extends State<AdminFirestorePage> {
     try {
       if (_isDocPath(path)) {
         final data = await _data.getDoc(path);
+        if (!mounted) return;
         if (data == null) {
-          setState(() => _error = 'Dokument existiert nicht (Speichern legt es an).');
           _editCtrl.text = '{\n  \n}';
-          setState(() => _loadedDocPath = path);
+          setState(() {
+            _error = 'Dokument existiert nicht (Speichern legt es an).';
+            _loadedDocPath = path;
+            _originalEditable = {};
+          });
         } else {
+          final editable = _editable(data);
+          _editCtrl.text = _pretty(editable);
           setState(() {
             _loadedDocPath = path;
             _preview = _pretty(_jsonSafe(data));
-            _editCtrl.text = _pretty(_editable(data));
+            _originalEditable = editable;
           });
         }
       } else {
         final ids = await _data.listCollection(path);
+        if (!mounted) return;
         setState(() => _collectionIds = ids);
       }
     } catch (e) {
-      setState(() => _error = '$e');
+      if (mounted) setState(() => _error = '$e');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -103,13 +113,21 @@ class _AdminFirestorePageState extends State<AdminFirestorePage> {
       _snack('Ungültiges JSON: $e');
       return;
     }
+    // Mix in FieldValue.delete() for top-level fields the operator removed from
+    // the editable JSON — a merge-set alone can never delete a field. (Nested-map
+    // keys still can't be removed this way; use „Feld löschen" for those.)
+    final update = <String, dynamic>{...parsed};
+    for (final k in _originalEditable.keys) {
+      if (!parsed.containsKey(k)) update[k] = FieldValue.delete();
+    }
     setState(() => _busy = true);
     try {
-      await _data.mergeDoc(path, parsed);
-      _snack('Gespeichert (merge).');
+      await _data.updateDoc(path, update);
+      if (!mounted) return;
+      _snack('Gespeichert.');
       await _load();
     } catch (e) {
-      _snack('Fehler: $e');
+      if (mounted) _snack('Fehler: $e');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -119,18 +137,20 @@ class _AdminFirestorePageState extends State<AdminFirestorePage> {
     final path = _loadedDocPath;
     if (path == null) return;
     final ok = await _confirm('Dokument löschen?', path);
-    if (ok != true) return;
+    if (ok != true || !mounted) return;
     setState(() => _busy = true);
     try {
       await _data.deleteDoc(path);
+      if (!mounted) return;
       _snack('Gelöscht.');
       setState(() {
         _loadedDocPath = null;
         _preview = '';
         _editCtrl.clear();
+        _originalEditable = {};
       });
     } catch (e) {
-      _snack('Fehler: $e');
+      if (mounted) _snack('Fehler: $e');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -140,14 +160,15 @@ class _AdminFirestorePageState extends State<AdminFirestorePage> {
     final path = _loadedDocPath;
     if (path == null) return;
     final field = await _prompt('Feld löschen', 'Feldname');
-    if (field == null || field.isEmpty) return;
+    if (field == null || field.isEmpty || !mounted) return;
     setState(() => _busy = true);
     try {
       await _data.deleteField(path, field);
+      if (!mounted) return;
       _snack('Feld „$field" gelöscht.');
       await _load();
     } catch (e) {
-      _snack('Fehler: $e');
+      if (mounted) _snack('Fehler: $e');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -176,27 +197,31 @@ class _AdminFirestorePageState extends State<AdminFirestorePage> {
         ),
       );
 
-  Future<String?> _prompt(String title, String label) {
+  Future<String?> _prompt(String title, String label) async {
     final ctrl = TextEditingController();
-    return showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(title),
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          decoration: InputDecoration(labelText: label),
+    try {
+      return await showDialog<String>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(title),
+          content: TextField(
+            controller: ctrl,
+            autofocus: true,
+            decoration: InputDecoration(labelText: label),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Abbrechen')),
+            FilledButton(
+                onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+                child: const Text('OK')),
+          ],
         ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Abbrechen')),
-          FilledButton(
-              onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
-              child: const Text('OK')),
-        ],
-      ),
-    );
+      );
+    } finally {
+      ctrl.dispose();
+    }
   }
 
   @override

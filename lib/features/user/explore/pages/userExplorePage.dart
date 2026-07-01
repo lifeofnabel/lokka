@@ -1,20 +1,26 @@
+import 'dart:async';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:lokka/core/services/authService.dart';
 import 'package:lokka/core/services/firestoreService.dart';
-import 'package:lokka/core/services/localCacheService.dart';
+import 'package:lokka/core/utils/deferredWarmup.dart';
 import 'package:lokka/core/theme/appColors.dart';
+import 'package:lokka/core/theme/appRadius.dart';
 import 'package:lokka/core/theme/appSpacing.dart';
 import 'package:lokka/core/utils/locationUtils.dart';
 import 'package:lokka/core/widgets/appEmptyState.dart';
 import 'package:lokka/core/widgets/appErrorState.dart';
 import 'package:lokka/core/widgets/appLoadingState.dart';
+import 'package:lokka/core/widgets/appPillSwitch.dart';
 import 'package:lokka/core/widgets/appSearchField.dart';
 import 'package:lokka/features/user/discover/models/publicMerchantUserModel.dart';
 import 'package:lokka/features/user/discover/providers/userDiscoverProvider.dart';
-import 'package:lokka/features/user/discover/services/userDiscoverService.dart';
+import 'package:lokka/features/user/discover/services/userDiscoverService.dart'
+    show DiscoverFeedItem;
+import 'package:lokka/features/user/feed/utils/feedTypeLabels.dart';
 import 'package:lokka/features/user/partners/providers/userPartnersProvider.dart';
 import 'package:lokka/features/user/partners/widgets/partnerCard.dart';
 
@@ -49,7 +55,9 @@ class _UserExplorePageState extends State<UserExplorePage> {
   void initState() {
     super.initState();
     _firestoreService = context.read<FirestoreService>();
-    _load();
+    // Tab-Index 1 ("Suche") – verzögert, solange ein anderer Tab aktiv ist,
+    // damit ein Kaltstart im Feed diese leichte Anfrage nicht mit blockiert.
+    DeferredWarmup.schedule(1, () => unawaited(_load()));
   }
 
   Future<void> _load() async {
@@ -152,8 +160,7 @@ class _UserExplorePageState extends State<UserExplorePage> {
       bottom: false,
       child: Column(
         children: [
-          _ExploreHeader(
-              mode: _mode, onModeChanged: _setMode, compact: true),
+          _ExploreHeader(mode: _mode, onModeChanged: _setMode),
           _ResultsBar(
             category: category,
             mode: _mode,
@@ -163,7 +170,7 @@ class _UserExplorePageState extends State<UserExplorePage> {
           ),
           Expanded(
             child: _mode == ExploreMode.deals
-                ? _DealsResults(
+                ? _DealsResultsBody(
                     key: ValueKey('deals-$category'),
                     category: category,
                     sort: _sort,
@@ -186,75 +193,19 @@ class _ExploreHeader extends StatelessWidget {
   const _ExploreHeader({
     required this.mode,
     required this.onModeChanged,
-    this.compact = false,
   });
 
   final ExploreMode mode;
   final ValueChanged<ExploreMode> onModeChanged;
-  final bool compact;
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-    final subtitle =
-        mode == ExploreMode.deals ? 'Deals entdecken' : 'Partner entdecken';
-
     return Padding(
-      padding: EdgeInsets.fromLTRB(
-          AppSpacing.md, compact ? AppSpacing.sm : AppSpacing.md, AppSpacing.md,
-          AppSpacing.xs),
+      padding: kSwitcherPadding,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (!compact) ...[
-            Row(
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    gradient: AppColors.mintGradient,
-                    borderRadius: BorderRadius.circular(15),
-                  ),
-                  child: const Icon(Icons.travel_explore_rounded,
-                      color: Colors.white, size: 24),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Entdecken',
-                        style: tt.headlineMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: -0.5,
-                          color: cs.onSurface,
-                        ),
-                      ),
-                      Text(
-                        subtitle,
-                        style: tt.bodyMedium
-                            ?.copyWith(color: cs.onSurfaceVariant),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.md),
-          ] else ...[
-            Text(
-              subtitle,
-              style: tt.labelLarge?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: cs.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-          ],
-          _PillSwitch<ExploreMode>(
+          AppPillSwitch<ExploreMode>(
             value: mode,
             onChanged: onModeChanged,
             expand: true,
@@ -346,7 +297,7 @@ class _ResultsBar extends StatelessWidget {
             ),
           ),
           const SizedBox(height: AppSpacing.sm),
-          _PillSwitch<_ResultSort>(
+          AppPillSwitch<_ResultSort>(
             value: sort,
             onChanged: onSortChanged,
             segments: [
@@ -363,90 +314,6 @@ class _ResultsBar extends StatelessWidget {
             ],
           ),
         ],
-      ),
-    );
-  }
-}
-
-/// Wiederverwendbarer M3-Segment-Umschalter (Pille mit gleitender Aktiv-Fläche).
-class _PillSwitch<T> extends StatelessWidget {
-  const _PillSwitch({
-    required this.value,
-    required this.segments,
-    required this.onChanged,
-    this.expand = false,
-  });
-
-  final T value;
-  final List<({T value, String label, IconData icon})> segments;
-  final ValueChanged<T> onChanged;
-  final bool expand;
-
-  @override
-  Widget build(BuildContext context) {
-    Widget seg(({T value, String label, IconData icon}) s) {
-      final cs = Theme.of(context).colorScheme;
-      final tt = Theme.of(context).textTheme;
-      final active = s.value == value;
-      final child = AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOut,
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-        decoration: BoxDecoration(
-          color: active ? cs.surface : Colors.transparent,
-          borderRadius: BorderRadius.circular(999),
-          boxShadow: active
-              ? [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.08),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ]
-              : null,
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(s.icon,
-                size: 18, color: active ? cs.primary : cs.onSurfaceVariant),
-            const SizedBox(width: 7),
-            Flexible(
-              child: Text(
-                s.label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: tt.labelLarge?.copyWith(
-                  fontWeight: active ? FontWeight.w600 : FontWeight.w500,
-                  color: active ? cs.onSurface : cs.onSurfaceVariant,
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-      final tappable = Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(999),
-        child: InkWell(
-          onTap: () => onChanged(s.value),
-          borderRadius: BorderRadius.circular(999),
-          child: child,
-        ),
-      );
-      return expand ? Expanded(child: tappable) : tappable;
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceGray,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
-        children: segments.map(seg).toList(),
       ),
     );
   }
@@ -469,14 +336,13 @@ class _TileGrid extends StatelessWidget {
           crossAxisCount: 2,
           mainAxisSpacing: AppSpacing.md,
           crossAxisSpacing: AppSpacing.md,
-          childAspectRatio: 1.35,
+          childAspectRatio: 1.15,
         ),
         delegate: SliverChildBuilderDelegate(
           (context, index) {
             final item = items[index];
             return _ExploreTile(
               label: item,
-              seed: index,
               onTap: () => onTap(item),
             );
           },
@@ -487,64 +353,56 @@ class _TileGrid extends StatelessWidget {
   }
 }
 
-/// Große, weiche Bild-/Icon-Kachel. Eine Geste = Ergebnisse öffnen.
+/// Große, weiche Kategorie-Kachel. Eine Geste = Ergebnisse öffnen.
+/// Eine EINHEITLICHE, ruhige Mint-Fläche (kein Regenbogen) + der eine
+/// Deep-Green-Akzent fürs Icon — die App bleibt neutrale Bühne. Icon und Label
+/// sind unten gruppiert, damit kein totes Mittelfeld entsteht.
 class _ExploreTile extends StatelessWidget {
   const _ExploreTile({
     required this.label,
-    required this.seed,
     required this.onTap,
   });
 
   final String label;
-  final int seed;
   final VoidCallback onTap;
-
-  // Ruhige, tonale Verläufe – rotieren für visuelle Abwechslung.
-  static const _palettes = <List<Color>>[
-    [Color(0xFFE9FAF3), Color(0xFFC8F0E0)],
-    [Color(0xFFEAF2FE), Color(0xFFD2E4FC)],
-    [Color(0xFFFFF4E5), Color(0xFFFCE3C2)],
-    [Color(0xFFF3EAFE), Color(0xFFE2D2FC)],
-    [Color(0xFFFDEAEF), Color(0xFFFAD2DC)],
-    [Color(0xFFEAFBF1), Color(0xFFCFF0DA)],
-  ];
 
   @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
-    final palette = _palettes[seed % _palettes.length];
-    final accent = _darken(palette.last);
 
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(28),
+      borderRadius: BorderRadius.circular(AppRadius.xl),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
         child: Ink(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(28),
-            gradient: LinearGradient(
+            borderRadius: BorderRadius.circular(AppRadius.xl),
+            gradient: const LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: palette,
+              colors: [AppColors.greenTint, AppColors.mintSoft],
             ),
+            border: Border.all(color: AppColors.greenLine),
           ),
           child: Padding(
             padding: const EdgeInsets.all(AppSpacing.md),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 Container(
-                  width: 44,
-                  height: 44,
+                  width: 46,
+                  height: 46,
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.7),
-                    borderRadius: BorderRadius.circular(16),
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(AppRadius.medium),
                   ),
-                  child: Icon(_categoryIcon(label), size: 24, color: accent),
+                  child: Icon(_categoryIcon(label),
+                      size: 24, color: AppColors.accent),
                 ),
+                const SizedBox(height: AppSpacing.sm),
                 Text(
                   label,
                   maxLines: 2,
@@ -562,11 +420,6 @@ class _ExploreTile extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  static Color _darken(Color c) {
-    final hsl = HSLColor.fromColor(c);
-    return hsl.withLightness((hsl.lightness - 0.32).clamp(0.0, 1.0)).toColor();
   }
 
   static IconData _categoryIcon(String label) {
@@ -612,31 +465,15 @@ class _ExploreTile extends StatelessWidget {
 
 // ── Deals-Ergebnisse einer Kategorie ──────────────────────────────────────────
 
-/// Eigener [UserDiscoverProvider], damit der Haupt-Feed unberührt bleibt; der
-/// globale Nutzer-Standort kommt aus demselben geteilten Cache (konsistent).
-class _DealsResults extends StatelessWidget {
-  const _DealsResults({super.key, required this.category, required this.sort});
-
-  final String category;
-  final _ResultSort sort;
-
-  @override
-  Widget build(BuildContext context) {
-    return ChangeNotifierProvider<UserDiscoverProvider>(
-      create: (ctx) => UserDiscoverProvider(
-        service: UserDiscoverService(
-          firestoreService: ctx.read<FirestoreService>(),
-          authService: ctx.read<AuthService>(),
-          cacheService: ctx.read<LocalCacheService>(),
-        ),
-      ),
-      child: _DealsResultsBody(category: category, sort: sort),
-    );
-  }
-}
-
+/// Nutzt den geteilten [UserDiscoverProvider] (bereits vom Feed-Tab warm
+/// geladen) statt eine eigene, neue Instanz zu erzeugen – ein Kategorie-Tap
+/// löste sonst bei JEDEM Öffnen den vollen Feed-Ladepfad (Standort/Interessen/
+/// Merchants/Beiträge) noch einmal komplett neu aus. Filter/Modus werden beim
+/// Verlassen zurückgesetzt (gleiches Prinzip wie [_PartnerResults] für den
+/// geteilten [UserPartnersProvider]), damit der Feed-Tab nicht kontaminiert
+/// bleibt.
 class _DealsResultsBody extends StatefulWidget {
-  const _DealsResultsBody({required this.category, required this.sort});
+  const _DealsResultsBody({super.key, required this.category, required this.sort});
 
   final String category;
   final _ResultSort sort;
@@ -646,12 +483,20 @@ class _DealsResultsBody extends StatefulWidget {
 }
 
 class _DealsResultsBodyState extends State<_DealsResultsBody> {
+  late final UserDiscoverProvider _provider;
   bool _scoped = false;
   _ResultSort? _appliedSort;
+  String? _originalShopType;
+  DiscoverSort? _originalSort;
+  DiscoverFeedMode? _originalMode;
 
   @override
   void initState() {
     super.initState();
+    _provider = context.read<UserDiscoverProvider>();
+    _originalShopType = _provider.shopType;
+    _originalSort = _provider.sort;
+    _originalMode = _provider.mode;
     WidgetsBinding.instance.addPostFrameCallback((_) => _apply());
   }
 
@@ -663,21 +508,29 @@ class _DealsResultsBodyState extends State<_DealsResultsBody> {
     }
   }
 
+  @override
+  void dispose() {
+    // Geteilten Feed-Provider zurücksetzen, sonst bleibt der Kategorie-Filter/
+    // -Modus beim Zurückkehren zum Feed-Tab hängen.
+    _provider.applyFilters(shopType: _originalShopType, sort: _originalSort);
+    _provider.setMode(_originalMode ?? DiscoverFeedMode.forYou);
+    super.dispose();
+  }
+
   /// Erst auf die Kategorie eingrenzen, sobald die Daten geladen sind, dann die
   /// gewählte Sortierung anwenden. „Top" = meiste Likes, „Näheste" = Distanz.
   void _apply() {
     if (!mounted) return;
-    final p = context.read<UserDiscoverProvider>();
-    if (p.isLoading) return;
+    if (_provider.isLoading) return;
     if (_scoped && _appliedSort == widget.sort) return;
     _scoped = true;
     _appliedSort = widget.sort;
     if (widget.sort == _ResultSort.near) {
-      p.applyFilters(shopType: widget.category, sort: DiscoverSort.mostLiked);
-      p.setMode(DiscoverFeedMode.nearMe);
+      _provider.applyFilters(shopType: widget.category, sort: DiscoverSort.mostLiked);
+      _provider.setMode(DiscoverFeedMode.nearMe);
     } else {
-      p.setMode(DiscoverFeedMode.forYou);
-      p.applyFilters(shopType: widget.category, sort: DiscoverSort.mostLiked);
+      _provider.setMode(DiscoverFeedMode.forYou);
+      _provider.applyFilters(shopType: widget.category, sort: DiscoverSort.mostLiked);
     }
   }
 
@@ -848,7 +701,7 @@ class _CategoryFeedCard extends StatelessWidget {
 
     return Material(
       color: cs.surface,
-      borderRadius: BorderRadius.circular(28),
+      borderRadius: BorderRadius.circular(AppRadius.large),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: () async {
@@ -858,7 +711,7 @@ class _CategoryFeedCard extends StatelessWidget {
         },
         child: Ink(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(28),
+            borderRadius: BorderRadius.circular(AppRadius.large),
             border: Border.all(color: cs.outlineVariant),
           ),
           child: Column(
@@ -1134,24 +987,3 @@ String _initials(String value) {
       .toUpperCase();
 }
 
-String feedTypeLabel(String type) {
-  const labels = {
-    'offer': 'Angebot',
-    'onePlusOneFree': '1+1 Gratis',
-    'buyOneGetOneFree': 'Kauf 1, bekomme 1',
-    'twoPlusOneFree': '2+1 Gratis',
-    'buyTwoGetOneFree': 'Kauf 2, bekomme 1',
-    'categoryDiscountPercent': 'Prozent-Rabatt',
-    'categoryDiscountFixed': 'Rabatt',
-    'happyHour': 'Happy Hour',
-    'quickSell': 'Schnell weg',
-    'rescueMe': 'Rette mich',
-    'news': 'Neuigkeit',
-    'newProduct': 'Neue Ware',
-    'info': 'Info',
-    'communityEvent': 'Event',
-    'hiring': 'Team gesucht',
-    'sponsoredSpot': 'Sponsored',
-  };
-  return labels[type] ?? type;
-}

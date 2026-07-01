@@ -1284,6 +1284,9 @@ class _ItemTagChips extends StatelessWidget {
           .map(
             (tag) => Tooltip(
               message: tag.name,
+              // Sonst zeigt der Tooltip auf Touch nur bei Long-Press
+              // (Default), nicht bei normalem Tap.
+              triggerMode: TooltipTriggerMode.tap,
               child: _TinyShopChip(label: tag.code, palette: palette),
             ),
           )

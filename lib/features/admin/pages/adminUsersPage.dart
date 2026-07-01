@@ -64,14 +64,14 @@ class _MerchantsTabState extends State<_MerchantsTab> {
     super.dispose();
   }
 
-  void _reload() {
-    setState(() {
-      _future = () async {
-        final pending = await widget.data.pendingMerchants();
-        final all = await widget.data.listMerchants();
-        return _MerchantBundle(pending, all);
-      }();
-    });
+  Future<void> _reload() {
+    final f = () async {
+      final pending = await widget.data.pendingMerchants();
+      final all = await widget.data.listMerchants();
+      return _MerchantBundle(pending, all);
+    }();
+    setState(() => _future = f);
+    return f;
   }
 
   Future<void> _setStatus(String uid, String status) async {
@@ -163,7 +163,7 @@ class _MerchantsTabState extends State<_MerchantsTab> {
                 return hay.contains(_query);
               }).toList();
               return RefreshIndicator(
-                onRefresh: () async => _reload(),
+                onRefresh: _reload,
                 child: ListView(
                   padding: const EdgeInsets.fromLTRB(12, 0, 12, 24),
                   children: [
@@ -256,7 +256,11 @@ class _UsersTabState extends State<_UsersTab> {
     super.dispose();
   }
 
-  void _reload() => setState(() => _future = widget.data.listUsers());
+  Future<void> _reload() {
+    final f = widget.data.listUsers();
+    setState(() => _future = f);
+    return f;
+  }
 
   void _actions(AdminDoc u) {
     final active = u.data['isActive'] != false;
@@ -348,7 +352,7 @@ class _UsersTabState extends State<_UsersTab> {
                 return hay.contains(_query);
               }).toList();
               return RefreshIndicator(
-                onRefresh: () async => _reload(),
+                onRefresh: _reload,
                 child: ListView.builder(
                   padding: const EdgeInsets.fromLTRB(12, 0, 12, 24),
                   itemCount: users.length,

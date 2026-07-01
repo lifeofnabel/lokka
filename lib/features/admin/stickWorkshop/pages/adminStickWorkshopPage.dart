@@ -7,10 +7,12 @@ import '../../services/adminService.dart';
 import '../services/fileDownload.dart';
 import '../services/stickArtifacts.dart';
 
-/// Godmode → Stift-Werkstatt. Centrally mass-produces UNBOUND sticks:
-///   • Link-Stifte (Path A): mint N sticks → claim QR `lokka-stick-a:…`.
-///   • Sicher-Chips (Path B): derive chip keys + provToken QR `lokka-stick:…`.
-/// Plus an inventory register. Merchants bind the sticks themselves later.
+/// Godmode → Stift-Werkstatt. Centrally mass-produces link sticks: each mint
+/// yields a permanent NFC link `https://<app>/s/<token>` (the owner writes it
+/// onto the blank tag once) plus a bind-QR `lokka-stick-a:…` that ships with the
+/// stick. A merchant scans the bind-QR to link the stick to one of their cards;
+/// the NFC link never changes, so re-binding needs no rewrite. Plus an inventory
+/// register.
 class AdminStickWorkshopPage extends StatefulWidget {
   const AdminStickWorkshopPage({super.key, this.service});
 
@@ -250,23 +252,40 @@ class _MintedStickTile extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 6),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: cs.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(10),
+            if (stick.redeemToken.isEmpty)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: cs.errorContainer,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  'Kein Link erhalten. Die Cloud Functions sind vermutlich noch '
+                  'nicht aktualisiert — „firebase deploy --only functions" '
+                  'ausführen, dann die Stifte neu erzeugen.',
+                  style: tt.bodySmall?.copyWith(color: cs.onErrorContainer),
+                ),
+              )
+            else ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: cs.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: SelectableText(_nfcUrl, style: tt.bodySmall),
               ),
-              child: SelectableText(_nfcUrl, style: tt.bodySmall),
-            ),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(
-                onPressed: _copyUrl,
-                icon: const Icon(Icons.content_copy_rounded, size: 16),
-                label: const Text('Link kopieren'),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: _copyUrl,
+                  icon: const Icon(Icons.content_copy_rounded, size: 16),
+                  label: const Text('Link kopieren'),
+                ),
               ),
-            ),
+            ],
             const Divider(height: 18),
             // 2) Binde-QR — liegt dem Stift bei; der Händler scannt ihn.
             Row(

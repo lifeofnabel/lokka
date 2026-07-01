@@ -48,7 +48,11 @@ class _SticksTabState extends State<_SticksTab> {
     _reload();
   }
 
-  void _reload() => setState(() => _future = widget.admin.listSticks());
+  Future<void> _reload() {
+    final f = widget.admin.listSticks();
+    setState(() => _future = f);
+    return f;
+  }
 
   Future<void> _unbind(StickInventoryItem s) async {
     final ok = await showDialog<bool>(
@@ -101,7 +105,7 @@ class _SticksTabState extends State<_SticksTab> {
           ]);
         }
         return RefreshIndicator(
-          onRefresh: () async => _reload(),
+          onRefresh: _reload,
           child: ListView.builder(
             padding: const EdgeInsets.all(12),
             itemCount: sticks.length,
@@ -164,7 +168,11 @@ class _CardsTabState extends State<_CardsTab> {
     _reload();
   }
 
-  void _reload() => setState(() => _future = widget.data.stampCards());
+  Future<void> _reload() {
+    final f = widget.data.stampCards();
+    setState(() => _future = f);
+    return f;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -185,7 +193,7 @@ class _CardsTabState extends State<_CardsTab> {
           ]);
         }
         return RefreshIndicator(
-          onRefresh: () async => _reload(),
+          onRefresh: _reload,
           child: ListView.builder(
             padding: const EdgeInsets.all(12),
             itemCount: cards.length,

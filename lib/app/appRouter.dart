@@ -61,13 +61,17 @@ import '../core/services/authService.dart';
 import '../core/services/firestoreService.dart';
 import '../core/theme/appTheme.dart';
 import '../features/user/discover/models/publicMerchantUserModel.dart';
+import '../features/user/discover/pages/userDiscoverPage.dart';
+import '../features/user/explore/pages/userExplorePage.dart';
 import '../features/user/feed/models/feedPostModel.dart';
 import '../features/user/feed/pages/userFeedDetailPage.dart';
 import '../features/user/feed/services/userFeedService.dart';
 import '../features/user/partners/pages/userPartnerDetailPage.dart';
 import '../features/user/partners/pages/userPartnerStampsPage.dart';
 import '../features/user/partners/services/userPartnersService.dart';
+import '../features/user/profile/pages/userProfilePage.dart';
 import '../features/user/shell/userShellPage.dart';
+import '../features/user/wallet/pages/userWalletPage.dart';
 
 /// Legt das Google-Home-Dark Merchant-Theme über eine Route, damit alle
 /// Material-Widgets (Eingaben, Dialoge, Sheets) im Merchant-Bereich dunkel
@@ -294,22 +298,40 @@ class AppRouter {
         name: demoComingSoon,
         builder: (context, state) => const DemoComingSoonPage(),
       ),
-      GoRoute(
-        path: '/user/discover',
-        name: userDiscover,
-        builder: (context, state) => const UserShellPage(initialIndex: 0),
-      ),
-      GoRoute(
-        path: '/user/explore',
-        builder: (context, state) => const UserShellPage(initialIndex: 1),
-      ),
-      GoRoute(
-        path: '/user/wallet',
-        builder: (context, state) => const UserShellPage(initialIndex: 2),
-      ),
-      GoRoute(
-        path: '/user/profile',
-        builder: (context, state) => const UserShellPage(initialIndex: 3),
+      // Persistente Tab-Shell: EIN Navigator-Ast pro Branch bleibt beim
+      // Wechseln am Leben (State/Provider werden NICHT disposed) — anders als
+      // 4 einzelne GoRoutes, die jede für sich eine neue UserShellPage bauen
+      // und die alte (inkl. aller Provider) zerstören würden.
+      StatefulShellRoute.indexedStack(
+        builder: (context, state, navigationShell) =>
+            UserShellPage(navigationShell: navigationShell),
+        branches: [
+          StatefulShellBranch(routes: [
+            GoRoute(
+              path: '/user/discover',
+              name: userDiscover,
+              builder: (context, state) => const UserDiscoverPage(),
+            ),
+          ]),
+          StatefulShellBranch(routes: [
+            GoRoute(
+              path: '/user/explore',
+              builder: (context, state) => const UserExplorePage(),
+            ),
+          ]),
+          StatefulShellBranch(routes: [
+            GoRoute(
+              path: '/user/wallet',
+              builder: (context, state) => const UserWalletPage(),
+            ),
+          ]),
+          StatefulShellBranch(routes: [
+            GoRoute(
+              path: '/user/profile',
+              builder: (context, state) => const UserProfilePage(),
+            ),
+          ]),
+        ],
       ),
       GoRoute(
         path: '/user/partners/:merchantId',
@@ -628,21 +650,22 @@ class AppRouter {
         path: '/merchant/tools/tables',
         builder: (context, state) => _merchantDark(const MerchantTablesPage()),
       ),
-      // NFC stamp tap (and QR fallback). The chip's SUN URL points here:
-      // /stamp?picc=…&cmac=…  → verified server-side by redeemStampTap.
-      GoRoute(
-        path: '/stamp',
-        builder: (context, state) => StampTapPage(
-          picc: state.uri.queryParameters['picc'] ?? '',
-          cmac: state.uri.queryParameters['cmac'] ?? '',
-        ),
-      ),
-      // /s/<token>  → Path A static stick, verified by redeemStaticStamp.
+      // Stamp-stick tap. The tag holds /s/<token> — the owner-written, fixed
+      // link; verified server-side by redeemStaticStamp (which reads the current
+      // card binding from sticks/<id>).
       GoRoute(
         path: '/s/:token',
         builder: (context, state) => StampTapPage(
           token: state.pathParameters['token'] ?? '',
         ),
+      ),
+      // Robustness: a bare `/s` (no token) — e.g. an NFC tag written before the
+      // redeem token existed, or with an empty token — must NOT fall through to
+      // the /:handle merchant resolver (which confusingly opens a Partner page).
+      // Show the invalid-tag stamp state instead.
+      GoRoute(
+        path: '/s',
+        builder: (context, state) => const StampTapPage(token: ''),
       ),
       GoRoute(
         path: '/claim/stamp',

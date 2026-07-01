@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:lokka/core/theme/appRadius.dart';
 import 'package:lokka/core/theme/appSpacing.dart';
 
 /// Einheitlicher Leerzustand für Listen/Seiten.
@@ -52,7 +53,7 @@ class AppEmptyState extends StatelessWidget {
                 height: 72,
                 decoration: BoxDecoration(
                   color: cs.secondaryContainer,
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(AppRadius.large),
                 ),
                 child: Icon(icon, size: 36, color: cs.onSecondaryContainer),
               ),
