@@ -160,6 +160,38 @@ export const adminListSticks = onCall({ cors: true }, async (req) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+//  Delete a stick from the register. If it was bound to a card, the badge is
+//  detached first so the merchant's card no longer shows a connected stick.
+// ─────────────────────────────────────────────────────────────────────────────
+export const adminDeleteStick = onCall({ cors: true }, async (req) => {
+  requireAdmin(req);
+  const stickId = String(req.data?.stickId ?? '')
+    .toLowerCase()
+    .replace(/[^0-9a-z]/g, '');
+  if (!stickId) throw new HttpsError('invalid-argument', 'stamp/invalid-request');
+  const db = getFirestore();
+  const ref = db.doc(`sticks/${stickId}`);
+  const snap = await ref.get();
+  if (snap.exists) {
+    const s = snap.data() ?? {};
+    const mid = s.boundMerchantId ? String(s.boundMerchantId) : '';
+    const cardId = s.boundCardId ? String(s.boundCardId) : '';
+    if (mid && cardId) {
+      await db.doc(`merchants/${mid}/stampCards/${cardId}`).set(
+        {
+          boundStickId: '',
+          stickVerifiedAt: null,
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+    }
+    await ref.delete();
+  }
+  return { ok: true, stickId };
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 //  Merchant claims an admin-minted static stick and binds it to one of their
 //  cards. NOT admin-gated — any merchant may claim an unbound inventory stick
 //  they physically hold (proven by the claim token). Returns the real signed

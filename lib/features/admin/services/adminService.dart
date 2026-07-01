@@ -72,6 +72,12 @@ class AdminService {
         .toList();
   }
 
+  /// Deletes a stick from the register. If it was bound, the server detaches it
+  /// from the card first.
+  Future<void> deleteStick(String stickId) async {
+    await _call('adminDeleteStick', {'stickId': stickId});
+  }
+
   Future<Map<String, dynamic>> _call(
       String name, Map<String, dynamic> data) async {
     final callable = _functions.httpsCallable(name);
@@ -108,9 +114,14 @@ String adminErrorMessage(Object error) {
       case 'deadline-exceeded':
         return 'Server nicht erreichbar. Sind die Functions deployt?';
     }
-    return msg.isEmpty ? 'Unbekannter Fehler.' : msg;
+    // Fallback: surface the real code + message so a hosted-only failure
+    // (CORS / functions not deployed / SDK not loaded) is diagnosable instead
+    // of a dead-end "unknown error".
+    return 'Fehler (${error.code})${msg.isEmpty ? '' : ': $msg'}';
   }
-  return 'Unbekannter Fehler.';
+  // Not a Functions error at all — e.g. the Firebase SDK module failed to load
+  // (self-hosted /firebase/*) or a network/JS error. Show the raw cause.
+  return 'Unerwarteter Fehler: $error';
 }
 
 /// A freshly minted, still-unbound link stick. Two artefacts:

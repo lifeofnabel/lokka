@@ -358,6 +358,43 @@ class _InventoryTabState extends State<_InventoryTab> {
     return f;
   }
 
+  Future<void> _delete(String stickId) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Stift löschen?'),
+        content: Text(
+          '„$stickId" wird gelöscht und von einer evtl. gebundenen Karte '
+          'getrennt. Das lässt sich nicht rückgängig machen.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Abbrechen'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Löschen'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await widget.admin.deleteStick(stickId);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(adminErrorMessage(e)),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+    await _reload();
+  }
+
   @override
   Widget build(BuildContext context) {
     return RefreshIndicator(
@@ -397,7 +434,10 @@ class _InventoryTabState extends State<_InventoryTab> {
             padding: const EdgeInsets.all(16),
             itemCount: items.length,
             separatorBuilder: (_, _) => const SizedBox(height: 8),
-            itemBuilder: (context, i) => _InventoryTile(item: items[i]),
+            itemBuilder: (context, i) => _InventoryTile(
+              item: items[i],
+              onDelete: () => _delete(items[i].stickId),
+            ),
           );
         },
       ),
@@ -406,8 +446,9 @@ class _InventoryTabState extends State<_InventoryTab> {
 }
 
 class _InventoryTile extends StatelessWidget {
-  const _InventoryTile({required this.item});
+  const _InventoryTile({required this.item, required this.onDelete});
   final StickInventoryItem item;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -429,7 +470,19 @@ class _InventoryTile extends StatelessWidget {
             if (item.verified) 'verifiziert ✓',
           ].join(' · '),
         ),
-        trailing: _StatusChip(item: item),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _StatusChip(item: item),
+            const SizedBox(width: 2),
+            IconButton(
+              icon: Icon(Icons.delete_outline_rounded, color: cs.error),
+              tooltip: 'Löschen',
+              visualDensity: VisualDensity.compact,
+              onPressed: onDelete,
+            ),
+          ],
+        ),
         isThreeLine: false,
       ),
     );

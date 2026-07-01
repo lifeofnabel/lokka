@@ -453,5 +453,6 @@ export {
   bootstrapAdmin,
   adminMintStaticSticks,
   adminListSticks,
+  adminDeleteStick,
   claimStaticStick,
 } from './admin';
