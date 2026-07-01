@@ -719,3 +719,225 @@ Architecture report ✅ · full route+data inventory ✅ · ranked risk list ✅
 - **Full user-facing responsive coverage achieved.** Still desktop-visually-unverified this session (headless CanvasKit WebGL context never recovered — confirmed dead even after a fresh build + ~10min). User verifies at ≥1024px.
 - **Tuning knob:** all caps are one-liners — `responsiveContentWidth.dart` default (640) or per-call `maxWidth:` (shell 720, shop 900).
 
+---
+
+# Stempelstift — Umbau auf „Owner schreibt Link, Merchant bindet per QR" (Sprint 1)
+
+> 2026-07-01. Ziel-Modell (User-Vorgabe): Owner erzeugt in Godmode je Stift einen fixen NFC-Link + einen Binde-QR. Owner schreibt den Link EINMAL auf den Chip. Merchant scannt den Binde-QR auf eine gewählte Stempelkarte → gebunden. Nutzer tippt → stempelt die aktuell gebundene Karte (alle Schutzmechanismen).
+
+## Kern-Änderung (elegant, minimal)
+- **Redeem-Token ist jetzt stick-identisch statt karten-gebunden.** `staticToken.ts` `tag()` signiert nur noch `LOKKA-STICK-ID-v1|<stickId>` (merchantId/cardId raus der Signatur, Parameter bleiben für Call-Site-Kompat). Neuer Helper `signStickLink(master,stickId)`. → Der Tag-Inhalt ist fix; Umbinden auf eine andere Karte erfordert KEIN Neuschreiben, weil `redeemStaticStamp` die Bindung ohnehin aus `sticks/<id>.boundCardId` liest. `index.ts` brauchte deshalb 0 Änderungen.
+- **`adminMintStaticSticks`** gibt pro Stift zusätzlich `redeemToken` (= signStickLink) zurück → Owner-UI baut `https://<app>/s/<token>`.
+- **`claimStaticStick`** setzt jetzt `stickVerifiedAt: serverTimestamp()` auf die Karte (Owner hat den Tag schon geschrieben → „verbunden ✓" sofort). Gibt weiterhin den (identischen) Token zurück (Legacy-Merchant-Flow bleibt lauffähig).
+
+## Godmode-Werkstatt (`adminStickWorkshopPage.dart`)
+- Nur noch EIN Bereich „Stifte erzeugen". Pro Stift-Kachel: (1) **NFC-Link** (voller `/s/…`-URL, kopierbar, „auf den Chip schreiben") + (2) **Binde-QR** (QR-Bild, Code kopieren, PNG). PDF-Export = Binde-QRs.
+- **Path-B-Sektion („Sicher-Chips / NTAG 424") aus der Werkstatt entfernt** + `deriveNtagStick`/`DerivedNtagStick` aus `adminService.dart` gelöscht.
+
+## Verifiziert
+`cd functions && npm test` → tsc grün + **16/16** Crypto-Checks (inkl. neue Invarianten „card-agnostic", „signStickLink == identity", „rejects wrong stick"). `flutter analyze` = 0/0/0.
+
+## NOCH OFFEN (im Prompt spezifiziert, nächster Schritt)
+Path-B-Backend LÖSCHEN (`redeemStampTap`, `setupStick`, `verifyStickBinding`, `adminDeriveNtagStick`, `crypto/ntag424.ts`, `crypto/aesCmac.ts`, `provSecret`, `scripts/deriveKeys.ts`, deren `index.ts`-Exports; Route `/stamp?picc&cmac`; Client `nfcService*`, picc/cmac-Zweig in `stampTapPage`); **Merchant-`stickSetupFlow.dart` radikal auf „QR scannen → verbunden" vereinfachen** (kein NFC-Schreiben/Test-Tap/Link-Kopieren mehr); verwaiste i18n `merchant.stick.pathB.*` weg. NICHT anfassen: `merchantStampCustomer`, `claimReward`, `merchantRedeemReward`, `userAddStampCard`, `userRemoveStamp`, `userUnfollowMerchant`, `merchantLoadCustomer`.
+
+
+---
+
+# User-Area Design-Fix (Deep-Green System)
+
+### 2026-06-24 — Sprint 1 (System/Layout/Bugs) — Claude
+**Prompt:** Design-only Refresh über 8 User-Screens. Deep-Green (#1E7A5F) führt, Mint nur Fläche; Layout/Z-Index/Wallet-Karten/Hierarchie.
+**Entscheidungen (User):** Akzent global im Theme; „Karte"→„Speisekarte" (beide bleiben); Mint bleibt ruhige Fläche.
+**Changed:**
+- `appColors.dart`: neuer `accent`=#1E7A5F; `green`/`seedGreen`/`mintStrong` → `accent` (alle bisherigen Mint-Akzente werden ohne Einzeledits Deep-Green); `mintGradient` auf Deep-Green getönt. Mint/greenTint/greenLine bleiben Fläche.
+- `appTheme.dart`: Light-Scheme `primary` exakt auf `accent` gepinnt (+onPrimary weiß) → CTAs/Fokus/Nav-Indicator/Chips global Deep-Green. merchantDark unberührt.
+- `userProfilePage.dart`: „Mein Bereich" 4-in-Reihe → **2×2 Grid** (kein Squish); „Ausloggen" von tonal-FilledButton → ruhiger zentrierter TextButton (demotet).
+**Bereits konform vorgefunden (nicht angefasst):** WalletCard (AspectRatio=gleiche Höhe, dunkler Gradient, feste Zonen Logo/Titel/Code); Wallet-Stack-Overlay (zentrierter Handle + Close, Dots) → keine Z-Index-Kollision mehr im aktuellen Code.
+**Verify:** analyze lib 0/0.
+**Next:** Sprint 2 — Feed Like-Dedupe+Action-Bar, Explore-Kacheln, Stempel-Detail-Spacing/Header-Grün, Social-Glyph, Karte→Speisekarte.
+
+### 2026-06-24 — Sprint 2 (Life/Consistency/States) — Claude
+**Changed:**
+- **Explore-Feed-Karte** (`userDiscoverPage.dart` `_FeedCard`): EINE Like-Steuerung statt zwei — schwebendes Bild-Herz entfernt; unten echte Aktionsleiste **Like(+Count) · Kommentar · Teilen** (interaktiv, Kommentare via inline-`UserFeedService`+`showCommentsSheet`, Teilen via ShareUtils). Toter `_LikeButton` gelöscht. Rating/Distanz als ruhige Meta-Zeile darüber.
+- **Quick-Actions vereinheitlicht:** Social-Glyph `@`→`Icons.public_rounded` in Partner-Profil, Post-Seite und Wallet-Sheet (alle nutzen schon dieselbe `QuickActionBar`). „Karte"→**„Speisekarte"** (keine Verwechslung mit Landkarte; Route + Speisekarte bleiben getrennt).
+- **Stempelkarte-Detail** (`userPartnerStampsPage.dart`): zwei gestapelte Mint-Statusleisten → EINE (Bottom-CTA „Zur Wallet hinzufügen" nur bis man folgt; danach trägt die Per-Karte-Status „In deiner Wallet"). Header-Verlauf → solides System-Grün `AppColors.accent` (ein Grün). Pager-Dots größer (26/9, aktiv/inaktiv = primary/primary-28%). Bühne neutral (greenTint→surfaceBg) → kein großer Mint-Leerraum, Karten stehen im Fokus.
+**Automatisch via Sprint-1-Theme:** Akzent app-weit (CTAs/Fokus/Nav/Chips); Konto-Icon-Tints einheitlich (eine secondaryContainer-Quelle).
+**Bewusst gelassen:** Explore-Top-Tabs/Glocke-Crowding (FittedBox skaliert bereits) + „Aktivität"-Icon (hat Tooltip) = minor; Explore-Gradient-Kategorie-Kacheln nicht eindeutig lokalisierbar → nicht angefasst (kein Blind-Edit).
+**Verify:** analyze lib 0/0.
+
+---
+
+# Pro-Redesign (Instagram-Level) — Mehr-Sprint-Programm
+**Vorgaben (User):** Radien straff/modern (zentral), Animation minimal (Fades), Scope User+Auth/Landing (Merchant-Dashboard bleibt), Dark Mode VOLL (Default hell, Schalter im Profil Hell/Dunkel/System), Bottom-Nav behalten (nur Farben/Radien). Jeder Sprint endet analyze 0/0.
+
+### Sprint 1 — Fundament (Tokens + Theming + Dark-Schalter) — Claude
+- `appRadius.dart`: moderne Skala small8/medium12/large16/xl24/xxl28/**full999** (zentral, kaskadiert).
+- `appTheme.dart`: **EIN** `_userTheme(scheme)` für Hell UND Dunkel (kein Drift); alle Komponenten über `ColorScheme.*` + AppRadius-Tokens (vorher hartkodiertes surfaceBg/Radien raus). Neue `darkTheme` (grün-getöntes Neutral-Dunkel, Akzent #34C293 für Kontrast). Light optisch ~gleich, nur Radien straffer + Inputs/Sheets/Dialoge an Tokens.
+- `themeController.dart` (neu, ChangeNotifier, persistiert via LocalCacheService, Default Light) → in `appProviders` registriert; `app.dart` MaterialApp.router bekommt `darkTheme`+`themeMode` via Consumer.
+- `userProfilePage.dart`: Sektion **„Darstellung"** mit SegmentedButton Hell/Dunkel/System.
+**Wichtig/Offen:** Dark ist für Theme-getriebene Widgets korrekt; Screens, die noch `AppColors.surfaceBg`/weiße Scaffolds hartkodieren, werden Sprint 2–5 pro Screen auf semantische Tokens migriert → Dark wird progressiv vollständig. Light bleibt durchgehend fehlerfrei.
+**Verify:** analyze lib 0/0.
+
+### Sprint 2 — Frame dark-correct + erste Screen-Migration — Claude
+- **Shell** (`userShellPage.dart`): Scaffold/Nav von hartem Weiß (`AppColors.background/surfaceBg`) auf `cs.surface`/`scheme.surfaceContainerLowest` + Nav-Radius auf `AppRadius.xxl`. → Rahmen ist in Dark korrekt.
+- **Tab-Frames:** Feed-AppBar, Explore-Scaffold+AppBar auf Theme-Tokens (`cs.surface`/`surfaceContainerLowest`).
+- **Profil komplett dark-korrekt** (wichtig, da dort der Schalter sitzt): alle `AppColors.surfaceBg`→`cs.surface`/Scaffold-Token, AppColors-Import entfernt. Hell unverändert, Dark sauber.
+- **Verify:** analyze lib 0/0 + `flutter build web --release` ✅.
+**Status Dark-Migration (ehrlich):** Theme-getriebene Widgets (PostCard, Explore-Card, Partner-Detail, Wallet-Stack u.a. nutzen großteils `cs.*`) adaptieren automatisch. NOCH zu migrieren (hartkodiertes Weiß/Dunkeltext) für volle Dark-Treue: userFeedDetailPage, ratingSection, commentsSheet, walletCard/Page, userPartnerStampsPage, userPartnerPointsPage(+Shop), Auth/Landing, diverse Profil-Unterseiten (meine*Page). ~155 AppColors-Literale übrig → Folge-Sprints, je Screen analyze 0/0.
+
+### 2026-06-24 — Original 2-Sprint-Prompt: Restlücken geschlossen (Audit-getrieben) — Claude
+6-Agent-Audit (Workflow) aller 8 Screens gegen die Checkliste → präzise Lückenliste. Danach umgesetzt:
+- **Explore-Kacheln** (`userExplorePage._ExploreTile`): Regenbogen-`_palettes` RAUS → EINE ruhige Mint-Fläche (greenTint→mintSoft + greenLine-Border), Icon = Deep-Green `AppColors.accent`. Totes Mittelfeld weg: `spaceBetween`→`MainAxisAlignment.end` (Icon+Label unten gruppiert) + Grid `childAspectRatio 1.35→1.15`. `seed`/`_darken` gelöscht.
+- **Wallet-Overlay „weiße Slivers"** (`walletCardStack`): `PageController(viewportFraction: 0.88)`→Vollbild (kein Nachbar-Karten-Durchscheinen über dem Dim). Grab-Handle symmetrisch zentriert. Store-QR + `userQrCard`-QR responsive (`width*0.5/0.6` clamp) statt fix 196/248. Karten-Radien 30/26/32 → AppRadius-Tokens.
+- **Profil**: „Aktivität"-Icon → beschriftete Pille (Icon+Text, nicht nur Tooltip). Bottom-Spacer 140 → `96 + viewPadding.bottom`. `_Shortcut`-Radien 20/13 → AppRadius.large/medium.
+- **Bottom-Nav aktiv = Akzent** (`userShellPage._NavTab`): aktives Tab jetzt Deep-Green (`cs.primary` @0.14 + primary Icon/Text) statt Mint-`secondaryContainer`.
+- **Merchant-Profil**: Social-Popout-Header-Icon `@`→`public_rounded` (letztes @-Glyph im Social-Flow).
+- **Radius-Vereinheitlichung**: Feed-Karten (discover `_FeedCard` + explore `_CategoryFeedCard`) 28→`AppRadius.large` (identisch zu PostCard); Discover-Location-Dialog 28→`AppRadius.xl`; Shared `AppEmptyState`/`AppErrorState`-Icon-Kachel 20→`AppRadius.large`.
+**Verify:** analyze lib 0/0 + `flutter build web --release` ✅.
+**Bewusst offen (ehrlich, nicht in der Checkliste):** explore `_CategoryFeedCard` hat noch die Bild-Herz+Meta-Doppel-Like (Discover-`_FeedCard` ist gefixt) — eigener Sprint, da es eine Karten-Kopie ist; Long-Tail-Radius-Literale (partnerCard/progress-cards) noch nicht komplett tokenisiert; discoverCard-Placeholder-Tint (mintSoft) unverändert (context-los, minimal sichtbar).
+
+---
+
+# Wallet-Redesign (Senior-UI) — Phase 1: Fundament
+
+## Done (2026-06-24)
+- **Design-Tokens:** `features/user/wallet/theme/walletDesignTokens.dart` — radien/spacing/shadow/motion(easeOutCubic ≤300ms)/fontWeights. Farben NICHT neu definiert → 1:1 aus `AppColors` (shadow, storyRing-Gradient) bzw. `ColorScheme` (theme-aware). maxContentWidth=420.
+- **Mobile-first:** Wallet-Seite in `Center + ConstrainedBox(maxWidth:420)` → auf Desktop/Tablet zentriertes „Handy", Rest neutral.
+- **Header rechts = 2 Icons:** neue `WalletSearchBar` (klappt von rechts auf 220px auf, 200ms easeOutCubic, Live-Filter über Name/Stadt/Kategorie, theme-aware) + Sort-Chip. Leerzustand bei 0 Treffern („Keine Karte gefunden").
+- **Sort umbenannt:** „Nähste zuerst" (Distanz) | „Zuletzt genutzt" (jetzt nach `lastActivityAt`).
+- **Files:** + walletDesignTokens.dart, + walletSearchBar.dart; ~ userWalletPage.dart. analyze wallet = 0 issues.
+
+## Offen (Phase 2/3 — größer, teils Backend)
+- **Karten-Layout-Overhaul** (WalletCard neu): Profilfoto oben-links (42px, weißer Rand) → Merchant-Page; Kategorie-Chip oben-rechts; Name+Stadt unten-links; Karten-Typ-Icon (QR/Stamp/Points) unten-rechts. + `WalletStack` als Apple-Stack (ist als `walletDeck` schon da → an neues Card-Schema angleichen).
+- **QR-Detail-Sheet** (`QRSheet`) nach Spec (Handle, Merchant-Header 52px, QR 220 + Vergrößern-Icon im Container, Code-Chip, `MerchantActionRow` nur vorhandene Links, 48px Brand-10%-Container).
+- **Karten-Typen im Sheet:** `StampCardShell` (neutrale Umgebung, Merchant-Design unangetastet) + `EmptyLoyaltyCard` (gestrichelt, 2 Text-Varianten, verlinkt zur Merchant-Page, kein CTA) + Points analog.
+- **Badges/Story:** `BadgeDot` (neuer Stempel/Punkte-Update) + Story-Ring (Merchant-Post <24h) — BRAUCHT Backend: merchant-lastPostAt lesen + `seenStoryAt`/seen-badge in Firestore.
+- **Widgets noch zu extrahieren:** WalletCard, WalletStack, QRSheet, StampCardShell, EmptyLoyaltyCard, MerchantActionRow, BadgeDot.
+
+---
+
+# Profil-Sammelauftrag (6 Teile) — 2026-06-24 — Claude
+
+5-Agent-Map-Workflow → dann umgesetzt (analyze 0/0, build web ✅):
+1. **Name-Bug:** `AppUserModel.fromMap` las nur `firstName`/`lastName`. Jetzt Fallback-Kette firstName/lastName → ownerFirstName/ownerLastName → Split von `name`/`displayName`/`fullName`. Kein UI-/Rules-Change, keine Migration nötig.
+2. **Erscheinungsbild-Umbau:** „Darstellung"-Sektion jetzt direkt unter „Mein Bereich" (vor „Konto"). „Interessen"-Kachel → **„Über mich"**; OnboardingSurvey-Titel „Interessen anpassen" → „Über mich anpassen".
+3. **Cover:** Profil-Hero von Vollfarbe → dezenter diagonaler Marken-Gradient (`cs.primary`→dunkler, theme-aware). Avatar bleibt zentriert/sichtbar.
+4. **Emoji-Avatar:** `AppUserModel` +`profileEmoji`/`profileImageType`; Service `updateProfileEmoji` + `updateProfileImage` setzt type='image'. Kamera-Button → Chooser (Foto/Emoji); 20-Emoji-Grid-Picker; `_Hero` rendert Emoji groß/zentriert (Precedence: type=='emoji' → Emoji, sonst Bild, sonst Initialen). Legacy-Bild-User unberührt.
+5. **Persönliche Daten entschlackt:** Name/Kontakt/Adresse (Vorname/Nachname/PLZ/Telefon-Readonly) komplett raus inkl. Controller/Validierung/Save-Felder + tote Widgets (`_field`/`_PlzField`/`_ReadonlyField`) + `postalCodeService`-Import. Bleibt: Geburtstag. EIN einheitlicher Full-Width-`FilledButton` (AppBar-TextButton weg). Profil-Tile-Subtitle → „Geburtstag".
+6. **Datenschutzerklärung (DSGVO):** Voller 8-Abschnitte-Text (Verantwortlicher/Daten&Zweck/Rechtsgrundlage/Speicherdauer/Weitergabe/Nutzerrechte/Cookies/Kontakt&Beschwerde) in `assets/legal/datenschutz.json`. `LegalService` (Firestore `legal/privacyPolicy` → Asset-Fallback + best-effort Auto-Seed). Neue `PrivacyPolicyPage` (In-App, ersetzt externen Link). `FirebasePaths.legal`+`legalDocument`. Rule `legal/{doc}` public read (Write nur Admin-Override). Externer `AppConfig.privacyPolicyUrl`/`url_launcher` aus Profil raus.
+**Manuell:** `firebase deploy --only firestore:rules` (sonst greift legal-Read erst nach Deploy; bis dahin Asset-Fallback). Platzhalter [Firmenname/Adresse/E-Mail/Behörde] im DSGVO-Text vor Live durch echte Daten ersetzen + juristisch prüfen.
+
+## Phase 2 — Karten-Overhaul + Widgets (2026-06-24)
+- **WalletCard neu** (Spec §2, festes Layout): Cover + dark gradient (bottom→top); [o-l] Merchant-Foto rund + weißer 2px-Rand → Tap öffnet Merchant-Profil (fetch publicMerchant → UserPartnerDetailPage); [o-r] Kategorie-Chip (transluzent weiß, 11px); [u-l] Name (bold 18) + Stadt (13, 0.8, Hessen-gekürzt); [u-r] QR-Typ-Icon + optionaler BadgeDot (Prop `showBadge`, Default off → Phase 3). radius/shadow/minHeight aus Tokens. Code+Chevron entfernt (Code lebt im QR-Sheet).
+- **Neue Widgets:** `BadgeDot` (brand + Surface-Ring, theme-aware), `EmptyLoyaltyCard` (gestrichelt via CustomPaint, Variante A/B, verlinkt „besuche sein Profil", kein CTA), `MerchantActionRow` (48px Brand-10%-Tiles, 11px Label, nur vorhandene Aktionen).
+- **Verdrahtet in walletCardStack:** `_quickActions()` → nur verfügbare `MerchantAction`s; `QuickActionBar` → `MerchantActionRow`; `_HintPane` (mit CTA-Button) ersetzt durch `EmptyLoyaltyCard` (offersProgramme = _activeCards.isNotEmpty). `_HintPane` gelöscht, quickActionBar-Import raus.
+- **Files:** + walletBadgeDot.dart, + walletEmptyLoyaltyCard.dart, + walletMerchantActionRow.dart; ~ walletCard.dart (Rewrite), ~ walletCardStack.dart. analyze wallet = 0 issues.
+
+## Phase 3 — offen (Backend nötig)
+- Story-Ring (Merchant-Post <24h) auf Merchant-Foto + `seenStoryAt`-Persistenz → braucht merchant-lastPostAt + users/{uid} seen-state.
+- BadgeDot datengetrieben (neuer Stempel/Punkte-Update seit letztem Öffnen) → seen-tracking.
+- Optional: QR-Detail als echtes Modal-BottomSheet (aktuell Apple-Stack-Overlay) + StampCardShell als eigene neutrale Shell.
+
+## Wallet Bugfix + Design-Level-Up (2026-06-24)
+- **BUG 1 (weißer Bereich):** Deck lag in fixem `SizedBox(0.7h)` → Rest weiß. Fix: Header + `Expanded(WalletDeck)` in einer Column → Deck füllt jetzt Header→BottomNav komplett.
+- **BUG 2 (Titel bricht):** Suchfeld saß in derselben Row wie „Wallet" → per-Buchstabe-Umbruch. Fix: neuer `WalletHeader` mit `AnimatedSwitcher` (150ms) — Such-Icon → Titelbereich wird KOMPLETT durch Vollbreite-Suchfeld ersetzt, X bringt Titel zurück. Live-Filter.
+- **Header-Redesign:** minimal (≤52px), 32px App-Logo links, Such- + Sort-Icon rechts, keine Subtitle.
+- **Detail-View:** hatte bereits horizontales PageView (QR/Stempel/Punkte) + Dot-Indicator + X; ergänzt: Swipe-down-to-close am Top-Handle.
+- **Hintergrund:** subtiler Gradient `surface → surfaceContainerLow` (theme-aware) statt plain white.
+- **Extrahiert:** `WalletHeader`, `SortDropdown` (neu) + geteilter `WalletSort`-Enum (models/walletSort.dart). `walletSearchBar.dart` gelöscht (in Header aufgegangen). (WalletStack=walletDeck, WalletDetailView=walletCardStack, MerchantCard=walletCard existieren bereits.)
+- **Files:** + walletHeader.dart, + walletSortDropdown.dart, + models/walletSort.dart; ~ userWalletPage.dart (Rewrite), ~ walletCardStack.dart; − walletSearchBar.dart. analyze wallet = 0 issues.
+
+### Bewusst NICHT gemacht (Cross-Cutting / Backend)
+- **Header-Shrink-on-Scroll (52→40) + BottomNav-Shrink (64→48, Labels weg):** braucht Scroll-Position-Kopplung; Wallet-Content ist ein Deck (kein klassischer Scroll) und die BottomNav ist Shell-Level (alle Tabs). → eigener Schritt mit Shell-Änderung + Scroll-Notifier.
+- **Story-Ring + Badge-Dot datengetrieben:** Phase 3 (merchant lastPostAt + users seen-state).
+
+### Wallet-Header schwebend (2026-06-24)
+Grünes Logo + weißer Header-Balken entfernt → Deck füllt jetzt von ganz oben (transparent). Such- + Sort-Icon sind schwebende Kreis-Buttons (cs.surface + softShadow, Feed-Style) als Overlay oben rechts über dem Deck (Stack + Positioned); Suche klappt zu schwebendem Vollbreite-Feld auf. WalletHeader = logolos/transparent, SortDropdown mit softShadow.
+
+### Wallet: Feed-Buttons + dichter Endless-Stack (2026-06-24)
+- Floating-Controls jetzt exakt wie Feed: unten rechts (Positioned bottom:92), grün (secondaryContainer + onSecondaryContainer), Such-Button oben + Sort-Button darunter gestapelt; Suche klappt zu Vollbreite-Feld unten auf. SortDropdown ebenfalls grün (tune-Icon).
+- WalletDeck: viewportFraction jetzt DYNAMISCH via LayoutBuilder (slotH = cardH*0.72) → Karten sitzen eng/überlappend, endless oben+unten, unabhängig von der Bildschirmhöhe (Controller lazy einmal erzeugt). scale 0.10/opacity 0.45 pro Schritt.
+
+---
+
+# Wallet — Kompletter Neubau: Vollbild-Boarding-Pass-Karussell (2026-06-24)
+
+## Kontext / Entscheidung
+Nutzer war mit Apple-Wallet-Stapel-Design nicht zufrieden. 5 Optionen vorgeschlagen (Liste/Stapel/Karussell/Grid/Hero+Liste); Nutzer wählte **Option 3 (Vollbild-Karussell)**. Vor dem Bau 5+2 Ja/Nein-Fragen gestellt, um Architektur eindeutig festzulegen:
+1. Horizontal wischen = zwischen LÄDEN (ein Laden = eine große Karte) → **Ja**
+2. Alten Apple-Wallet-Stapel komplett löschen → **Ja**
+3. Suche + Sortierung bleibt (im neuen Look) → **Ja**
+4. Mehrere Stempelkarten eines Ladens = Mini-Kacheln UNTER der großen Karte, wischbar → **Ja**
+5. Karten-Stil: **echter Boarding-Pass** (helle Ticket-Karte, schmaler Foto-Streifen oben, perforierte Trennlinie) — NICHT Cover-Foto-Hintergrund wie vorher.
+6. Layout: **Hauptdaten (Foto-Streifen, Name/Stadt/Kategorie, QR, Route/Anrufen/Social/Zeiten) OHNE Scrollen sichtbar.** Alles zu einzelnen Stempelkarten/Punktesystem darunter, SCROLLBAR.
+
+## Architektur (neu)
+- **`WalletBoardingPassCard`** (walletBoardingPassCard.dart, StatefulWidget) = EINE Vollbild-Seite pro Laden:
+  - **Fixer Block** (`_IdentityBlock`, kein Scroll): 84px Foto-Streifen (Cover, Fallback-Verlauf) → `_PerforatedDivider` (CustomPaint-Punktreihe, liest sich als Perforation) → helle Ticket-Body: Mini-Logo+Name+Stadt·Kategorie, QR (responsiv zur Breite, Tap→Vollbild), Code-Chip (Copy), `MerchantActionRow` (Route/Zeiten/Anrufen/Social — nur was der Merchant hat).
+  - **Scrollbarer Block darunter**: Stempelkarten-Mini-Kacheln (`_StampTile`, 220px breit, horizontales `ListView.separated`, je Kachel `StampCardVisual(compact:true)` + Fortschritt + Entfernen/Einlösen) ODER `EmptyLoyaltyCard` (Variante A/B) wenn nichts hinzugefügt; `_PointsSection`-Placeholder wenn Punkte aktiv; `_EarnedRewardsSection` (alle verdienten Belohnungen des Ladens).
+- **`UserWalletPage`** (Rewrite): `PageView.builder` horizontal über sortierte/gefilterte Läden (ein `WalletBoardingPassCard` pro Seite). Floating Suche+Sortierung bleiben unten rechts (grün, Feed-Stil, aus vorherigem Schritt). NEU: schwebende **Seiten-Pille** oben mittig ("2 / 5"), erscheint nur bei >1 Karte. Suche/Sortierung setzen die Karussell-Position auf Seite 0 zurück (kein Verwirren bei geänderter Reihenfolge/Filter).
+- **`walletMerchantSheets.dart`** (neu, extrahiert): `showHoursSheet`/`showSocialSheet` — wiederverwendbare Öffnungszeiten-/Social-Bottom-Sheets (vorher private Klassen im gelöschten walletCardStack.dart).
+- **Gelöscht** (komplett ersetzt, keine Referenzen mehr): `walletDeck.dart`, `walletCardStack.dart` (Apple-Wallet-Stapel + Detail-Overlay), `walletCard.dart` (alte Listen-Kachel), `walletStampSection.dart` (unbenutzt seit Vorgänger-Umbau), `walletBadgeDot.dart` (Phase-3-Baustein, unbenutzt nach diesem Rewrite — bei Bedarf in Phase 3 neu anlegen, wenn Story-Ring/Badge-Tracking wirklich verdrahtet wird).
+- **Backend/Service unverändert**: `userWalletService.dart` (loadMerchant/loadActiveStampCards/loadPointsEnabled/walletCardStream/stampProgressByMerchantStream/earnedRewardsByMerchantStream/addStampCardToWallet/removeStampCardFromWallet) — alle bereits vorhanden, keine neuen Firestore-Felder/Deploys nötig.
+
+## Bewusste Trade-offs
+- Fixer Identity-Block ist kompakt gehalten (84px Streifen, 120–160px QR, knappe Paddings), damit er auf typischen Mobile-Viewports ohne Scroll passt (App ist laut Vorgabe Mobile-Only). Auf sehr kurzen Viewports (z. B. sehr breites, sehr niedriges Desktop-Fenster) könnte es eng werden — akzeptierter Trade-off gemäß Mobile-Only-Scope.
+- Seiten-Pille ("2/5") war nicht explizit gefordert, aber sinnvolle Orientierungshilfe beim horizontalen Wischen zwischen vielen Läden — dezent, kein zusätzlicher Tap nötig.
+
+## Verifikation
+- `flutter analyze lib/features/user/wallet` = **0 issues**.
+- `flutter analyze lib` = 1 vorbestehender, nicht von dieser Änderung verursachter Unused-Import-Hinweis in `profilePersonalDataPage.dart` (fremde Datei, nicht angefasst).
+- `flutter build web --release` = **√ Built buildweb** (79.5s, kompiliert einwandfrei).
+
+## Offen / nächste Schritte
+- Phase 3 (Story-Ring + datengetriebene Badges) weiterhin offen — braucht Merchant-`lastPostAt` + Seen-State; bei Umsetzung `walletBadgeDot.dart` neu anlegen und auf den Mini-Kacheln/Fotostreifen verdrahten.
+- Feintuning-Stellschrauben: Foto-Streifen-Höhe (84), QR-Größenfaktor (0.34× Breite), Mini-Kachel-Breite (220) — alles über benannte Konstanten leicht justierbar.
+
+---
+
+# Wallet — Redesign v2: Explore-Stil-Header + vertikaler "Peek-Deck" (2026-06-24)
+
+## Kontext
+Vorheriges Vollbild-Boarding-Pass-Karussell (v1) hatte einen sichtbaren Bug: die horizontalen Stempelkarten-Mini-Kacheln unter der Hauptkarte überliefen (`BOTTOM OVERFLOWED BY 40/22/14 PIXELS`). Nutzer wollte zudem ein anderes Layout, orientiert an der Suche/Explore-Seite (Screenshot-Vorlage: `/user/explore`, Deals/Partner-Pillenschalter + Suchleiste + Kategorie-Raster).
+
+## Neue Struktur
+**Oberer, fixer Bereich** (Explore-Seiten-Stil, geteilte Komponenten wiederverwendet statt neu gebaut):
+- `AppPillSwitch<WalletSort>` (bereits vorhandene, projektweit geteilte Komponente aus `core/widgets/appPillSwitch.dart`, identisch zu Explore/Feed) — zwei Segmente „Zuletzt benutzt" (`WalletSort.latest`, Icon `history`) / „Nähste von mir" (`WalletSort.nearest`, Icon `near_me`). Ersetzt den alten Popup-`SortDropdown` komplett.
+- `AppSearchField` (bereits vorhandene, geteilte Komponente aus `core/widgets/appSearchField.dart`) — immer sichtbare Suchleiste statt der vorherigen einklappenden Icon-Suche. Ersetzt `walletHeader.dart` komplett.
+- `_PreparingRow` (neu, klein) — Mini-Spinner „Standort wird ermittelt…", erscheint nur während „Nähste von mir" den Standort auflöst.
+- `_CounterRow` (neu) — „2 / 5": Position des aktuellen LADENS unter allen sichtbaren Läden, direkt im Fluss (kein Overlay mehr).
+
+**Pro Laden: `WalletStoreDeck`** (neu, `walletStoreDeck.dart`, ersetzt `walletBoardingPassCard.dart` komplett):
+- Vertikaler „Peek-Deck": `PageView(scrollDirection: vertical, viewportFraction: (H-peek)/H)` — reiner Trick ohne Custom-Animation-Code: bei Ruheposition füllt die aktuelle Karte die Fläche (minus `peek`=58px), und genau die oberen 58px der NÄCHSTEN Karte schauen unten heraus. Wischt man hoch, schiebt sich die aktuelle Karte nach oben raus, die nächste füllt auf, die übernächste beginnt zu gucken — exakt das beschriebene Verhalten, mathematisch sauber aus der PageView-Mechanik abgeleitet (kein Scale/Fade-Hack wie im allerersten Entwurf).
+- **Seite 1 (`_MainStoreCard`):** Cover-Foto füllt die GANZE Kartenfläche (`Stack fit:expand`, „ganz sichtbar" wörtlich umgesetzt), oben Logo+Name+Kategorie als Scrim-Overlay, unten ein **„Ticket-Shelf"** (solide `cs.surface`-Fläche mit oberem Schatten, `BackdropShelf`-Widget) mit perforierter Punktlinie, QR (Tap→Vollbild), Code-Chip, `MerchantActionRow` — garantierter Kontrast unabhängig vom Foto.
+- **Weitere Seiten:** `_StampFullCard` (volle Höhe, `StampCardVisual(compact:false)`, Fortschritt, Entfernen/Einlösen, EIGENE verdiente Belohnungen dieser Karte) je hinzugefügter Stempelkarte; `EmptyLoyaltyCard` (Variante A/B, unverändert) wenn nichts hinzugefügt; `_PointsFullCard` (Platzhalter) wenn Punkte aktiv.
+- **`_DeckPage`**: gemeinsame Hülle (abgerundet, Schatten, `LayoutBuilder`+`SingleChildScrollView`+`ConstrainedBox(minHeight)`) für alle Nicht-Hauptkarten — **behebt den Overflow-Bug endgültig**, da Inhalt bei knappem Platz jetzt intern scrollt statt zu überlaufen, egal wie hoch/niedrig das Gerät ist.
+
+## Gelöscht
+`walletBoardingPassCard.dart` (v1, komplett ersetzt durch `walletStoreDeck.dart`), `walletHeader.dart` (schwebende Icon-Suche, ersetzt durch `AppSearchField` inline), `walletSortDropdown.dart` (Popup-Menü, ersetzt durch `AppPillSwitch`).
+
+## Verifikation
+- `flutter analyze lib/features/user/wallet` = **0 issues**.
+- `flutter analyze lib` (gesamte App) = **0 issues** nach Re-Run (2 Fehler in `userDiscoverPage.dart` beim ersten Lauf waren bestätigt STALE Analyzer-State nach Datei-Löschungen — bekanntes Muster, siehe frühere Einträge in dieser Datei — verschwanden beim erneuten Analyze; nicht von dieser Änderung verursacht, Datei nicht angefasst).
+- `flutter build web --release` = **√ Built buildweb** (76.3s, kompiliert einwandfrei).
+
+## Bewusster Hinweis
+`userDiscoverPage.dart`/`userDiscoverProvider.dart` sind außerhalb dieser Session verändert worden (lt. früherer System-Notiz von Nutzer/Linter) und NICHT Teil dieser Wallet-Arbeit — bei Bedarf separat prüfen, aktuell aber analyzer-sauber.
+
+---
+
+# Wallet — Feinschliff v3: Merchant-Navigation, QR-Vollbild, exakter Cover-Zuschnitt (2026-06-24)
+
+## Änderungen
+1. **Merchant-Profil-Navigation:** Tippen auf das Logo ODER den Namen in der Hauptkarte öffnet jetzt `UserPartnerDetailPage` (`_openMerchantProfile()` in `WalletStoreDeck`, nutzt den bereits geladenen `_merchant`). Beide Tap-Ziele nutzen denselben Callback `onOpenMerchant`.
+2. **QR-Vollbild schöner:** Statt losem weißem Text unter der QR-Box jetzt EINE zusammenhängende weiße Karte (QR + `_FullscreenCodeChip` darunter, wie ein „Pass"), Merchant-Name als Kontext darüber, weicherer Schatten. Neuer `_FullscreenCodeChip` mit fest hellen Farben (nicht themeabhängig — sitzt immer auf der fest-weißen QR-Karte, unabhängig vom Dark Mode; Scan-Kontrast hat Vorrang vor Theme).
+3. **Cover-Zuschnitt exakt wie im Merchant-Profil:** `_MainStoreCard` komplett umgebaut — vorher füllte das Cover die GANZE Kartenhöhe (`Stack fit:expand`), jetzt exakt wie in `userPartnerDetailPage.dart`s eigenem Profil-Hero: fixe Höhe **220px**, `BoxFit.cover`, gleicher leichter Scrim-Gradient (0.18/transparent/0.22), **92px rundes Logo überlappt die Unterkante** (bottom:-46), darunter Name (bold, zentriert) + Kategorie·Stadt (zentriert) — 1:1 dasselbe Layout-Muster wie das Profil, dadurch identischer sichtbarer Bildausschnitt. QR/Code/Aktionen füllen den Rest (jetzt `Expanded`+zentriert+scrollbar bei wenig Platz, kein `BackdropShelf`/dunkler Vollbild-Scrim mehr nötig).
+4. **Entfernt:** `BackdropShelf`-Widget (nicht mehr gebraucht, da Cover nicht mehr die ganze Karte füllt).
+
+## Verifikation
+- `flutter analyze lib/features/user/wallet` = **0 issues**.
+- `flutter analyze lib` (gesamte App) = **0 issues**.
+- `flutter build web --release` = **√ Built buildweb** (83.2s, kompiliert einwandfrei).
+
+## Bekannter, transparent kommunizierter Trade-off
+Der Cover-Ausschnitt ist "exakt wie im Profil" nur soweit garantiert, wie die Container-BREITE der Wallet-Hauptkarte der Profilseiten-Breite entspricht (beide sind aber Mobile-Only, i. d. R. na­hezu Vollbreite abzüglich kleiner Margins) — bei `BoxFit.cover` bestimmt das Breite:Höhe-Verhältnis den sichtbaren Ausschnitt, nicht die absolute Pixelgröße. Gleiche Höhe (220) + ähnliche Breite ⇒ praktisch identischer Ausschnitt.

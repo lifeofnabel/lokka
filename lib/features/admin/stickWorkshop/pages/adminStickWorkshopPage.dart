@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
+import '../../../stamps/services/appLinkBase.dart';
 import '../../services/adminService.dart';
 import '../services/fileDownload.dart';
 import '../services/stickArtifacts.dart';
@@ -59,20 +60,14 @@ class _CreateTab extends StatefulWidget {
 class _CreateTabState extends State<_CreateTab> {
   final _countCtrl = TextEditingController(text: '5');
   final _noteCtrl = TextEditingController();
-  final _uidCtrl = TextEditingController();
-  final _ntagNoteCtrl = TextEditingController();
 
   bool _mintingA = false;
-  bool _derivingB = false;
   List<MintedStick> _minted = const [];
-  DerivedNtagStick? _derived;
 
   @override
   void dispose() {
     _countCtrl.dispose();
     _noteCtrl.dispose();
-    _uidCtrl.dispose();
-    _ntagNoteCtrl.dispose();
     super.dispose();
   }
 
@@ -92,25 +87,6 @@ class _CreateTabState extends State<_CreateTab> {
       _snack(adminErrorMessage(e));
     } finally {
       if (mounted) setState(() => _mintingA = false);
-    }
-  }
-
-  Future<void> _derive() async {
-    final uid = _uidCtrl.text.trim();
-    if (uid.replaceAll(RegExp('[^0-9a-fA-F]'), '').length < 8) {
-      _snack('Chip-UID eingeben (mind. 8 Hex-Zeichen).');
-      return;
-    }
-    setState(() => _derivingB = true);
-    try {
-      final res = await widget.admin
-          .deriveNtagStick(tagUid: uid, note: _ntagNoteCtrl.text.trim());
-      if (!mounted) return;
-      setState(() => _derived = res);
-    } catch (e) {
-      _snack(adminErrorMessage(e));
-    } finally {
-      if (mounted) setState(() => _derivingB = false);
     }
   }
 
@@ -151,10 +127,11 @@ class _CreateTabState extends State<_CreateTab> {
         // ── Path A ──────────────────────────────────────────────────────────
         _SectionCard(
           icon: Icons.link_rounded,
-          title: 'Link-Stifte (Path A)',
+          title: 'Stifte erzeugen',
           subtitle:
-              'Erzeugt unbound Stifte mit Claim-QR. Der Händler scannt den QR, '
-              'wählt eine Karte und bekommt den fertigen /s/…-Link zum Aufschreiben.',
+              'Pro Stift entstehen zwei Dinge: der NFC-Link (du schreibst ihn '
+              'einmal auf den Chip) und der Binde-QR (liegt dem Stift bei — der '
+              'Händler scannt ihn auf eine seiner Stempelkarten).',
           children: [
             Row(
               children: [
@@ -209,45 +186,6 @@ class _CreateTabState extends State<_CreateTab> {
             ],
           ],
         ),
-        const SizedBox(height: 20),
-        // ── Path B ──────────────────────────────────────────────────────────
-        _SectionCard(
-          icon: Icons.memory_rounded,
-          title: 'Sicher-Chips (Path B · NTAG 424)',
-          subtitle:
-              'Leitet pro Chip-UID die beiden Programmier-Schlüssel + den '
-              'Provisioning-Token ab. Den QR scannt der Händler beim Binden.',
-          children: [
-            TextField(
-              controller: _uidCtrl,
-              decoration: const InputDecoration(
-                labelText: 'Chip-UID (Hex)',
-                hintText: '04a1b2c3d4e5f6',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _ntagNoteCtrl,
-              decoration: const InputDecoration(
-                labelText: 'Notiz (optional)',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 12),
-            FilledButton.icon(
-              onPressed: _derivingB ? null : _derive,
-              icon: _derivingB
-                  ? const _Spinner()
-                  : const Icon(Icons.vpn_key_rounded),
-              label: Text(_derivingB ? 'Leite ab …' : 'Schlüssel ableiten'),
-            ),
-            if (_derived != null) ...[
-              const SizedBox(height: 16),
-              _DerivedStickView(derived: _derived!, onSnack: _snack),
-            ],
-          ],
-        ),
       ],
     );
   }
@@ -258,183 +196,126 @@ class _MintedStickTile extends StatelessWidget {
   final MintedStick stick;
   final void Function(String) onSnack;
 
-  Future<void> _copy(BuildContext context) async {
-    await Clipboard.setData(ClipboardData(text: stick.code));
-    onSnack('Claim-Code kopiert.');
+  /// The exact URL to write onto the stick's NFC tag.
+  String get _nfcUrl {
+    final base = appLinkBase();
+    final b = base.isNotEmpty ? base : Uri.base.origin;
+    final root = b.endsWith('/') ? b : '$b/';
+    return '${root}s/${stick.redeemToken}';
   }
 
-  Future<void> _png() async {
+  Future<void> _copyUrl() async {
+    await Clipboard.setData(ClipboardData(text: _nfcUrl));
+    onSnack('NFC-Link kopiert.');
+  }
+
+  Future<void> _copyBind() async {
+    await Clipboard.setData(ClipboardData(text: stick.code));
+    onSnack('Binde-Code kopiert.');
+  }
+
+  Future<void> _bindPng() async {
     if (!downloadSupported) {
       onSnack('PNG-Download nur im Web verfügbar.');
       return;
     }
     final bytes = await qrPng(stick.code);
-    downloadBytes(bytes, 'link-stift-${stick.stickId}.png', 'image/png');
+    downloadBytes(bytes, 'binde-qr-${stick.stickId}.png', 'image/png');
   }
 
   @override
   Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
     return Card(
-      margin: const EdgeInsets.only(bottom: 10),
+      margin: const EdgeInsets.only(bottom: 12),
       child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
+        padding: const EdgeInsets.all(14),
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            QrImageView(
-              data: stick.code,
-              size: 86,
-              backgroundColor: Colors.white,
-              padding: const EdgeInsets.all(6),
+            Text(stick.stickId,
+                style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w800)),
+            const SizedBox(height: 10),
+            // 1) NFC-Link — der Owner schreibt ihn auf den Chip.
+            Row(
+              children: [
+                Icon(Icons.nfc_rounded, size: 18, color: cs.primary),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text('NFC-Link — auf den Chip schreiben',
+                      style:
+                          tt.labelMedium?.copyWith(fontWeight: FontWeight.w800)),
+                ),
+              ],
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(stick.stickId,
-                      style: Theme.of(context)
-                          .textTheme
-                          .titleSmall
-                          ?.copyWith(fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 2),
-                  SelectableText(
-                    stick.code,
-                    style: Theme.of(context).textTheme.bodySmall,
-                    maxLines: 2,
-                  ),
-                  const SizedBox(height: 6),
-                  Wrap(
-                    spacing: 8,
+            const SizedBox(height: 6),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: cs.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: SelectableText(_nfcUrl, style: tt.bodySmall),
+            ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: _copyUrl,
+                icon: const Icon(Icons.content_copy_rounded, size: 16),
+                label: const Text('Link kopieren'),
+              ),
+            ),
+            const Divider(height: 18),
+            // 2) Binde-QR — liegt dem Stift bei; der Händler scannt ihn.
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                QrImageView(
+                  data: stick.code,
+                  size: 82,
+                  backgroundColor: Colors.white,
+                  padding: const EdgeInsets.all(6),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      TextButton.icon(
-                        onPressed: () => _copy(context),
-                        icon: const Icon(Icons.content_copy_rounded, size: 16),
-                        label: const Text('Code'),
+                      Text('Binde-QR — dem Stift beilegen',
+                          style: tt.labelMedium
+                              ?.copyWith(fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Der Händler scannt ihn auf seine Stempelkarte.',
+                        style: tt.bodySmall
+                            ?.copyWith(color: cs.onSurfaceVariant),
                       ),
-                      TextButton.icon(
-                        onPressed: _png,
-                        icon: const Icon(Icons.image_rounded, size: 16),
-                        label: const Text('PNG'),
+                      const SizedBox(height: 6),
+                      Wrap(
+                        spacing: 8,
+                        children: [
+                          TextButton.icon(
+                            onPressed: _copyBind,
+                            icon: const Icon(Icons.content_copy_rounded,
+                                size: 16),
+                            label: const Text('Code'),
+                          ),
+                          TextButton.icon(
+                            onPressed: _bindPng,
+                            icon: const Icon(Icons.image_rounded, size: 16),
+                            label: const Text('PNG'),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _DerivedStickView extends StatelessWidget {
-  const _DerivedStickView({required this.derived, required this.onSnack});
-  final DerivedNtagStick derived;
-  final void Function(String) onSnack;
-
-  Future<void> _png() async {
-    if (!downloadSupported) {
-      onSnack('PNG-Download nur im Web verfügbar.');
-      return;
-    }
-    final bytes = await qrPng(derived.qr);
-    downloadBytes(bytes, 'sicher-chip-${derived.uid}.png', 'image/png');
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: cs.errorContainer.withValues(alpha: 0.5),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            children: [
-              Icon(Icons.warning_amber_rounded, color: cs.onErrorContainer),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'Schlüssel JETZT sichern und in den Chip programmieren. Aus '
-                  'Sicherheit werden sie hier nicht gespeichert.',
-                  style: TextStyle(color: cs.onErrorContainer),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 12),
-        Center(
-          child: QrImageView(
-            data: derived.qr,
-            size: 150,
-            backgroundColor: Colors.white,
-            padding: const EdgeInsets.all(8),
-          ),
-        ),
-        const SizedBox(height: 12),
-        _CopyRow(label: 'UID', value: derived.uid, onSnack: onSnack),
-        _CopyRow(label: 'SDMMetaRead-Key', value: derived.metaKey, onSnack: onSnack),
-        _CopyRow(label: 'SDMFileRead-Key', value: derived.fileKey, onSnack: onSnack),
-        _CopyRow(label: 'provToken', value: derived.provToken, onSnack: onSnack),
-        _CopyRow(label: 'QR-Inhalt', value: derived.qr, onSnack: onSnack),
-        const SizedBox(height: 8),
-        OutlinedButton.icon(
-          onPressed: _png,
-          icon: const Icon(Icons.image_rounded, size: 18),
-          label: const Text('QR als PNG'),
-        ),
-      ],
-    );
-  }
-}
-
-class _CopyRow extends StatelessWidget {
-  const _CopyRow({
-    required this.label,
-    required this.value,
-    required this.onSnack,
-  });
-  final String label;
-  final String value;
-  final void Function(String) onSnack;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 130,
-            child: Text(label,
-                style: Theme.of(context)
-                    .textTheme
-                    .labelMedium
-                    ?.copyWith(fontWeight: FontWeight.w700)),
-          ),
-          Expanded(
-            child: SelectableText(value,
-                style: Theme.of(context).textTheme.bodySmall),
-          ),
-          IconButton(
-            visualDensity: VisualDensity.compact,
-            iconSize: 18,
-            tooltip: 'Kopieren',
-            onPressed: () async {
-              await Clipboard.setData(ClipboardData(text: value));
-              onSnack('$label kopiert.');
-            },
-            icon: const Icon(Icons.content_copy_rounded),
-          ),
-        ],
       ),
     );
   }
@@ -452,8 +333,10 @@ class _InventoryTab extends StatefulWidget {
 class _InventoryTabState extends State<_InventoryTab> {
   late Future<List<StickInventoryItem>> _future = widget.admin.listSticks();
 
-  Future<void> _reload() async {
-    setState(() => _future = widget.admin.listSticks());
+  Future<void> _reload() {
+    final f = widget.admin.listSticks();
+    setState(() => _future = f);
+    return f;
   }
 
   @override

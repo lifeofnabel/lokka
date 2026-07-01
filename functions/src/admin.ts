@@ -23,7 +23,7 @@ import { defineSecret } from 'firebase-functions/params';
 
 import { deriveMetaKey, deriveFileKey } from './crypto/ntag424';
 import { provSecret, claimToken } from './crypto/provisioning';
-import { newStickId, signStaticToken } from './crypto/staticToken';
+import { newStickId, signStickLink } from './crypto/staticToken';
 
 const masterKeySecret = defineSecret('STAMP_MASTER_KEY');
 
@@ -94,7 +94,12 @@ export const adminMintStaticSticks = onCall(
     const master = masterKey();
 
     const batch = db.batch();
-    const sticks: { stickId: string; claim: string; code: string }[] = [];
+    const sticks: {
+      stickId: string;
+      claim: string;
+      code: string;
+      redeemToken: string;
+    }[] = [];
     for (let i = 0; i < count; i++) {
       const id = newStickId();
       const claim = claimToken(master, id);
@@ -111,7 +116,15 @@ export const adminMintStaticSticks = onCall(
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       });
-      sticks.push({ stickId: id, claim, code: `lokka-stick-a:${id}:${claim}` });
+      sticks.push({
+        stickId: id,
+        claim,
+        // Binde-QR — ships with the stick; the merchant scans it onto a card.
+        code: `lokka-stick-a:${id}:${claim}`,
+        // Permanent NFC redeem token — the owner writes https://<app>/s/<token>
+        // onto the tag ONCE. Stable across (re-)binding.
+        redeemToken: signStickLink(master, id),
+      });
     }
     await batch.commit();
     return { sticks };
@@ -257,20 +270,24 @@ export const claimStaticStick = onCall(
         },
         { merge: true },
       );
-      // Mirror onto the client-readable card. stickVerifiedAt resets so the
-      // "Stift verbunden ✓" badge only appears after a fresh Test-Tap.
+      // Mirror onto the client-readable card. The owner already wrote the NFC
+      // link in the workshop, so a successful bind means the stick is ready —
+      // the "Stift verbunden ✓" badge flips immediately (no Test-Tap needed).
       tx.set(
         cardRef,
         {
           boundStickId: stickId,
           stickType: 'static',
-          stickVerifiedAt: null,
+          stickVerifiedAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
         },
         { merge: true },
       );
     });
 
-    return { stickId, token: signStaticToken(master, stickId, merchantId, cardId) };
+    // The token is identity-only (stable across binding) and is normally already
+    // written on the tag by the owner. Returned for the legacy merchant flow that
+    // can still (re-)write it if a merchant provisions their own blank tag.
+    return { stickId, token: signStickLink(master, stickId) };
   },
 );

@@ -18,6 +18,7 @@ const {
 const {
   newStickId,
   signStaticToken,
+  signStickLink,
   parseStaticToken,
   verifyStaticToken,
 } = require('../lib/crypto/staticToken');
@@ -102,9 +103,17 @@ const tok = signStaticToken(master, sid, 'merchantA', 'card1');
 const parsedTok = parseStaticToken(tok);
 check('static token parses', parsedTok && parsedTok.stickId === sid);
 check('static token verifies', verifyStaticToken(master, sid, 'merchantA', 'card1', parsedTok.sig));
-// Wrong card / merchant must NOT verify (binding is part of the signature).
-check('static token rejects wrong card', !verifyStaticToken(master, sid, 'merchantA', 'card2', parsedTok.sig));
-check('static token rejects wrong merchant', !verifyStaticToken(master, sid, 'merchantB', 'card1', parsedTok.sig));
+// Identity model: the token binds ONLY to the stick id, NOT to a card — it must
+// verify for the SAME stick regardless of merchant/card (the card binding lives
+// server-side in sticks/<id> and can change without rewriting the tag).
+check('static token is card-agnostic',
+  verifyStaticToken(master, sid, 'merchantB', 'card2', parsedTok.sig));
+// signStickLink is exactly the identity token (what the owner writes on the tag).
+check('signStickLink == identity token', signStickLink(master, sid) === tok);
+// A token for a DIFFERENT stick must NOT verify (stick identity is enforced).
+const otherSid = newStickId();
+check('static token rejects wrong stick',
+  !verifyStaticToken(master, otherSid, 'merchantA', 'card1', parsedTok.sig));
 // Tampered signature must NOT verify.
 check('static token rejects tampered sig', !verifyStaticToken(master, sid, 'merchantA', 'card1', '00'.repeat(16)));
 // Malformed token → null.

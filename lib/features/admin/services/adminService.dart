@@ -21,15 +21,16 @@ class AdminService {
 
   /// True if the signed-in account carries the `admin` custom claim. Pass
   /// [refresh] = true to force a fresh ID token (e.g. right after bootstrap).
+  ///
+  /// Returns false only for the genuine "no eligible user" cases. A token-fetch
+  /// failure (offline / stalled secure-token endpoint) is allowed to THROW so
+  /// the caller can show a retry instead of mislabelling the owner as not-admin
+  /// (the gate bounds this call with a timeout + cached-token fallback).
   Future<bool> isAdmin({bool refresh = false}) async {
     final user = _auth.currentUser;
     if (user == null || user.isAnonymous) return false;
-    try {
-      final res = await user.getIdTokenResult(refresh);
-      return res.claims?['admin'] == true;
-    } catch (_) {
-      return false;
-    }
+    final res = await user.getIdTokenResult(refresh);
+    return res.claims?['admin'] == true;
   }
 
   /// Whether to show the one-time bootstrap action: signed in as the owner email
@@ -60,18 +61,6 @@ class AdminService {
         .whereType<Map>()
         .map((e) => MintedStick.fromMap(Map<String, dynamic>.from(e)))
         .toList();
-  }
-
-  /// Derives the chip keys + provToken for a Path-B (NTAG 424) stick UID.
-  Future<DerivedNtagStick> deriveNtagStick({
-    required String tagUid,
-    String note = '',
-  }) async {
-    final res = await _call('adminDeriveNtagStick', {
-      'tagUid': tagUid,
-      'note': note,
-    });
-    return DerivedNtagStick.fromMap(res);
   }
 
   /// Loads the stick inventory (newest first) for the register.
@@ -124,49 +113,29 @@ String adminErrorMessage(Object error) {
   return 'Unbekannter Fehler.';
 }
 
-/// A freshly minted, still-unbound Path-A stick. The merchant scans [code] to
-/// claim and bind it.
+/// A freshly minted, still-unbound link stick. Two artefacts:
+///  • [redeemToken] → the NFC link `https://<app>/s/<redeemToken>` that the
+///    OWNER writes onto the tag once (stable across re-binding).
+///  • [code] → the bind-QR `lokka-stick-a:<id>:<claim>` that ships with the
+///    stick; the merchant scans it to bind the stick to one of their cards.
 class MintedStick {
   const MintedStick({
     required this.stickId,
     required this.claim,
     required this.code,
+    required this.redeemToken,
   });
 
   final String stickId;
   final String claim;
-  final String code; // lokka-stick-a:<id>:<claim>
+  final String code; // lokka-stick-a:<id>:<claim>  (bind QR)
+  final String redeemToken; // <stickId>.<sig>  (NFC link token)
 
   factory MintedStick.fromMap(Map<String, dynamic> m) => MintedStick(
         stickId: (m['stickId'] ?? '').toString(),
         claim: (m['claim'] ?? '').toString(),
         code: (m['code'] ?? '').toString(),
-      );
-}
-
-/// Path-B (NTAG 424) derivation result: the two keys to program into the chip
-/// plus the printed-QR provToken.
-class DerivedNtagStick {
-  const DerivedNtagStick({
-    required this.uid,
-    required this.metaKey,
-    required this.fileKey,
-    required this.provToken,
-    required this.qr,
-  });
-
-  final String uid;
-  final String metaKey;
-  final String fileKey;
-  final String provToken;
-  final String qr; // lokka-stick:<uid>:<provToken>
-
-  factory DerivedNtagStick.fromMap(Map<String, dynamic> m) => DerivedNtagStick(
-        uid: (m['uid'] ?? '').toString(),
-        metaKey: (m['sdmMetaReadKey'] ?? '').toString(),
-        fileKey: (m['sdmFileReadKey'] ?? '').toString(),
-        provToken: (m['provToken'] ?? '').toString(),
-        qr: (m['qr'] ?? '').toString(),
+        redeemToken: (m['redeemToken'] ?? '').toString(),
       );
 }
 

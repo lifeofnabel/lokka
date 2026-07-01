@@ -21,26 +21,39 @@ export function newStickId(): string {
   return 's' + randomBytes(11).toString('hex');
 }
 
+// Identity-only tag: binds ONLY to the stick id, never to a card. The link is
+// written ONCE (by the owner, in the Godmode workshop) and stays valid forever;
+// the card a stick stamps lives server-side in `sticks/<id>.boundCardId` and can
+// be re-pointed by the merchant (re-scanning the bind-QR) WITHOUT rewriting the
+// tag. `merchantId`/`cardId` are accepted for call-site compatibility but are
+// intentionally NOT part of the signature anymore.
 function tag(
   master: Buffer,
   stickId: string,
-  merchantId: string,
-  cardId: string,
+  _merchantId?: string,
+  _cardId?: string,
 ): Buffer {
   return createHmac('sha256', master)
-    .update(`LOKKA-STATIC-v1|${stickId}|${merchantId}|${cardId}`)
+    .update(`LOKKA-STICK-ID-v1|${stickId}`)
     .digest()
     .subarray(0, SIG_BYTES);
 }
 
-/** Build the signed token for a stick bound to {merchantId, cardId}. */
+/** Build the signed (identity-only) token for a stick. */
 export function signStaticToken(
   master: Buffer,
   stickId: string,
-  merchantId: string,
-  cardId: string,
+  merchantId?: string,
+  cardId?: string,
 ): string {
   return `${stickId}.${tag(master, stickId, merchantId, cardId).toString('hex')}`;
+}
+
+/** The stick's permanent redeem token — the value written onto the NFC tag as
+ *  `https://<app>/s/<token>`. Stable across (re-)binding because it is
+ *  identity-only. Produced at mint time in the workshop, before any card exists. */
+export function signStickLink(master: Buffer, stickId: string): string {
+  return signStaticToken(master, stickId);
 }
 
 /** Split a token into its stickId + signature, or null if malformed. */
