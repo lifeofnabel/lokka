@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
@@ -198,6 +199,8 @@ class AuthTextField extends StatelessWidget {
     this.focusNode,
     this.autofillHints,
     this.prefixIcon,
+    this.prefixText,
+    this.inputFormatters,
   });
 
   final TextEditingController controller;
@@ -212,6 +215,10 @@ class AuthTextField extends StatelessWidget {
   final FocusNode? focusNode;
   final Iterable<String>? autofillHints;
   final IconData? prefixIcon;
+
+  /// Fixed prefix shown inside the field, e.g. `'+49 '` for a phone number.
+  final String? prefixText;
+  final List<TextInputFormatter>? inputFormatters;
 
   @override
   Widget build(BuildContext context) {
@@ -234,8 +241,10 @@ class AuthTextField extends StatelessWidget {
         textInputAction: textInputAction,
         onSubmitted: onSubmitted,
         autofillHints: autofillHints,
+        inputFormatters: inputFormatters,
         decoration: InputDecoration(
           labelText: label,
+          prefixText: prefixText,
           prefixIcon: prefixIcon == null
               ? null
               : Icon(prefixIcon, size: 20, color: iconColor),

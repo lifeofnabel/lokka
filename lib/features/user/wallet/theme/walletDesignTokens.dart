@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:lokka/core/theme/appColors.dart';
+import 'package:lokka/core/widgets/appPillSwitch.dart' show kAppMaxWidth;
 
 /// Design tokens for the Wallet section.
 ///
@@ -12,7 +13,9 @@ class WalletTokens {
 
   /// Mobile-first: on tablet/desktop the content is capped to this width and
   /// centered, the rest of the surface stays neutral (like a phone on a table).
-  static const double maxContentWidth = 420;
+  /// Same value as [kAppMaxWidth] (the shell already caps the whole app to
+  /// phone width) – referenced, not duplicated, so the two can't drift apart.
+  static const double maxContentWidth = kAppMaxWidth;
 
   // ── Radii ──────────────────────────────────────────────────────────────────
   static const double cardRadius = 20;

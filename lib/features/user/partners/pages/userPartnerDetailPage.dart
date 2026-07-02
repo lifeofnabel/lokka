@@ -13,6 +13,7 @@ import 'package:lokka/core/theme/appColors.dart';
 import 'package:lokka/core/theme/appSpacing.dart';
 import 'package:lokka/core/utils/shareUtils.dart';
 import 'package:lokka/core/widgets/responsiveContentWidth.dart';
+import 'package:lokka/features/merchant/stamps/models/stampCardModel.dart';
 import 'package:lokka/features/user/discover/models/publicMerchantUserModel.dart';
 import 'package:lokka/features/user/feed/models/feedPostModel.dart';
 import 'package:lokka/features/stamps/services/stampFunctionsService.dart';
@@ -40,6 +41,14 @@ class UserPartnerDetailPage extends StatefulWidget {
 }
 
 enum _PartnerFeedSort { newest, hottest }
+
+/// Zusammengefasste Verfügbarkeit der Stempelkarten dieses Partners, für die
+/// Unterzeile der „Stempelkarte"-Kachel.
+class _StampAvailability {
+  const _StampAvailability({required this.label, required this.soldOut});
+  final String label;
+  final bool soldOut;
+}
 
 /// Beitrag + aggregierte Bewertung aus den Post-Reviews.
 class _PartnerPost {
@@ -82,6 +91,11 @@ class _UserPartnerDetailPageState extends State<UserPartnerDetailPage> {
   // Punkte = aktiviertes Feature. Wird in initState async geladen.
   bool _stampsEnabled = false;
   bool _pointsEnabled = false;
+
+  // Live Stempelkarten dieses Partners — für die „Noch X verfügbar" / „Alle
+  // vergeben"-Anzeige unter der Stempelkarten-Kachel (nur befüllt, sobald
+  // mindestens eine Karte ein Verteil-Limit gesetzt hat).
+  List<StampCardModel> _stampCards = const [];
 
   @override
   void initState() {
@@ -132,8 +146,10 @@ class _UserPartnerDetailPageState extends State<UserPartnerDetailPage> {
         _walletService.loadPointsEnabled(mid),
       ]);
       if (!mounted) return;
+      final cards = results[0] as List<StampCardModel>;
       setState(() {
-        _stampsEnabled = (results[0] as List).isNotEmpty;
+        _stampCards = cards;
+        _stampsEnabled = cards.isNotEmpty;
         _pointsEnabled = results[1] as bool;
       });
     } catch (_) {
@@ -642,6 +658,7 @@ class _UserPartnerDetailPageState extends State<UserPartnerDetailPage> {
   Widget _loyaltyTiles() {
     final pointsEnabled = _pointsEnabled;
     final stampsEnabled = _stampsEnabled;
+    final availability = _stampAvailability();
     return Row(
       children: [
         Expanded(
@@ -660,12 +677,32 @@ class _UserPartnerDetailPageState extends State<UserPartnerDetailPage> {
             icon: Icons.approval_rounded,
             title: 'Stempelkarte',
             enabled: stampsEnabled,
+            subtitleOverride: availability?.label,
+            soldOut: availability?.soldOut ?? false,
             onTap: _openStamps,
             onDisabledTap: () =>
                 _snack('Dieses Geschäft hat keine Stempelkarten hinterlegt.'),
           ),
         ),
       ],
+    );
+  }
+
+  /// Fasst das optionale Verteil-Limit ALLER live Stempelkarten dieses
+  /// Partners zusammen ("nur die ersten X Karten"). Null, solange keine der
+  /// Karten ein Limit gesetzt hat — dann bleibt die Kachel beim Standardtext.
+  _StampAvailability? _stampAvailability() {
+    final capped = _stampCards.where((c) => c.maxDistribution != null).toList();
+    if (capped.isEmpty) return null;
+    final totalMax = capped.fold<int>(0, (sum, c) => sum + c.maxDistribution!);
+    final totalRemaining =
+        capped.fold<int>(0, (sum, c) => sum + (c.remainingDistribution ?? 0));
+    if (totalRemaining <= 0) {
+      return const _StampAvailability(label: 'Alle vergeben', soldOut: true);
+    }
+    return _StampAvailability(
+      label: 'Noch $totalRemaining von $totalMax verfügbar',
+      soldOut: false,
     );
   }
 
@@ -1169,6 +1206,8 @@ class _LoyaltyCard extends StatelessWidget {
     required this.enabled,
     required this.onTap,
     required this.onDisabledTap,
+    this.subtitleOverride,
+    this.soldOut = false,
   });
 
   final IconData icon;
@@ -1176,6 +1215,14 @@ class _LoyaltyCard extends StatelessWidget {
   final bool enabled;
   final VoidCallback onTap;
   final VoidCallback onDisabledTap;
+
+  /// Ersetzt die Standard-Unterzeile ("Jetzt ansehen"), z. B. mit der
+  /// verbleibenden Verfügbarkeit ("Noch 12 von 50 verfügbar").
+  final String? subtitleOverride;
+
+  /// Alle verfügbaren Plätze sind vergeben — Kachel bleibt tappbar (bestehende
+  /// Wallet-Karten laufen weiter), zeigt aber einen deutlichen Hinweis.
+  final bool soldOut;
 
   @override
   Widget build(BuildContext context) {
@@ -1187,6 +1234,7 @@ class _LoyaltyCard extends StatelessWidget {
         : cs.surfaceContainerHighest.withValues(alpha: 0.5);
     final fg = enabled ? cs.onSecondaryContainer : cs.onSurfaceVariant;
     final iconColor = enabled ? cs.primary : cs.onSurfaceVariant;
+    final subtitleColor = soldOut ? cs.error : fg.withValues(alpha: 0.75);
     return Material(
       color: bg,
       borderRadius: BorderRadius.circular(22),
@@ -1221,14 +1269,21 @@ class _LoyaltyCard extends StatelessWidget {
                 const SizedBox(height: 2),
                 Row(
                   children: [
-                    Text(
-                      enabled ? 'Jetzt ansehen' : 'Nicht verfügbar',
-                      style: tt.labelMedium?.copyWith(
-                        color: fg.withValues(alpha: 0.75),
-                        fontWeight: FontWeight.w500,
+                    Expanded(
+                      child: Text(
+                        !enabled
+                            ? 'Nicht verfügbar'
+                            : subtitleOverride ?? 'Jetzt ansehen',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: tt.labelMedium?.copyWith(
+                          color: subtitleColor,
+                          fontWeight:
+                              soldOut ? FontWeight.w700 : FontWeight.w500,
+                        ),
                       ),
                     ),
-                    if (enabled) ...[
+                    if (enabled && !soldOut) ...[
                       const SizedBox(width: 2),
                       Icon(Icons.chevron_right_rounded,
                           size: 16, color: fg.withValues(alpha: 0.75)),

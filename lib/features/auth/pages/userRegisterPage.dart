@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../../../core/services/firestoreService.dart';
 import '../../../core/services/languageService.dart';
+import '../../../core/services/legalService.dart';
 import '../providers/authProvider.dart';
 import '../services/authNavigation.dart';
 import '../widgets/authFlowWidgets.dart';
@@ -147,7 +149,11 @@ class _UserRegisterPageState extends State<UserRegisterPage> {
           leading: 'Ich akzeptiere die ',
           linkLabel: 'AGB',
           trailing: ' *',
-          onLinkTap: () => showLegalSheet(context, 'assets/legal/agb.json'),
+          onLinkTap: () => showLegalSheet(
+            context,
+            load: () =>
+                LegalService(context.read<FirestoreService>()).loadTerms(),
+          ),
         ),
         AuthConsentCheck(
           value: _privacy,
@@ -155,8 +161,11 @@ class _UserRegisterPageState extends State<UserRegisterPage> {
           leading: 'Ich akzeptiere die ',
           linkLabel: 'Datenschutzhinweise',
           trailing: ' *',
-          onLinkTap: () =>
-              showLegalSheet(context, 'assets/legal/datenschutz.json'),
+          onLinkTap: () => showLegalSheet(
+            context,
+            load: () => LegalService(context.read<FirestoreService>())
+                .loadPrivacyPolicy(),
+          ),
         ),
         AuthCheck(
           value: _marketing,

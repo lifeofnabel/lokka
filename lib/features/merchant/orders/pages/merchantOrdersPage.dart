@@ -327,6 +327,9 @@ class _MerchantOrdersViewState extends State<_MerchantOrdersView> {
       title: texts.text('merchant.orders.title'),
       subtitle: texts.text('merchant.orders.subtitle'),
       backPath: '/merchant/catalog',
+      // Arbeits-Terminal (Kasse/Tablet): breiter als Handy-Default, damit der
+      // Split-View (Liste + Detail ab kOrdersSplitWidth) nutzbar bleibt.
+      maxWidth: 980,
       // Glocke (stummschalten) + Tisch-Einsicht + Info, oben rechts.
       trailing: Row(
         mainAxisSize: MainAxisSize.min,

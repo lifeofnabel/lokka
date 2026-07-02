@@ -111,6 +111,8 @@ class StampCardModel {
     this.staticToken = '',
     this.stickType = '',
     this.stickVerifiedAt,
+    this.maxDistribution,
+    this.distributedCount = 0,
     required this.backgroundColor,
     required this.gradientColor,
     required this.gradientEnabled,
@@ -173,6 +175,17 @@ class StampCardModel {
   /// "Stift verbunden ✓" badge only shows once this is set. Server-managed.
   final DateTime? stickVerifiedAt;
 
+  /// Optional cap on how many DISTINCT customers may ever hold this card (a
+  /// limited-edition drop, e.g. "only the first 50"). Null = unlimited.
+  /// Merchant-editable — included in [toMap].
+  final int? maxDistribution;
+
+  /// How many distinct customers have received this card so far. 100%
+  /// server-owned (bumped by Cloud Functions the moment a customer's first
+  /// stamp lands) — deliberately excluded from [toMap] so a merchant save can
+  /// never clobber it; `setDocument`'s merge-write leaves absent fields alone.
+  final int distributedCount;
+
   final String backgroundColor;
   final String gradientColor;
   final bool gradientEnabled;
@@ -207,6 +220,14 @@ class StampCardModel {
 
   /// A stick is connected AND passed its Test-Tap → show "Stift verbunden ✓".
   bool get stickVerified => stickVerifiedAt != null;
+
+  /// Slots left before the supply cap is reached. Null = unlimited.
+  int? get remainingDistribution =>
+      maxDistribution == null ? null : (maxDistribution! - distributedCount).clamp(0, maxDistribution!);
+
+  /// A cap is set and every slot has already gone to a customer.
+  bool get isDistributionFull =>
+      maxDistribution != null && distributedCount >= maxDistribution!;
 
   /// Normalised reward milestones, sorted ascending by [StampRewardTier.atStamp].
   /// Falls back to a single tier synthesised from the legacy reward fields so
@@ -257,6 +278,8 @@ class StampCardModel {
       rewardDescription: '',
       rewardTiers: const [],
       boundStickId: '',
+      maxDistribution: null,
+      distributedCount: 0,
       backgroundColor: '#171A18',
       gradientColor: '#45C9A4',
       gradientEnabled: false,
@@ -302,6 +325,13 @@ class StampCardModel {
       staticToken: (map['staticToken'] ?? '').toString(),
       stickType: (map['stickType'] ?? '').toString(),
       stickVerifiedAt: _readDateTime(map['stickVerifiedAt']),
+      maxDistribution: (() {
+        final raw = map['maxDistribution'];
+        if (raw == null) return null;
+        final n = raw is num ? raw.round() : int.tryParse(raw.toString());
+        return (n != null && n > 0) ? n : null;
+      })(),
+      distributedCount: _readInt(map['distributedCount'], fallback: 0),
       backgroundColor: (map['backgroundColor'] ?? '#171A18').toString(),
       gradientColor: (map['gradientColor'] ?? '#45C9A4').toString(),
       gradientEnabled: map['gradientEnabled'] as bool? ?? false,
@@ -352,6 +382,10 @@ class StampCardModel {
       // Stift-Metadaten mitschreiben, damit ein späteres Speichern/Veröffentlichen
       // die verbundenen Stift-Infos (Typ + Verifiziert-Zeitpunkt) nicht löscht.
       'stickType': stickType,
+      'maxDistribution': maxDistribution,
+      // distributedCount ist bewusst NICHT enthalten: 100% server-verwaltet
+      // (Cloud-Function-Increment). setDocument merged standardmäßig, ein
+      // fehlendes Feld bleibt also unangetastet — kein Race mit Merchant-Saves.
       'backgroundColor': backgroundColor,
       'gradientColor': gradientColor,
       'gradientEnabled': gradientEnabled,
@@ -400,6 +434,9 @@ class StampCardModel {
     String? staticToken,
     String? stickType,
     DateTime? stickVerifiedAt,
+    int? maxDistribution,
+    bool clearMaxDistribution = false,
+    int? distributedCount,
     String? backgroundColor,
     String? gradientColor,
     bool? gradientEnabled,
@@ -444,6 +481,9 @@ class StampCardModel {
       staticToken: staticToken ?? this.staticToken,
       stickType: stickType ?? this.stickType,
       stickVerifiedAt: stickVerifiedAt ?? this.stickVerifiedAt,
+      maxDistribution:
+          clearMaxDistribution ? null : (maxDistribution ?? this.maxDistribution),
+      distributedCount: distributedCount ?? this.distributedCount,
       backgroundColor: backgroundColor ?? this.backgroundColor,
       gradientColor: gradientColor ?? this.gradientColor,
       gradientEnabled: gradientEnabled ?? this.gradientEnabled,

@@ -5,36 +5,17 @@ import '../../../../core/services/languageService.dart';
 import '../../../../core/theme/appSpacing.dart';
 import '../../../stamps/widgets/stampCardVisual.dart';
 import '../../shared/widgets/merchantPremiumUi.dart';
-import '../../tools/widgets/merchantToolUi.dart';
 import '../models/stampCardModel.dart';
 
 /// Eine Stempelkarte in der Übersicht: große Vorschau, Titel + Belohnung,
-/// Status, und wenige große Knöpfe. Der Hauptknopf hängt vom Zustand ab —
-/// „Veröffentlichen" für Entwürfe, „Stempel-Link" für aktive Karten (das, was
-/// der Händler wirklich braucht, um zu stempeln).
+/// Status. Rein visuell — liegt in der swipebaren Vorschau; alle Aktionen
+/// (Veröffentlichen, Stift, Limit, Bearbeiten, Pausieren, Löschen) sitzen fest
+/// AUSSERHALB davon (siehe `_ActionPanel` in merchantStampsPage.dart), damit man
+/// zum Bedienen nicht erst zur richtigen Karte swipen muss.
 class MerchantStampCard extends StatelessWidget {
-  const MerchantStampCard({
-    super.key,
-    required this.card,
-    required this.onEdit,
-    required this.onPublish,
-    required this.onPause,
-    required this.onDelete,
-    required this.onStick,
-    required this.onLimit,
-  });
+  const MerchantStampCard({super.key, required this.card});
 
   final StampCardModel card;
-  final VoidCallback onEdit;
-  final VoidCallback onPublish;
-  final VoidCallback onPause;
-  final VoidCallback onDelete;
-
-  /// Öffnet die Stempelstift-Einrichtung (Kamera-Scan) für diese Karte.
-  final VoidCallback onStick;
-
-  /// Öffnet den schnellen „Limit setzen"-Dialog (Wartezeit zwischen Stempeln).
-  final VoidCallback onLimit;
 
   @override
   Widget build(BuildContext context) {
@@ -88,62 +69,6 @@ class MerchantStampCard extends StatelessWidget {
               _StatusPill(label: _statusLabel(texts, card.status)),
             ],
           ),
-          const SizedBox(height: AppSpacing.md),
-
-          // ── Hauptknopf: Stift verbinden (live) bzw. veröffentlichen ─────
-          if (card.isLive)
-            MerchantPrimaryButton(
-              label: 'Stempelstift verbinden',
-              icon: Icons.nfc_rounded,
-              onPressed: onStick,
-            )
-          else
-            MerchantPrimaryButton(
-              label: texts.text('merchant.stamps.publish'),
-              icon: Icons.rocket_launch_rounded,
-              onPressed: onPublish,
-            ),
-          const SizedBox(height: AppSpacing.sm),
-
-          // ── Limit (Wartezeit) setzen ───────────────────────────────────
-          MerchantSecondaryButton(
-            label: 'Limit setzen',
-            icon: Icons.timer_outlined,
-            onPressed: onLimit,
-          ),
-          const SizedBox(height: AppSpacing.sm),
-
-          // ── Bearbeiten · Pausieren · Löschen (nebeneinander) ──────────
-          Row(
-            children: [
-              Expanded(
-                child: _CardAction(
-                  label: texts.text('common.edit'),
-                  icon: Icons.edit_rounded,
-                  onTap: onEdit,
-                ),
-              ),
-              if (card.isLive) ...[
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _CardAction(
-                    label: texts.text('merchant.stamps.pause'),
-                    icon: Icons.pause_rounded,
-                    onTap: onPause,
-                  ),
-                ),
-              ],
-              const SizedBox(width: 8),
-              Expanded(
-                child: _CardAction(
-                  label: texts.text('common.delete'),
-                  icon: Icons.delete_outline_rounded,
-                  isDanger: true,
-                  onTap: onDelete,
-                ),
-              ),
-            ],
-          ),
         ],
       ),
     );
@@ -166,57 +91,6 @@ class MerchantStampPreview extends StatelessWidget {
   @override
   Widget build(BuildContext context) =>
       StampCardVisual(card: card, compact: compact);
-}
-
-class _CardAction extends StatelessWidget {
-  const _CardAction({
-    required this.label,
-    required this.icon,
-    required this.onTap,
-    this.isDanger = false,
-  });
-
-  final String label;
-  final IconData icon;
-  final VoidCallback onTap;
-  final bool isDanger;
-
-  @override
-  Widget build(BuildContext context) {
-    final color =
-        isDanger ? MerchantPremiumColors.danger : MerchantPremiumColors.ink;
-    return OutlinedButton(
-      onPressed: onTap,
-      style: OutlinedButton.styleFrom(
-        foregroundColor: color,
-        side: BorderSide(
-          color: isDanger
-              ? MerchantPremiumColors.danger.withValues(alpha: 0.5)
-              : MerchantPremiumColors.line,
-        ),
-        minimumSize: const Size.fromHeight(48),
-        padding: const EdgeInsets.symmetric(horizontal: 6),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 19, color: color),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: color,
-              fontWeight: FontWeight.w800,
-              fontSize: 12.5,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 class _StatusPill extends StatelessWidget {

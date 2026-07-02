@@ -44,6 +44,8 @@ class _MerchantOrderDetailView extends StatelessWidget {
       title: texts.text('merchant.orders.detailTitle'),
       subtitle: texts.text('merchant.orders.detailSubtitle'),
       backPath: '/merchant/orders',
+      // Bestellungen-Familie einheitlich breit (Kasse/Tablet).
+      maxWidth: 980,
       trailing: MerchantInfoTooltip(
         message: texts.text('merchant.orders.detailTooltip'),
       ),

@@ -78,6 +78,50 @@ class UploadService {
     return PickedUploadFile(bytes: bytes, fileName: file.name);
   }
 
+  /// Max. Eingabegröße für Menü-PDFs (Mehrseiter mit Fotos können größer sein
+  /// als ein einzelnes Bild, daher großzügiger als der Bild-Guard).
+  static const int _maxPdfBytes = 15 * 1024 * 1024;
+
+  /// Wählt eine PDF-Datei (z. B. gescannte Speisekarte/Katalog) und lädt sie
+  /// ROH hoch – ohne Bild-Aufbereitung (kein Crop/Resize/EXIF), da es kein
+  /// Bild ist. Gibt die öffentliche Download-URL zurück; sie wird 1:1 wie ein
+  /// getippter externer Speisekarten-Link behandelt (`menuExternalUrl`).
+  /// Rückgabe null = Nutzer hat die Auswahl abgebrochen.
+  Future<String?> pickAndUploadMenuPdf({String? ownerId}) async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf'],
+      withData: true,
+    );
+    final file = result?.files.single;
+    final bytes = file?.bytes;
+    if (file == null || bytes == null) return null;
+
+    if (bytes.lengthInBytes > _maxPdfBytes) {
+      throw const StorageException(
+        'Die PDF ist zu groß (max. 15 MB). Bitte eine kleinere Datei wählen.',
+      );
+    }
+
+    final uid = (ownerId?.isNotEmpty ?? false)
+        ? ownerId!
+        : _auth.currentUser?.uid ?? '';
+    if (uid.isEmpty) {
+      throw const StorageException(
+        'Bitte zuerst anmelden, um eine Datei hochzuladen.',
+      );
+    }
+
+    final id = _uuid.v4();
+    final uploaded = await storageService.uploadBytes(
+      path: '${StoragePaths.merchantsRoot}/$uid/menu/$id.pdf',
+      bytes: bytes,
+      contentType: 'application/pdf',
+      customMetadata: {'type': 'menuPdf'},
+    );
+    return uploaded.downloadUrl;
+  }
+
   Future<PickedUploadFile?> pickImageWithImagePicker() async {
     final picker = ImagePicker();
     final image = await picker.pickImage(source: ImageSource.gallery);

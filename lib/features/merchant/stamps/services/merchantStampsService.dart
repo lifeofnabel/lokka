@@ -156,16 +156,23 @@ class MerchantStampsService {
     );
   }
 
-  /// Sets the claim limits (currently the cooldown between two stamps for the
-  /// same customer) with a targeted merge write — never a full replace, so the
-  /// stick binding and every other field stay untouched.
-  Future<void> setClaimLimits(
-    String stampCardId,
-    Map<String, dynamic> claimLimits,
-  ) {
+  /// Sets both merchant-facing limits in one targeted merge write: the
+  /// cooldown between two stamps for the same customer, and the optional cap
+  /// on how many distinct customers may ever hold the card. Never a full
+  /// replace, so `distributedCount`, the stick binding and every other field
+  /// stay untouched — `maxDistribution: null` clears the cap (unlimited).
+  Future<void> setLimits(
+    String stampCardId, {
+    required Map<String, dynamic> claimLimits,
+    required int? maxDistribution,
+  }) {
     return firestoreService.setDocument(
       FirebasePaths.merchantStampCard(merchantId, stampCardId),
-      {'claimLimits': claimLimits, 'updatedAt': FieldValue.serverTimestamp()},
+      {
+        'claimLimits': claimLimits,
+        'maxDistribution': maxDistribution,
+        'updatedAt': FieldValue.serverTimestamp(),
+      },
       merge: true,
     );
   }

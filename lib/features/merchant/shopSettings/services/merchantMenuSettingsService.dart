@@ -41,10 +41,18 @@ class MerchantMenuSettingsService {
     final data = await firestoreService.readDocument(
       FirebasePaths.publicMerchant(_merchantId),
     );
+    // Noch nie konfiguriert (Feld fehlt komplett, nicht nur `false`) → die
+    // integrierte Lokka-Karte ist die empfohlene Vorgabe, immer vorab
+    // aktiviert. Hat der Merchant schon einmal gespeichert (Feld vorhanden,
+    // auch wenn `false`), wird sein expliziter Stand respektiert.
+    final neverConfigured =
+        data == null || !data.containsKey('menuIntegratedEnabled');
     return MenuSettingsData(
       externalUrl: data?['menuExternalUrl'] as String? ?? '',
       externalEnabled: data?['menuExternalEnabled'] as bool? ?? false,
-      integratedEnabled: data?['menuIntegratedEnabled'] as bool? ?? false,
+      integratedEnabled: neverConfigured
+          ? true
+          : (data['menuIntegratedEnabled'] as bool? ?? false),
       style: MenuDesign.fromMap(data),
     );
   }

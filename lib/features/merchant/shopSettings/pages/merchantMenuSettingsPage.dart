@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../../../core/services/authService.dart';
 import '../../../../core/services/firestoreService.dart';
 import '../../../../core/services/languageService.dart';
+import '../../../../core/services/uploadService.dart';
 import '../../../../core/theme/appRadius.dart';
 import '../../../../core/theme/appSpacing.dart';
 import '../../shared/widgets/merchantPremiumUi.dart';
@@ -28,6 +29,7 @@ class MerchantMenuSettingsPage extends StatelessWidget {
           authService: context.read<AuthService>(),
           firestoreService: context.read<FirestoreService>(),
         ),
+        uploadService: context.read<UploadService>(),
       )..load(),
       child: const _MenuSettingsView(),
     );
@@ -66,6 +68,26 @@ class _MenuSettingsViewState extends State<_MenuSettingsView> {
     _provider?.removeListener(_syncUrl);
     _urlController.dispose();
     super.dispose();
+  }
+
+  /// Dritte Speisekarten-Quelle neben getipptem Link/Lokka-Karte: PDF
+  /// hochladen. Die Download-URL landet im selben URL-Feld wie ein
+  /// getippter Link – für die Anzeige/Öffnen-Logik ist das identisch.
+  Future<void> _uploadPdf() async {
+    final texts = context.read<LanguageService>();
+    final provider = context.read<MerchantMenuSettingsProvider>();
+    final url = await provider.uploadMenuPdf();
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    if (url != null) {
+      _urlController.text = url;
+      if (!provider.externalEnabled) provider.setExternalEnabled(true);
+      messenger.showSnackBar(
+        SnackBar(content: Text(texts.text('merchant.menu.pdfUploaded'))),
+      );
+    } else if (provider.pdfError != null) {
+      messenger.showSnackBar(SnackBar(content: Text(provider.pdfError!)));
+    }
   }
 
   Future<void> _save() async {
@@ -107,53 +129,30 @@ class _MenuSettingsViewState extends State<_MenuSettingsView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Externer Link
+        // Integrierte Lokka-Karte – EMPFOHLEN, erste Option, immer vorab
+        // aktiviert (siehe MerchantMenuSettingsService.load: neu/nie
+        // konfiguriert → integratedEnabled defaultet auf true).
         MerchantPremiumCard(
           padding: const EdgeInsets.all(AppSpacing.md),
+          borderColor: MerchantPremiumColors.gold.withValues(alpha: 0.30),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _SwitchRow(
-                icon: Icons.link_rounded,
-                title: texts.text('merchant.menu.externalTitle'),
-                subtitle: texts.text('merchant.menu.externalSubtitle'),
-                value: provider.externalEnabled,
-                onChanged: provider.setExternalEnabled,
-              ),
-              if (provider.externalEnabled) ...[
-                const SizedBox(height: AppSpacing.md),
-                TextField(
-                  controller: _urlController,
-                  keyboardType: TextInputType.url,
-                  decoration: InputDecoration(
-                    hintText: texts.text('merchant.menu.urlHint'),
-                    filled: true,
-                    fillColor: MerchantPremiumColors.surfaceAlt,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(AppRadius.large),
-                      borderSide: BorderSide.none,
+              Row(
+                children: [
+                  Expanded(
+                    child: _SwitchRow(
+                      icon: Icons.restaurant_menu_rounded,
+                      title: texts.text('merchant.menu.integratedTitle'),
+                      subtitle: texts.text('merchant.menu.integratedSubtitle'),
+                      value: provider.integratedEnabled,
+                      onChanged: provider.setIntegratedEnabled,
                     ),
-                    prefixIcon: const Icon(Icons.public_rounded),
                   ),
-                ),
-              ],
-            ],
-          ),
-        ),
-        const SizedBox(height: AppSpacing.md),
-        // Integrierte Lokka-Karte
-        MerchantPremiumCard(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _SwitchRow(
-                icon: Icons.restaurant_menu_rounded,
-                title: texts.text('merchant.menu.integratedTitle'),
-                subtitle: texts.text('merchant.menu.integratedSubtitle'),
-                value: provider.integratedEnabled,
-                onChanged: provider.setIntegratedEnabled,
+                ],
               ),
+              const SizedBox(height: 6),
+              _RecommendedBadge(label: texts.text('merchant.menu.recommended')),
               if (provider.integratedEnabled) ...[
                 const SizedBox(height: AppSpacing.md),
                 Container(
@@ -192,6 +191,80 @@ class _MenuSettingsViewState extends State<_MenuSettingsView> {
             ],
           ),
         ),
+        const SizedBox(height: AppSpacing.md),
+        // Externer Link ODER PDF-Upload (beide füllen dieselbe URL).
+        MerchantPremiumCard(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _SwitchRow(
+                icon: Icons.link_rounded,
+                title: texts.text('merchant.menu.externalTitle'),
+                subtitle: texts.text('merchant.menu.externalSubtitle'),
+                value: provider.externalEnabled,
+                onChanged: provider.setExternalEnabled,
+              ),
+              if (provider.externalEnabled) ...[
+                const SizedBox(height: AppSpacing.md),
+                TextField(
+                  controller: _urlController,
+                  keyboardType: TextInputType.url,
+                  decoration: InputDecoration(
+                    hintText: texts.text('merchant.menu.urlHint'),
+                    filled: true,
+                    fillColor: MerchantPremiumColors.surfaceAlt,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(AppRadius.large),
+                      borderSide: BorderSide.none,
+                    ),
+                    prefixIcon: const Icon(Icons.public_rounded),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                // Alternative zum Eintippen: PDF direkt hochladen – landet in
+                // derselben URL (identisches „Öffnen"-Verhalten für Kunden).
+                Row(
+                  children: [
+                    const Expanded(child: Divider()),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      child: Text(
+                        texts.text('common.or'),
+                        style: const TextStyle(
+                          color: MerchantPremiumColors.muted,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                    const Expanded(child: Divider()),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                OutlinedButton.icon(
+                  onPressed: provider.isUploadingPdf ? null : _uploadPdf,
+                  icon: provider.isUploadingPdf
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.picture_as_pdf_rounded, size: 18),
+                  label: Text(texts.text('merchant.menu.uploadPdf')),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: MerchantPremiumColors.ink,
+                    side: const BorderSide(color: MerchantPremiumColors.line),
+                    minimumSize: const Size.fromHeight(46),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppRadius.large),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
         const SizedBox(height: AppSpacing.lg),
         MerchantPrimaryButton(
           label: texts.text('merchant.menu.save'),
@@ -210,6 +283,34 @@ class _MenuSettingsViewState extends State<_MenuSettingsView> {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Kleines Badge, das die Lokka-Karte als empfohlene erste Option markiert.
+class _RecommendedBadge extends StatelessWidget {
+  const _RecommendedBadge({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(left: 58),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+      decoration: BoxDecoration(
+        color: MerchantPremiumColors.gold.withValues(alpha: 0.16),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: MerchantPremiumColors.gold.withValues(alpha: 0.32)),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: MerchantPremiumColors.gold,
+          fontSize: 11.5,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
     );
   }
 }

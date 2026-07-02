@@ -27,12 +27,22 @@ service firebase.storage {
       return request.resource.size < 8 * 1024 * 1024; // 8 MB
     }
 
-    // Beim Upload Bild + Größe erzwingen, beim Löschen (resource == null) erlauben.
-    function validWriteOrDelete() {
-      return request.resource == null || (isImage() && withinSizeLimit());
+    // Menü-PDFs (Speisekarte als Datei hochgeladen, statt Link/Lokka-Karte):
+    // eigener, größerer Grenzwert – Mehrseiter mit Fotos sind oft > 8 MB.
+    function isMenuPdf() {
+      return request.resource.contentType == 'application/pdf'
+             && request.resource.size < 15 * 1024 * 1024; // 15 MB
     }
 
-    // Merchant-Assets: profile/cover/offers/catalog/wallet/displayStudio.
+    // Beim Upload Bild + Größe (oder Menü-PDF) erzwingen, beim Löschen
+    // (resource == null) erlauben.
+    function validWriteOrDelete() {
+      return request.resource == null
+             || (isImage() && withinSizeLimit())
+             || isMenuPdf();
+    }
+
+    // Merchant-Assets: profile/cover/offers/catalog/wallet/displayStudio/menu.
     match /merchants/{merchantId}/{allPaths=**} {
       allow read: if true;
       allow write: if signedIn()

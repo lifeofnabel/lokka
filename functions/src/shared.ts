@@ -35,6 +35,12 @@ export interface StampCard {
   rewardItemName: string;
   rewardDescription: string;
   claimLimits: Record<string, unknown>;
+  /** Optional cap on how many DISTINCT customers may ever hold this card
+   *  (a limited-edition drop, e.g. "only the first 50"). null = unlimited. */
+  maxDistribution: number | null;
+  /** How many distinct customers have received this card so far. Server-owned —
+   *  bumped exactly once per customer, the moment their first stamp lands. */
+  distributedCount: number;
 }
 
 /** Read a live stamp card or throw a stable, client-safe error. */
@@ -86,6 +92,11 @@ export function normaliseCard(
     rewardItemName: String(data.rewardItemName ?? ''),
     rewardDescription: String(data.rewardDescription ?? ''),
     claimLimits: (data.claimLimits as Record<string, unknown>) ?? {},
+    maxDistribution: (() => {
+      const n = Number(data.maxDistribution);
+      return Number.isFinite(n) && n > 0 ? n : null;
+    })(),
+    distributedCount: Number(data.distributedCount) || 0,
   };
 }
 
@@ -131,6 +142,31 @@ export interface ApplyResult {
 }
 
 /**
+ * A brand-new customer is about to receive `card` for the first time (their
+ * `stampProgress` doc doesn't exist yet) — this IS the "distribution" moment.
+ * Enforces the merchant's optional supply cap and bumps the running counter,
+ * both inside the caller's transaction. Must run before any writes in that
+ * transaction (Firestore requires all reads before all writes) — callers only
+ * ever invoke this right after confirming `!snap.exists`, before their own
+ * `tx.set`/`tx.update` calls.
+ */
+async function consumeDistributionSlot(
+  tx: FirebaseFirestore.Transaction,
+  card: StampCard,
+): Promise<void> {
+  const db = getFirestore();
+  const cardRef = db.doc(`merchants/${card.merchantId}/stampCards/${card.id}`);
+  if (card.maxDistribution != null) {
+    const cardSnap = await tx.get(cardRef);
+    const distributed = Number(cardSnap.data()?.distributedCount) || 0;
+    if (distributed >= card.maxDistribution) {
+      throw new HttpsError('resource-exhausted', 'stamp/distribution-full');
+    }
+  }
+  tx.set(cardRef, { distributedCount: FieldValue.increment(1) }, { merge: true });
+}
+
+/**
  * Apply `delta` stamps to (uid, card) inside a transaction. Enforces cooldown,
  * clamps at the card maximum (never overflows — edge case "card full"), appends
  * a capped history entry and flips status to `completed` at the top.
@@ -159,6 +195,12 @@ export async function applyStamps(
     if (prev >= max) {
       // Full card: tapping must not overflow — prompt the customer to convert.
       throw new HttpsError('failed-precondition', 'stamp/card-full');
+    }
+
+    // First stamp ever for this (uid, card) → this customer is a NEW holder.
+    // Enforce the optional supply cap and bump the counter before any writes.
+    if (!snap.exists) {
+      await consumeDistributionSlot(tx, card);
     }
 
     const lastAt = data.lastStampAt as Timestamp | undefined;
@@ -311,6 +353,8 @@ export async function ensureStampCard(
       const current = Number(d.currentStamps) || 0;
       return { currentStamps: current, maxStamps: max, completed: current >= max, added: 0 };
     }
+    // Brand-new holder — same supply-cap gate as the real first-stamp path.
+    await consumeDistributionSlot(tx, card);
     tx.set(ref, {
       stampCardId: card.id,
       merchantId: card.merchantId,

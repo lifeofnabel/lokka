@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../../../core/services/languageService.dart';
 import '../../../../core/theme/appRadius.dart';
 import '../../../../core/theme/appSpacing.dart';
+import '../../../../core/widgets/appPillSwitch.dart' show kAppMaxWidth;
 import '../../shared/widgets/merchantPremiumUi.dart';
 
 class MerchantToolScaffold extends StatelessWidget {
@@ -18,11 +19,18 @@ class MerchantToolScaffold extends StatelessWidget {
     this.trailing,
     this.backPath,
     this.showHeader = false,
+    this.maxWidth = kAppMaxWidth,
   }) : assert(child != null || slivers != null,
             'MerchantToolScaffold braucht entweder child oder slivers');
 
   final String title;
   final String subtitle;
+
+  /// Inhalts-Breite. Default = Handy-Breite ([kAppMaxWidth]) – auf großen
+  /// Displays sieht der Merchant-Bereich damit wie auf dem Handy aus (gleiches
+  /// Prinzip wie der User-Bereich). Arbeits-Terminals (Bestellungen-Familie,
+  /// Kassen-/Tablet-Nutzung mit Split-View) übergeben bewusst 980.
+  final double maxWidth;
 
   /// Einfacher Body in einem ListView (Standard). Für lange Listen stattdessen
   /// [slivers] nutzen – dort werden Einträge dank CustomScrollView wirklich lazy
@@ -88,7 +96,7 @@ class MerchantToolScaffold extends StatelessWidget {
         child: SafeArea(
           child: Center(
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 980),
+              constraints: BoxConstraints(maxWidth: maxWidth),
               child: slivers != null
                   ? CustomScrollView(
                       slivers: [

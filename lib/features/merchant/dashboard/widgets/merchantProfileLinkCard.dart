@@ -8,237 +8,140 @@ import '../../shared/widgets/merchantPremiumUi.dart';
 import '../services/merchantHandleService.dart';
 
 /// Public host the app is served from — share links always start here so a
-/// merchant sees a clean, memorable address regardless of where the app happens
-/// to run (dev/localhost included).
+/// merchant sees a clean, memorable address regardless of where the app runs.
 const String _kPublicHost = 'jajehelp.com';
 
 /// Absolute base for a working public link (host + deployed sub-path). Path URL
 /// strategy is on (no `#`), so a route appends directly.
 const String _kPublicBase = 'https://$_kPublicHost/lokka/';
 
-/// Dashboard card: shows the merchant's shareable public link (short, always
-/// `jajehelp.com/<handle>`). Tapping opens a sheet to open the profile page or
-/// the catalog, copy the link, or change the handle.
-class MerchantProfileLinkCard extends StatefulWidget {
-  const MerchantProfileLinkCard({super.key, required this.merchantId});
-
-  final String merchantId;
-
-  @override
-  State<MerchantProfileLinkCard> createState() =>
-      _MerchantProfileLinkCardState();
-}
-
-class _MerchantProfileLinkCardState extends State<MerchantProfileLinkCard> {
-  late final MerchantHandleService _service;
-  String? _handle; // null = noch nicht geladen
-  bool _loading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _service = MerchantHandleService(context.read<FirestoreService>());
-    _load();
+/// Opens the profile-link popout (loaded on demand). Triggered from the hero's
+/// top-left symbol. Offers: open the public profile, open the catalog, copy the
+/// link, or change the handle.
+Future<void> showProfileLinkSheet(
+  BuildContext context, {
+  required String merchantId,
+}) async {
+  final service = MerchantHandleService(context.read<FirestoreService>());
+  var handle = '';
+  try {
+    handle = await service.handleFor(merchantId);
+  } catch (_) {
+    // No handle yet / read failed → the sheet still offers "Link festlegen".
   }
+  if (!context.mounted) return;
 
-  Future<void> _load() async {
-    try {
-      final h = await _service.handleFor(widget.merchantId);
-      if (mounted) {
-        setState(() {
-          _handle = h;
-          _loading = false;
-        });
-      }
-    } catch (_) {
-      if (mounted) {
-        setState(() {
-          _handle = '';
-          _loading = false;
-        });
-      }
-    }
-  }
+  final hasHandle = handle.trim().isNotEmpty;
+  final pretty = '$_kPublicHost/$handle';
+  final fullLink = '$_kPublicBase$handle';
 
-  bool get _hasHandle => (_handle ?? '').isNotEmpty;
-
-  /// Short, human-facing display — always starts with the public host.
-  String get _prettyLink => '$_kPublicHost/${_handle ?? ''}';
-
-  /// The full working URL to copy/share.
-  String get _fullLink => '$_kPublicBase${_handle ?? ''}';
-
-  Future<void> _copy() async {
-    if (!_hasHandle) {
-      _snack('Lege zuerst deinen Profil-Link fest.');
-      return;
-    }
-    await Clipboard.setData(ClipboardData(text: _fullLink));
-    _snack('Link kopiert');
-  }
-
-  void _snack(String msg) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(msg)));
-  }
-
-  Future<void> _edit() async {
-    final result = await showDialog<String>(
-      context: context,
-      builder: (_) => _HandleDialog(
-        service: _service,
-        merchantId: widget.merchantId,
-        initial: _handle ?? '',
-        base: _kPublicHost,
-      ),
-    );
-    if (result != null && mounted) {
-      setState(() => _handle = result);
-      _snack('Profil-Link gespeichert');
-    }
-  }
-
-  /// The popout: open the profile page or the catalog, copy, or change the link.
-  void _openActions() {
-    final mid = widget.merchantId;
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      backgroundColor: MerchantPremiumColors.baseElevated,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      builder: (sheetContext) => SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 0, 12, 14),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(10, 0, 10, 4),
-                child: Text(
-                  _hasHandle ? _prettyLink : 'Dein Profil-Link',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: MerchantPremiumColors.ink,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w900,
-                  ),
+  await showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    backgroundColor: MerchantPremiumColors.baseElevated,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+    ),
+    builder: (sheetContext) => SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 0, 12, 14),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 0, 10, 4),
+              child: Text(
+                hasHandle ? pretty : 'Dein Profil-Link',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: MerchantPremiumColors.ink,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
                 ),
               ),
-              const SizedBox(height: 4),
-              _ActionRow(
-                icon: Icons.storefront_rounded,
-                label: 'Profilseite öffnen',
-                subtitle: 'So sehen Kund:innen dein Profil.',
-                onTap: () {
-                  Navigator.of(sheetContext).pop();
-                  context.push('/user/partners/$mid');
-                },
-              ),
-              _ActionRow(
-                icon: Icons.menu_book_rounded,
-                label: 'Katalog öffnen',
-                subtitle: 'Deine Speisekarte / dein Angebot.',
-                onTap: () {
-                  Navigator.of(sheetContext).pop();
-                  context.push('/shop/$mid');
-                },
-              ),
-              _ActionRow(
-                icon: Icons.content_copy_rounded,
-                label: 'Link kopieren',
-                subtitle: _hasHandle ? _prettyLink : 'Erst Link festlegen',
-                onTap: () {
-                  Navigator.of(sheetContext).pop();
-                  _copy();
-                },
-              ),
-              _ActionRow(
-                icon: _hasHandle ? Icons.edit_rounded : Icons.add_link_rounded,
-                label: _hasHandle ? 'Link ändern' : 'Link festlegen',
-                subtitle: 'Wähle deine persönliche Adresse.',
-                onTap: () {
-                  Navigator.of(sheetContext).pop();
-                  _edit();
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: _loading ? null : _openActions,
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: MerchantPremiumColors.surface,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: MerchantPremiumColors.line),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: MerchantPremiumColors.goldSoft,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: const Icon(Icons.link_rounded,
-                  color: MerchantPremiumColors.gold, size: 22),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Dein Profil-Link',
-                    style: TextStyle(
-                      color: MerchantPremiumColors.muted,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  if (_loading)
-                    const Text('…',
-                        style:
-                            TextStyle(color: MerchantPremiumColors.mutedLight))
-                  else
-                    Text(
-                      _hasHandle ? _prettyLink : 'Noch nicht festgelegt',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: _hasHandle
-                            ? MerchantPremiumColors.ink
-                            : MerchantPremiumColors.mutedLight,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                ],
-              ),
+            const SizedBox(height: 4),
+            _ActionRow(
+              icon: Icons.storefront_rounded,
+              label: 'Profilseite öffnen',
+              subtitle: 'So sehen Kund:innen dein Profil.',
+              onTap: () {
+                Navigator.of(sheetContext).pop();
+                context.push('/user/partners/$merchantId');
+              },
             ),
-            if (!_loading)
-              const Icon(Icons.chevron_right_rounded,
-                  color: MerchantPremiumColors.mutedLight),
+            _ActionRow(
+              icon: Icons.menu_book_rounded,
+              label: 'Katalog öffnen',
+              subtitle: 'Deine Speisekarte / dein Angebot.',
+              onTap: () {
+                Navigator.of(sheetContext).pop();
+                context.push('/shop/$merchantId');
+              },
+            ),
+            _ActionRow(
+              icon: Icons.content_copy_rounded,
+              label: 'Link kopieren',
+              subtitle: hasHandle ? pretty : 'Erst Link festlegen',
+              onTap: () {
+                Navigator.of(sheetContext).pop();
+                _copyLink(context, hasHandle: hasHandle, fullLink: fullLink);
+              },
+            ),
+            _ActionRow(
+              icon: hasHandle ? Icons.edit_rounded : Icons.add_link_rounded,
+              label: hasHandle ? 'Link ändern' : 'Link festlegen',
+              subtitle: 'Wähle deine persönliche Adresse.',
+              onTap: () {
+                Navigator.of(sheetContext).pop();
+                _editHandle(context, service, merchantId, handle);
+              },
+            ),
           ],
         ),
       ),
+    ),
+  );
+}
+
+Future<void> _copyLink(
+  BuildContext context, {
+  required bool hasHandle,
+  required String fullLink,
+}) async {
+  if (!hasHandle) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Lege zuerst deinen Profil-Link fest.')),
     );
+    return;
+  }
+  await Clipboard.setData(ClipboardData(text: fullLink));
+  if (!context.mounted) return;
+  ScaffoldMessenger.of(context)
+      .showSnackBar(const SnackBar(content: Text('Link kopiert')));
+}
+
+Future<void> _editHandle(
+  BuildContext context,
+  MerchantHandleService service,
+  String merchantId,
+  String initial,
+) async {
+  final result = await showDialog<String>(
+    context: context,
+    builder: (_) => _HandleDialog(
+      service: service,
+      merchantId: merchantId,
+      initial: initial,
+      base: _kPublicHost,
+    ),
+  );
+  if (result != null && context.mounted) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Profil-Link gespeichert')));
   }
 }
 

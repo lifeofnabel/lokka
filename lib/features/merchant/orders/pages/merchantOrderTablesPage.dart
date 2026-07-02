@@ -53,6 +53,8 @@ class _MerchantOrderTablesView extends StatelessWidget {
       title: texts.text('merchant.orders.tablesTitle'),
       subtitle: texts.text('merchant.orders.tablesSubtitle'),
       backPath: '/merchant/orders',
+      // Arbeits-Terminal (Kasse/Tablet) – wie die Bestellungen-Seite breiter.
+      maxWidth: 980,
       trailing:
           MerchantInfoTooltip(message: texts.text('merchant.orders.tablesTooltip')),
       child: Column(
@@ -230,6 +232,8 @@ class _MerchantTableOrdersViewState extends State<_MerchantTableOrdersView> {
       title: label,
       subtitle: texts.text('merchant.orders.tableOrdersSubtitle'),
       backPath: '/merchant/orders/tables',
+      // Arbeits-Terminal (Kasse/Tablet) – wie die Bestellungen-Seite breiter.
+      maxWidth: 980,
       trailing:
           MerchantInfoTooltip(message: texts.text('merchant.orders.tablesTooltip')),
       child: Column(

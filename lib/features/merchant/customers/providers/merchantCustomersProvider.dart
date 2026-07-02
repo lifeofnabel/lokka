@@ -3,16 +3,10 @@ import 'package:flutter/foundation.dart';
 import '../models/merchantCustomerModel.dart';
 import '../services/merchantCustomersService.dart';
 
-enum MerchantCustomerFilter {
-  all,
-  followers,
-  stampCards,
-  pointsSystems,
-  coupons,
-  orders,
-  lastVisited,
-}
-
+/// Follower-Liste des Merchants. Früher „Kunden" mit 7 Filter-Chips – die
+/// Programm-Filter (Stempel/Punkte/Coupons/Bestellungen) waren tote Filter:
+/// `usedSystems` wird beim Folgen immer nur mit `['follower']` befüllt, die
+/// Chips lieferten nie Treffer. Jetzt: Follower + Namens-Suche, fertig.
 class MerchantCustomersProvider extends ChangeNotifier {
   MerchantCustomersProvider({required this.service});
 
@@ -23,32 +17,29 @@ class MerchantCustomersProvider extends ChangeNotifier {
   /// i18n-Key (z. B. 'common.error.network') – die View übersetzt ihn.
   /// Niemals rohe Exception-Strings hier ablegen.
   String? error;
-  MerchantCustomerFilter filter = MerchantCustomerFilter.all;
+  String search = '';
   List<MerchantCustomerModel> customers = [];
 
-  // Memoisiertes Ergebnis: wird nur bei load()/setFilter() neu berechnet, nicht in
-  // jedem build(). Immer eine eigene Kopie, damit die Sortierung die geteilte
-  // customers-Liste nicht in-place mutiert.
+  // Memoisiertes Ergebnis: wird nur bei load()/setSearch() neu berechnet, nicht
+  // in jedem build(). Immer eine eigene Kopie, damit die Sortierung die
+  // geteilte customers-Liste nicht in-place mutiert.
   List<MerchantCustomerModel> _visibleCustomers = [];
   List<MerchantCustomerModel> get visibleCustomers => _visibleCustomers;
 
+  /// Gesamtzahl der Follower (unabhängig von der Suche) – für den Zähler im
+  /// Seitenkopf.
+  int get followerCount => customers.length;
+
   void _recomputeVisible() {
-    final result = switch (filter) {
-      MerchantCustomerFilter.all => List.of(customers),
-      MerchantCustomerFilter.followers =>
-        customers.where((item) => item.isFollower).toList(),
-      // lastVisited filtert Kunden ohne Besuchsdatum heraus (sonst säße der
-      // Chip nur als Sortierung verkleidet als Filter da).
-      MerchantCustomerFilter.lastVisited =>
-        customers.where((item) => item.lastVisitAt != null).toList(),
-      MerchantCustomerFilter.stampCards => customers.where((item) => item.usedSystems.contains('stampCards')).toList(),
-      MerchantCustomerFilter.pointsSystems => customers.where((item) => item.usedSystems.contains('pointsSystems')).toList(),
-      MerchantCustomerFilter.coupons => customers.where((item) => item.usedSystems.contains('coupons')).toList(),
-      MerchantCustomerFilter.orders => customers.where((item) => item.usedSystems.contains('orders')).toList(),
-    };
-    if (filter == MerchantCustomerFilter.lastVisited) {
-      result.sort((a, b) => (b.lastVisitAt ?? DateTime(0)).compareTo(a.lastVisitAt ?? DateTime(0)));
-    }
+    final query = search.trim().toLowerCase();
+    final result = query.isEmpty
+        ? List.of(customers)
+        : customers
+            .where((item) => item.name.toLowerCase().contains(query))
+            .toList();
+    // Neueste Follower zuerst; ohne Folge-Datum ans Ende.
+    result.sort((a, b) => (b.followedAt ?? b.lastVisitAt ?? DateTime(0))
+        .compareTo(a.followedAt ?? a.lastVisitAt ?? DateTime(0)));
     _visibleCustomers = result;
   }
 
@@ -57,7 +48,11 @@ class MerchantCustomersProvider extends ChangeNotifier {
       isLoading = true;
       error = null;
       notifyListeners();
-      customers = await service.loadCustomers();
+      final loaded = await service.loadCustomers();
+      // Defensiv nur Follower zeigen – andere Datensätze existieren im
+      // Normalfall nicht (Folgen ist der einzige Schreibpfad), aber falls doch,
+      // gehören sie nicht in diese Liste.
+      customers = loaded.where((item) => item.isFollower).toList();
       _recomputeVisible();
     } catch (e) {
       error = _errorKey(e);
@@ -67,8 +62,8 @@ class MerchantCustomersProvider extends ChangeNotifier {
     }
   }
 
-  void setFilter(MerchantCustomerFilter value) {
-    filter = value;
+  void setSearch(String value) {
+    search = value;
     _recomputeVisible();
     notifyListeners();
   }

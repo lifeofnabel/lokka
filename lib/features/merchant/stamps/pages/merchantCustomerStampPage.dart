@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../../../core/services/languageService.dart';
 import '../../../../core/theme/appSpacing.dart';
+import '../../../../core/widgets/appPillSwitch.dart' show kAppMaxWidth;
 import '../../shared/widgets/merchantPremiumUi.dart';
 import '../../../stamps/services/stampFunctionsService.dart';
 import '../../../user/wallet/utils/walletCode.dart';
@@ -132,7 +133,12 @@ class _MerchantCustomerStampPageState extends State<MerchantCustomerStampPage> {
                 color: MerchantPremiumColors.ink, fontWeight: FontWeight.w900)),
       ),
       body: SafeArea(
-        child: _loading
+        // Handy-Breite wie der Rest des Merchant-Bereichs (kein
+        // MerchantToolScaffold hier wegen des dynamischen Kunden-Titels).
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: kAppMaxWidth),
+            child: _loading
             ? const Center(
                 child: CircularProgressIndicator(color: MerchantPremiumColors.gold))
             : _error != null
@@ -178,6 +184,8 @@ class _MerchantCustomerStampPageState extends State<MerchantCustomerStampPage> {
                           ],
                         ),
                       ),
+          ),
+        ),
       ),
     );
   }

@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 
 import '../../../../core/models/menuDesign.dart';
+import '../../../../core/services/storageService.dart';
+import '../../../../core/services/uploadService.dart';
 import '../services/merchantMenuSettingsService.dart';
 
 enum MenuSaveResult { success, missingUrl, error }
@@ -8,9 +10,10 @@ enum MenuSaveResult { success, missingUrl, error }
 /// State + Logik der Speisekarten-Einstellungen (Shell/Provider-Muster, #42).
 /// Firestore-Zugriffe liegen im Service.
 class MerchantMenuSettingsProvider extends ChangeNotifier {
-  MerchantMenuSettingsProvider({required this.service});
+  MerchantMenuSettingsProvider({required this.service, required this.uploadService});
 
   final MerchantMenuSettingsService service;
+  final UploadService uploadService;
 
   bool isLoading = true;
   bool isSaving = false;
@@ -18,6 +21,10 @@ class MerchantMenuSettingsProvider extends ChangeNotifier {
   String externalUrl = '';
   bool externalEnabled = false;
   bool integratedEnabled = false;
+
+  /// PDF-Upload für die dritte Speisekarten-Quelle (neben Link/Lokka-Karte).
+  bool isUploadingPdf = false;
+  String? pdfError;
 
   /// Gestaltung der Kundenkarte (Vorlage, Farbe, Theme, Spalten).
   MenuDesign style = const MenuDesign();
@@ -38,6 +45,25 @@ class MerchantMenuSettingsProvider extends ChangeNotifier {
       debugPrint('MerchantMenuSettingsProvider.load failed: $e');
     } finally {
       isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Wählt eine PDF-Datei und lädt sie hoch. Gibt die Download-URL zurück
+  /// (die Seite trägt sie ins URL-Feld ein) – null bei Abbruch/Fehler
+  /// ([pdfError] trägt dann die Meldung).
+  Future<String?> uploadMenuPdf() async {
+    try {
+      isUploadingPdf = true;
+      pdfError = null;
+      notifyListeners();
+      return await uploadService.pickAndUploadMenuPdf();
+    } catch (e) {
+      pdfError =
+          e is StorageException ? e.message : 'merchant.menu.error.pdfUpload';
+      return null;
+    } finally {
+      isUploadingPdf = false;
       notifyListeners();
     }
   }

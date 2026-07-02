@@ -6,6 +6,7 @@ import '../../../../core/models/menuDesign.dart';
 import '../../../../core/services/authService.dart';
 import '../../../../core/services/firestoreService.dart';
 import '../../../../core/services/languageService.dart';
+import '../../../../core/services/uploadService.dart';
 import '../../../../core/theme/appSpacing.dart';
 import '../../shared/widgets/merchantPremiumUi.dart';
 import '../../shopSettings/providers/merchantMenuSettingsProvider.dart';
@@ -26,6 +27,7 @@ class MerchantMenuDesignPage extends StatelessWidget {
           authService: context.read<AuthService>(),
           firestoreService: context.read<FirestoreService>(),
         ),
+        uploadService: context.read<UploadService>(),
       )..load(),
       child: const _MenuDesignView(),
     );

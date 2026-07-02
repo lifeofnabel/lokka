@@ -163,9 +163,12 @@ class _MerchantHeroCardState extends State<MerchantHeroCard> {
                     children: [
                       Row(
                         children: [
-                          _GlassButton(
-                            icon: Icons.remove_red_eye_rounded,
-                            label: texts.text('merchant.dashboard.shopPreview'),
+                          // Icon-only: öffnet den Profil-Link-Chooser (Profil
+                          // öffnen / Katalog öffnen / kopieren / ändern). Kein
+                          // „Shop ansehen"-Text mehr.
+                          _IconGlassButton(
+                            icon: Icons.link_rounded,
+                            tooltip: texts.text('merchant.dashboard.profileLink'),
                             onTap: widget.onShopTap,
                           ),
                           const Spacer(),
@@ -472,48 +475,6 @@ class _HeroMetric extends StatelessWidget {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _GlassButton extends StatelessWidget {
-  const _GlassButton({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(999),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 48),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: _glassDecoration(),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, color: MerchantPremiumColors.ink, size: 17),
-              const SizedBox(width: 7),
-              Text(
-                label,
-                style: const TextStyle(
-                  color: MerchantPremiumColors.ink,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 13,
-                ),
-              ),
-            ],
-          ),
         ),
       ),
     );

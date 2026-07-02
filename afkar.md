@@ -985,3 +985,31 @@ User hatte lokal schon Stifte erzeugt → Secret ist gesetzt, NICHT neu setzen (
 
 ## Nächster Schritt für den User
 `firebase deploy --only functions` (nimmt automatisch das gesetzte Secret) → dann `flutter build web --base-href "/lokka/"` + Hosting-Deploy, wie beim letzten Mal.
+
+---
+
+# 2026-07-02 — Speisekarte: 3 Quellen (Lokka-Karte/Link/PDF) + Default-Fix
+
+## Auslöser
+Merchant-Screenshot zeigte „Speisekarte"-Quick-Action ausgegraut auf der Partner-Profilseite, weil weder `menuIntegratedEnabled` noch `menuExternalEnabled` je gesetzt wurden (beide defaulteten hart auf `false`). Wunsch: unter Shopdaten→Basisdaten soll der Merchant seine Speisekarte einrichten können — entweder eigener Link, PDF-Upload, oder (empfohlen, Default an) die in Lokka integrierte Karte.
+
+## Wichtige Entdeckung
+Es gab bereits eine **fertige, dedizierte Seite** `/merchant/menu` (`MerchantMenuSettingsPage` + Provider + Service) mit Link/Integriert-Umschaltern — nur PDF-Upload fehlte, und der Default war falsch (beide Quellen `false` bei frischem Merchant). Statt das in Shopdaten zu duplizieren: PDF-Option dort ergänzt, Default gefixt, und von Shopdaten→Basisdaten aus dorthin verlinkt (`_MenuShortcutCard`, kein Extra-Firestore-Read nur für die Kachel).
+
+## Änderungen
+- **`UploadService.pickAndUploadMenuPdf()`** (neu): pickt PDF via `file_picker` (`FileType.custom, allowedExtensions:['pdf']`), lädt ROH (kein Crop/Resize, da kein Bild) über `StorageService.uploadBytes` nach `merchants/{uid}/menu/{uuid}.pdf`, 15-MB-Guard. Single-Funnel-Architektur eingehalten (kein direkter StorageService-Zugriff von der UI).
+- **`storage.rules`**: neue Funktion `isMenuPdf()` (contentType `application/pdf`, < 15 MB) neben `isImage()`; `validWriteOrDelete()` erlaubt jetzt beides.
+- **`MerchantMenuSettingsService.load()`**: „nie konfiguriert" (Feld `menuIntegratedEnabled` fehlt komplett in Firestore, nicht nur `false`) → `integratedEnabled` defaultet auf `true`. Merchant, der explizit mal gespeichert hat (Feld vorhanden, auch `false`), wird respektiert — kein Zurück-Flippen.
+- **`MerchantMenuSettingsProvider`**: + `uploadService`-Dependency, `uploadMenuPdf()` (liefert URL oder `pdfError`).
+- **`merchantMenuSettingsPage.dart`**: Lokka-Karte jetzt ERSTE Karte (vorher zweite) + „Empfohlen"-Badge + goldener Rand; Externer-Link-Karte hat jetzt zusätzlich „PDF hochladen"-Button (füllt dasselbe URL-Feld wie Eintippen — Öffnen-Verhalten ist identisch).
+- **`merchantShopSettingsPage.dart`**: neue `_MenuShortcutCard` am Ende der „Basisdaten"-Sektion → Sprung zu `/merchant/menu`.
+- i18n: `merchant.menu.recommended/uploadPdf/pdfUploaded/error.pdfUpload` + `common.or` in de/en/ar (ar nur für neue Keys übersetzt; der Rest von `merchant.menu.*` war schon vorher unübersetzt/deutsch — vorbestehende Lücke, nicht in diesem Zug behoben).
+
+## Bewusst NICHT gemacht
+Kein neues Firestore-Feld für PDF — die Download-URL landet im bestehenden `menuExternalUrl` (PDF-Link ist für den Öffnen-Flow identisch zu einem getippten Link, `url_launcher` öffnet/lädt beides gleich).
+
+## Verifikation
+`flutter analyze lib test` = 0/0/0. `flutter test` = 48/48 grün.
+
+## Nächster Schritt für den User
+`firebase deploy --only storage` (neue PDF-Regel muss live, sonst schlägt der Upload mit `permission-denied` fehl).

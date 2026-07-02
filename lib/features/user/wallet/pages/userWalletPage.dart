@@ -13,6 +13,7 @@ import 'package:lokka/core/widgets/appErrorState.dart';
 import 'package:lokka/core/widgets/appLoadingState.dart';
 import 'package:lokka/core/widgets/appPillSwitch.dart';
 import 'package:lokka/core/widgets/appSearchField.dart';
+import 'package:lokka/core/widgets/swipeHint.dart';
 import 'package:lokka/features/user/discover/services/userDiscoverService.dart';
 import 'package:lokka/features/user/wallet/models/walletCardModel.dart';
 import 'package:lokka/features/user/wallet/models/walletSort.dart';
@@ -179,12 +180,10 @@ class _UserWalletPageState extends State<UserWalletPage> {
             : const <WalletCardModel>[];
 
         return SafeArea(
-          // Umschalter/Suche/Zähler nutzen bewusst die VOLLE Breite (wie Feed/
-          // Suche, kein eigenes Max-Width-Limit) – nur das Karten-Deck darunter
-          // bleibt auf Telefon-Breite gekapselt ("wie ein Handy auf dem Tisch").
-          // Vorher lagen Umschalter UND Karten im selben 420px-Käfig, wodurch
-          // der Wallet-Umschalter auf breiteren Screens schmaler/anders
-          // positioniert war als der auf Feed/Suche.
+          // Die Handy-Breiten-Deckelung kommt jetzt zentral von der Shell
+          // (kAppMaxWidth in userShellPage.dart) – hier kein eigener
+          // Center/ConstrainedBox mehr nötig, Umschalter UND Karten-Deck
+          // sitzen dadurch automatisch exakt so breit wie auf Feed/Suche.
           child: Column(
             children: [
               if (hasCards) ...[
@@ -226,13 +225,7 @@ class _UserWalletPageState extends State<UserWalletPage> {
                   _CounterRow(index: _storeIndex, count: filtered.length),
               ],
               Expanded(
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(
-                        maxWidth: WalletTokens.maxContentWidth),
-                    child: _body(context, provider, filtered, uid),
-                  ),
-                ),
+                child: _body(context, provider, filtered, uid),
               ),
             ],
           ),
@@ -268,14 +261,52 @@ class _UserWalletPageState extends State<UserWalletPage> {
     }
     _currentFiltered = filtered;
     WidgetsBinding.instance.addPostFrameCallback((_) => _prefetchNeighbors());
-    return PageView.builder(
-      controller: _storeCtrl,
-      itemCount: filtered.length,
-      itemBuilder: (context, i) => WalletStoreDeck(
-        key: ValueKey(filtered[i].merchantId),
-        card: filtered[i],
-        uid: uid,
-      ),
+    return Stack(
+      children: [
+        PageView.builder(
+          controller: _storeCtrl,
+          itemCount: filtered.length,
+          itemBuilder: (context, i) => WalletStoreDeck(
+            key: ValueKey(filtered[i].merchantId),
+            card: filtered[i],
+            uid: uid,
+          ),
+        ),
+        // "Swipe right/left" affordances — only when there's actually a
+        // NEXT/PREVIOUS store in that direction.
+        if (_storeIndex < filtered.length - 1)
+          Positioned(
+            right: 8,
+            top: 0,
+            bottom: 0,
+            child: Center(
+              child: SwipeHint(
+                icon: Icons.chevron_right_rounded,
+                onTap: () => _storeCtrl.animateToPage(
+                  _storeIndex + 1,
+                  duration: WalletTokens.motion,
+                  curve: WalletTokens.curve,
+                ),
+              ),
+            ),
+          ),
+        if (_storeIndex > 0)
+          Positioned(
+            left: 8,
+            top: 0,
+            bottom: 0,
+            child: Center(
+              child: SwipeHint(
+                icon: Icons.chevron_left_rounded,
+                onTap: () => _storeCtrl.animateToPage(
+                  _storeIndex - 1,
+                  duration: WalletTokens.motion,
+                  curve: WalletTokens.curve,
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

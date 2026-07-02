@@ -1,15 +1,17 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show rootBundle;
 
-/// Lädt ein Legal-Dokument (AGB / Datenschutz) aus assets/legal/*.json und
-/// zeigt es in einem hellen Material-3-Sheet. Backend-frei, rein lokal.
-Future<void> showLegalSheet(BuildContext context, String asset) async {
+/// Lädt ein Legal-Dokument (AGB / Datenschutz) über [load] — normally a
+/// `LegalService.loadTerms()`/`loadPrivacyPolicy()` call, which tries
+/// Firestore first and falls back to the bundled asset — and shows it in a
+/// theme-aware Material-3 sheet (light in the user flow, dark in the
+/// merchant flow).
+Future<void> showLegalSheet(
+  BuildContext context, {
+  required Future<Map<String, dynamic>> Function() load,
+}) async {
   Map<String, dynamic>? data;
   try {
-    final raw = await rootBundle.loadString(asset);
-    data = jsonDecode(raw) as Map<String, dynamic>;
+    data = await load();
   } catch (_) {
     data = null;
   }

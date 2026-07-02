@@ -12,6 +12,9 @@ import '../models/merchantCustomerModel.dart';
 import '../providers/merchantCustomersProvider.dart';
 import '../services/merchantCustomersService.dart';
 
+/// Follower-Seite: wer dem Laden folgt, neueste zuerst, mit Namens-Suche.
+/// Die früheren Programm-Filter-Chips (Stempel/Punkte/Coupons/Bestellungen)
+/// waren tote Filter (usedSystems trägt nur 'follower') und sind entfernt.
 class MerchantCustomersPage extends StatelessWidget {
   const MerchantCustomersPage({super.key});
 
@@ -41,7 +44,7 @@ class _MerchantCustomersView extends StatelessWidget {
       title: texts.text('merchant.customers.title'),
       subtitle: texts.text('merchant.customers.subtitle'),
       trailing: MerchantInfoTooltip(message: texts.text('merchant.customers.tooltip')),
-      // Slivers statt Column-Spread: Kundenkarten werden via SliverList.builder
+      // Slivers statt Column-Spread: Follower-Karten werden via SliverList.builder
       // lazy gebaut (Virtualisierung), nicht alle gleichzeitig in den Widgetbaum.
       slivers: provider.isLoading
           ? const [SliverToBoxAdapter(child: MerchantLoadingCards(count: 5))]
@@ -58,14 +61,18 @@ class _MerchantCustomersView extends StatelessWidget {
                   SliverToBoxAdapter(
                     child: Padding(
                       padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                      child: _FilterChips(provider: provider),
+                      child: _FollowerHeader(provider: provider),
                     ),
                   ),
                   if (provider.visibleCustomers.isEmpty)
                     SliverToBoxAdapter(
                       child: MerchantEmptyState(
-                        title: texts.text('merchant.customers.emptyTitle'),
-                        message: texts.text('merchant.customers.emptyMessage'),
+                        title: texts.text(provider.search.trim().isEmpty
+                            ? 'merchant.customers.emptyTitle'
+                            : 'merchant.customers.searchEmptyTitle'),
+                        message: texts.text(provider.search.trim().isEmpty
+                            ? 'merchant.customers.emptyMessage'
+                            : 'merchant.customers.searchEmptyMessage'),
                         actionLabel: texts.text('common.refresh'),
                         onAction: provider.load,
                       ),
@@ -87,93 +94,69 @@ class _MerchantCustomersView extends StatelessWidget {
   }
 }
 
-class _FilterChips extends StatelessWidget {
-  const _FilterChips({required this.provider});
+/// Kopfbereich der Liste: Follower-Zähler + Namens-Suche (ersetzt die
+/// frühere Filter-Chip-Leiste).
+class _FollowerHeader extends StatelessWidget {
+  const _FollowerHeader({required this.provider});
 
   final MerchantCustomersProvider provider;
 
   @override
   Widget build(BuildContext context) {
     final texts = context.watch<LanguageService>();
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      // Symmetrisches Rand-Padding: erste/letzte Chip-Kante liegt nicht bündig und
-      // beide Seiten zeigen eine kleine Scroll-Affordanz.
-      padding: const EdgeInsets.symmetric(horizontal: 2),
-      child: Row(
-        children: [
-          _FilterChip(
-            label: texts.text('merchant.customers.filter.all'),
-            selected: provider.filter == MerchantCustomerFilter.all,
-            onTap: () => provider.setFilter(MerchantCustomerFilter.all),
+    final count = provider.followerCount;
+    final label = count == 1
+        ? texts.text('merchant.customers.countOne')
+        : texts.text('merchant.customers.countMany').replaceAll('{count}', '$count');
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            color: MerchantPremiumColors.muted,
+            fontWeight: FontWeight.w800,
+            fontSize: 13,
           ),
-          _FilterChip(
-            label: texts.text('merchant.customers.filter.followers'),
-            selected: provider.filter == MerchantCustomerFilter.followers,
-            onTap: () => provider.setFilter(MerchantCustomerFilter.followers),
-          ),
-          _FilterChip(
-            label: texts.text('merchant.customers.filter.stamps'),
-            selected: provider.filter == MerchantCustomerFilter.stampCards,
-            onTap: () => provider.setFilter(MerchantCustomerFilter.stampCards),
-          ),
-          _FilterChip(
-            label: texts.text('merchant.customers.filter.points'),
-            selected: provider.filter == MerchantCustomerFilter.pointsSystems,
-            onTap: () => provider.setFilter(MerchantCustomerFilter.pointsSystems),
-          ),
-          _FilterChip(
-            label: texts.text('merchant.customers.filter.coupons'),
-            selected: provider.filter == MerchantCustomerFilter.coupons,
-            onTap: () => provider.setFilter(MerchantCustomerFilter.coupons),
-          ),
-          _FilterChip(
-            label: texts.text('merchant.customers.filter.orders'),
-            selected: provider.filter == MerchantCustomerFilter.orders,
-            onTap: () => provider.setFilter(MerchantCustomerFilter.orders),
-          ),
-          _FilterChip(
-            label: texts.text('merchant.customers.filter.lastVisited'),
-            selected: provider.filter == MerchantCustomerFilter.lastVisited,
-            onTap: () => provider.setFilter(MerchantCustomerFilter.lastVisited),
+        ),
+        // Suche lohnt erst ab einer Handvoll Followern – vorher wäre das Feld
+        // nur Rauschen über einer 2-Zeilen-Liste.
+        if (count > 5) ...[
+          const SizedBox(height: AppSpacing.sm),
+          TextField(
+            onChanged: provider.setSearch,
+            style: const TextStyle(
+              color: MerchantPremiumColors.ink,
+              fontWeight: FontWeight.w700,
+            ),
+            decoration: InputDecoration(
+              hintText: texts.text('merchant.customers.searchHint'),
+              hintStyle: TextStyle(
+                color: MerchantPremiumColors.muted.withValues(alpha: 0.8),
+                fontWeight: FontWeight.w700,
+              ),
+              prefixIcon: const Icon(Icons.search_rounded,
+                  color: MerchantPremiumColors.muted),
+              filled: true,
+              fillColor: MerchantPremiumColors.surfaceAlt,
+              contentPadding: const EdgeInsets.symmetric(vertical: 12),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: const BorderSide(color: MerchantPremiumColors.line),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: const BorderSide(color: MerchantPremiumColors.line),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: const BorderSide(
+                    color: MerchantPremiumColors.gold, width: 1.4),
+              ),
+            ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _FilterChip extends StatelessWidget {
-  const _FilterChip({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: ChoiceChip(
-        label: Text(label),
-        selected: selected,
-        onSelected: (_) => onTap(),
-        // Touch-Target >= 48dp sicherstellen.
-        materialTapTargetSize: MaterialTapTargetSize.padded,
-        selectedColor: MerchantPremiumColors.ink,
-        backgroundColor: MerchantPremiumColors.surface,
-        side: const BorderSide(color: MerchantPremiumColors.line),
-        labelStyle: TextStyle(
-          // Selektiert liegt das Label auf hellem ink-Grund -> dunkles Token statt
-          // hartem Colors.white (das war auf hellem Grund praktisch unsichtbar).
-          color: selected ? MerchantPremiumColors.surface : MerchantPremiumColors.ink,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
+      ],
     );
   }
 }
@@ -187,8 +170,7 @@ class _CustomerCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final texts = context.watch<LanguageService>();
     final name = customer.name.trim().isEmpty ? texts.text('merchant.customers.unknownName') : customer.name;
-    // Followers show "Folgt dir seit …"; otherwise fall back to last visit.
-    final subtitle = customer.isFollower && customer.followedAt != null
+    final subtitle = customer.followedAt != null
         ? '${texts.text('merchant.customers.followsSince')}: ${_formatDate(texts, customer.followedAt!)}'
         : customer.lastVisitAt != null
             ? '${texts.text('merchant.customers.lastVisit')}: ${_formatDate(texts, customer.lastVisitAt!)}'
@@ -224,23 +206,6 @@ class _CustomerCard extends StatelessWidget {
                     ),
                   ),
                 ],
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: [
-                    if (customer.isFollower)
-                      _SystemPill(
-                        label: texts.text('merchant.customers.follows'),
-                        highlight: true,
-                      ),
-                    if (customer.usedSystems.isEmpty && !customer.isFollower)
-                      _SystemPill(label: texts.text('merchant.customers.noSystem'))
-                    else
-                      ...customer.usedSystems
-                          .map((system) => _SystemPill(label: _systemLabel(texts, system))),
-                  ],
-                ),
               ],
             ),
           ),
@@ -350,13 +315,8 @@ class _CustomerDetailSheet extends StatelessWidget {
                           fontWeight: FontWeight.w900,
                         ),
                       ),
-                      if (customer.isFollower) ...[
-                        const SizedBox(height: 6),
-                        _SystemPill(
-                          label: texts.text('merchant.customers.follows'),
-                          highlight: true,
-                        ),
-                      ],
+                      const SizedBox(height: 6),
+                      _FollowPill(label: texts.text('merchant.customers.follows')),
                     ],
                   ),
                 ),
@@ -381,38 +341,21 @@ class _CustomerDetailSheet extends StatelessWidget {
                 label: texts.text('merchant.customers.postalCode'),
                 value: customer.postalCode,
               ),
-            const SizedBox(height: AppSpacing.md),
-            _DetailSection(
-              label: texts.text('merchant.customers.programs'),
-              child: Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: customer.usedSystems.isEmpty
-                    ? [_SystemPill(label: texts.text('merchant.customers.noSystem'))]
-                    : customer.usedSystems
-                        .map((system) => _SystemPill(label: _systemLabel(texts, system)))
-                        .toList(),
+            // Interessen nur zeigen, wenn der Follower welche geteilt hat –
+            // keine leeren „keine Angaben"-Sektionen im Sheet.
+            if (customer.interests.isNotEmpty) ...[
+              const SizedBox(height: AppSpacing.md),
+              _DetailSection(
+                label: texts.text('merchant.customers.interests'),
+                child: Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: customer.interests
+                      .map((interest) => _InterestPill(label: interest))
+                      .toList(),
+                ),
               ),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            _DetailSection(
-              label: texts.text('merchant.customers.interests'),
-              child: customer.interests.isEmpty
-                  ? Text(
-                      texts.text('merchant.customers.noInterests'),
-                      style: const TextStyle(
-                        color: MerchantPremiumColors.muted,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    )
-                  : Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
-                      children: customer.interests
-                          .map((interest) => _SystemPill(label: interest))
-                          .toList(),
-                    ),
-            ),
+            ],
           ],
         ),
       ),
@@ -483,43 +426,58 @@ class _DetailSection extends StatelessWidget {
   }
 }
 
-class _SystemPill extends StatelessWidget {
-  const _SystemPill({required this.label, this.highlight = false});
+/// „Folgt dir"-Pille (Gold-Akzent).
+class _FollowPill extends StatelessWidget {
+  const _FollowPill({required this.label});
 
   final String label;
-  final bool highlight;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
-        color: highlight ? MerchantPremiumColors.goldSoft : MerchantPremiumColors.surfaceAlt,
+        color: MerchantPremiumColors.goldSoft,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: highlight ? MerchantPremiumColors.gold : MerchantPremiumColors.line,
-        ),
+        border: Border.all(color: MerchantPremiumColors.gold),
       ),
       child: Text(
         label,
-        style: TextStyle(
+        style: const TextStyle(
           color: MerchantPremiumColors.ink,
           fontSize: 12,
-          fontWeight: highlight ? FontWeight.w900 : FontWeight.w700,
+          fontWeight: FontWeight.w900,
         ),
       ),
     );
   }
 }
 
-String _systemLabel(LanguageService texts, String system) {
-  return switch (system) {
-    'stampCards' => texts.text('merchant.customers.system.stamps'),
-    'pointsSystems' => texts.text('merchant.customers.system.points'),
-    'coupons' => texts.text('merchant.customers.system.coupons'),
-    'orders' => texts.text('merchant.customers.system.orders'),
-    _ => system,
-  };
+/// Neutrale Interessen-Pille.
+class _InterestPill extends StatelessWidget {
+  const _InterestPill({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: MerchantPremiumColors.surfaceAlt,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: MerchantPremiumColors.line),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: MerchantPremiumColors.ink,
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
 }
 
 // Locale-bewusste, kompakte Datumsausgabe ohne intl-Paket.

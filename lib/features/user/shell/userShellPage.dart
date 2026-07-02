@@ -9,6 +9,7 @@ import 'package:lokka/core/theme/appRadius.dart';
 import 'package:lokka/core/utils/deferredWarmup.dart';
 import 'package:lokka/core/widgets/responsiveContentWidth.dart';
 import 'package:lokka/core/widgets/appLoadingState.dart';
+import 'package:lokka/core/widgets/appPillSwitch.dart' show kAppMaxWidth;
 import 'package:lokka/features/user/discover/providers/userDiscoverProvider.dart';
 import 'package:lokka/features/user/discover/services/userDiscoverService.dart';
 import 'package:lokka/features/user/onboarding/pages/onboardingSurveyPage.dart';
@@ -162,7 +163,12 @@ class _UserShellPageState extends State<UserShellPage> {
                   return false;
                 },
                 child: ResponsiveContentWidth(
-                  maxWidth: 720,
+                  // Handy-Breite als Obergrenze – auf großen Displays soll die
+                  // App durchgängig wie auf dem Handy aussehen, nicht
+                  // edge-to-edge stretchen (gleicher Wert wie
+                  // WalletTokens.maxContentWidth, EINE Handy-Breite für die
+                  // ganze App).
+                  maxWidth: kAppMaxWidth,
                   // navigationShell übernimmt die IndexedStack-artige
                   // Umschaltung bereits selbst (siehe StatefulShellRoute in
                   // appRouter.dart) — inkl. eigenem Navigator pro Branch, der
@@ -172,12 +178,27 @@ class _UserShellPageState extends State<UserShellPage> {
               ),
               // Beim Runterscrollen schrumpft die Toolbar (verschwindet nicht),
               // beim Hochscrollen wird sie wieder normal groß.
-              bottomNavigationBar: AnimatedScale(
-                duration: const Duration(milliseconds: 200),
-                curve: Curves.easeOut,
-                alignment: Alignment.bottomCenter,
-                scale: _showToolbar ? 1.0 : 0.7,
-                child: _buildBottomNav(ctx),
+              // bottomNavigationBar ist ein eigener Scaffold-Slot – NICHT vom
+              // ResponsiveContentWidth oben erfasst. Deshalb hier dieselbe
+              // Handy-Breiten-Deckelung + Zentrierung, sonst würde die
+              // schwebende Toolbar auf großen Displays trotzdem volle Breite
+              // nutzen. heightFactor: 1 ist Pflicht – extendBody:true gibt
+              // diesem Slot lockere/großzügige Höhen-Constraints; ohne
+              // heightFactor würde Center (wie Align) versuchen, die GANZE
+              // verfügbare Höhe zu füllen und die Toolbar dann vertikal
+              // MITTIG statt unten zentrieren (genau der gemeldete Bug).
+              bottomNavigationBar: Center(
+                heightFactor: 1,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: kAppMaxWidth),
+                  child: AnimatedScale(
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeOut,
+                    alignment: Alignment.bottomCenter,
+                    scale: _showToolbar ? 1.0 : 0.7,
+                    child: _buildBottomNav(ctx),
+                  ),
+                ),
               ),
             );
           },

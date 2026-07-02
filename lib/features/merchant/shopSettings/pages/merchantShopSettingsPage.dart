@@ -14,8 +14,10 @@ import '../../../../core/services/uploadService.dart';
 import '../../../../core/theme/appColors.dart';
 import '../../../../core/theme/appRadius.dart';
 import '../../../../core/theme/appSpacing.dart';
+import '../../../../core/widgets/appPillSwitch.dart' show kAppMaxWidth;
 import '../../feedManager/widgets/squareImageCropSheet.dart';
 import '../../shared/widgets/merchantPremiumUi.dart';
+import '../widgets/merchantMenuSourceSheet.dart';
 import '../../tools/providers/merchantToolsProvider.dart';
 import '../../tools/services/merchantToolsService.dart';
 import '../../tools/widgets/merchantToolUi.dart';
@@ -138,7 +140,9 @@ class _FloatingSaveBar extends StatelessWidget {
                     top: false,
                     child: Center(
                       child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 980),
+                        // Synchron zur Inhalts-Breite des MerchantToolScaffold
+                        // (Handy-Breite) – Leiste und Inhalt bündig.
+                        constraints: const BoxConstraints(maxWidth: kAppMaxWidth),
                         child: Padding(
                           padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
                           child: MerchantPrimaryButton(
@@ -478,6 +482,12 @@ class _ShopFormState extends State<_ShopForm> {
             MerchantTextField(controller: email, label: texts.text('auth.email'), keyboardType: TextInputType.emailAddress),
             const SizedBox(height: AppSpacing.md),
             MerchantTextField(controller: phone, label: texts.text('auth.phone'), keyboardType: TextInputType.phone),
+            const SizedBox(height: AppSpacing.md),
+            // Öffnet die Speisekarten-Quellen als kompaktes Popout (statt
+            // eigener Seite) – siehe merchantMenuSourceSheet.dart.
+            _MenuShortcutCard(
+              onTap: () => showMenuSourceSheet(context),
+            ),
           ],
         ),
         _SectionCard(
@@ -1694,6 +1704,81 @@ class _SectionCardState extends State<_SectionCard> {
             sizeCurve: Curves.easeOut,
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Sprung-Kachel zur dedizierten Speisekarten-Einstellungsseite
+/// (`/merchant/menu`, MerchantMenuSettingsPage): dort wählt der Merchant
+/// eine von drei Quellen – integrierte Lokka-Karte (empfohlen, Default),
+/// externer Link oder PDF-Upload. Bewusst kein Live-Status hier (würde einen
+/// zusätzlichen Firestore-Read auf publicMerchants nur für diese Kachel
+/// bedeuten) – nur ein klarer, immer sichtbarer Einstiegspunkt aus Basisdaten.
+class _MenuShortcutCard extends StatelessWidget {
+  const _MenuShortcutCard({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(AppRadius.large),
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: BoxDecoration(
+          color: MerchantPremiumColors.surfaceAlt,
+          borderRadius: BorderRadius.circular(AppRadius.large),
+          border: Border.all(color: MerchantPremiumColors.line),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: MerchantPremiumColors.goldSoft,
+                borderRadius: BorderRadius.circular(13),
+              ),
+              child: const Icon(
+                Icons.restaurant_menu_rounded,
+                color: MerchantPremiumColors.gold,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Speisekarte',
+                    style: TextStyle(
+                      color: MerchantPremiumColors.ink,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 15,
+                    ),
+                  ),
+                  SizedBox(height: 2),
+                  Text(
+                    'Lokka-Karte, eigener Link oder PDF hochladen',
+                    style: TextStyle(
+                      color: MerchantPremiumColors.muted,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              Icons.chevron_right_rounded,
+              color: MerchantPremiumColors.muted,
+            ),
+          ],
+        ),
       ),
     );
   }

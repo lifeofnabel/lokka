@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import 'appColors.dart';
 import 'appRadius.dart';
+import '../widgets/appPillSwitch.dart' show kAppMaxWidth;
 
 /// Chromium Experience – Google Material 3 Theme.
 /// Lokka-Grün als Seed; Google-Surfaces (#FFFFFF/#F8F9FA), Inter als
@@ -334,6 +335,10 @@ class AppTheme {
         backgroundColor: surface,
         surfaceTintColor: Colors.transparent,
         showDragHandle: true,
+        // Handy-Breite auch für alle Merchant-Bottom-Sheets – zentriert auf
+        // großen Displays statt volle Fensterbreite (ein Theme-Wert, wirkt auf
+        // jedes showModalBottomSheet unter /merchant/*).
+        constraints: BoxConstraints(maxWidth: kAppMaxWidth),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
         ),

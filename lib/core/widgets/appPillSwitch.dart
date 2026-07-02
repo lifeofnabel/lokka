@@ -10,6 +10,14 @@ import 'package:lokka/core/theme/appSpacing.dart';
 const kSwitcherPadding =
     EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.sm, AppSpacing.md, AppSpacing.sm);
 
+/// Handy-Breite als Obergrenze für die GESAMTE App (Shell-Body + Toolbar).
+/// Auf großen Displays soll Lokka durchgängig wie auf dem Handy aussehen
+/// statt edge-to-edge zu stretchen. EIN Wert für die ganze App (Shell in
+/// `userShellPage.dart` + `WalletTokens.maxContentWidth` referenzieren
+/// denselben Wert), statt mehrerer Kopien, die hätten auseinanderdriften
+/// können.
+const double kAppMaxWidth = 420;
+
 /// Wiederverwendbarer M3-Segment-Umschalter (Pille mit gleitender Aktiv-
 /// Fläche + Icon + Label je Segment). Geteilt zwischen der Suche-Seite
 /// (Deals/Partner, Top/Näheste), der Feed-Seite (Für dich/Folge ich/

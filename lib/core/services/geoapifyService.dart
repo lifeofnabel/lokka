@@ -67,8 +67,13 @@ class GeoapifyService {
   bool get isConfigured => _apiKey.isNotEmpty;
 
   /// Adress-Vorschläge beim Tippen (Autocomplete), optional auf eine Bounding-Box
-  /// begrenzt (z. B. [hessenRect]).
-  Future<List<GeoResult>> autocomplete(String text, {String? filterRect}) async {
+  /// ([filterRect], z. B. [hessenRect]) oder ein Land ([countryCode], z. B. `de`)
+  /// begrenzt. `filterRect` gewinnt, wenn beides gesetzt ist.
+  Future<List<GeoResult>> autocomplete(
+    String text, {
+    String? filterRect,
+    String? countryCode,
+  }) async {
     if (!isConfigured || text.trim().length < 3) return const [];
     final params = {
       'text': text.trim(),
@@ -77,7 +82,11 @@ class GeoapifyService {
       'format': 'json',
       'apiKey': _apiKey,
     };
-    if (filterRect != null) params['filter'] = 'rect:$filterRect';
+    if (filterRect != null) {
+      params['filter'] = 'rect:$filterRect';
+    } else if (countryCode != null) {
+      params['filter'] = 'countrycode:$countryCode';
+    }
     final uri =
         Uri.parse('$_base/autocomplete').replace(queryParameters: params);
     try {

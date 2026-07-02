@@ -9,6 +9,7 @@ import 'package:lokka/core/services/authService.dart';
 import 'package:lokka/core/services/firestoreService.dart';
 import 'package:lokka/core/services/localCacheService.dart';
 import 'package:lokka/core/theme/appColors.dart';
+import 'package:lokka/core/widgets/swipeHint.dart';
 import 'package:lokka/features/merchant/stamps/models/stampCardModel.dart';
 import 'package:lokka/features/stamps/services/stampFunctionsService.dart';
 import 'package:lokka/features/stamps/widgets/stampCardVisual.dart';
@@ -48,6 +49,7 @@ class _WalletStoreDeckState extends State<WalletStoreDeck> {
   late final UserWalletService _service;
   final _fn = StampFunctionsService();
   PageController? _deckCtrl;
+  int _deckPage = 0;
   final Set<String> _busy = {};
 
   PublicMerchantUserModel? _merchant;
@@ -160,13 +162,58 @@ class _WalletStoreDeckState extends State<WalletStoreDeck> {
         final h = constraints.maxHeight;
         const peek = 58.0;
         final vf = h <= peek ? 1.0 : ((h - peek) / h).clamp(0.5, 1.0);
-        _deckCtrl ??= PageController(viewportFraction: vf);
-        return PageView.builder(
-          controller: _deckCtrl,
-          scrollDirection: Axis.vertical,
-          physics: const _DeckPhysics(),
-          itemCount: pages.length,
-          itemBuilder: (context, i) => pages[i],
+        if (_deckCtrl == null) {
+          _deckCtrl = PageController(viewportFraction: vf);
+          _deckCtrl!.addListener(() {
+            final p = _deckCtrl!.page?.round() ?? 0;
+            if (p != _deckPage && mounted) setState(() => _deckPage = p);
+          });
+        }
+        // Hints live as an OVERLAY over the whole deck (not inside any one
+        // page's own layout), so "there's more" shows on EVERY page — the main
+        // store card, a stamp card, points, or the empty-loyalty hint alike.
+        return Stack(
+          children: [
+            PageView.builder(
+              controller: _deckCtrl,
+              scrollDirection: Axis.vertical,
+              physics: const _DeckPhysics(),
+              itemCount: pages.length,
+              itemBuilder: (context, i) => pages[i],
+            ),
+            if (_deckPage < pages.length - 1)
+              Positioned(
+                bottom: 8,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: SwipeHint(
+                    icon: Icons.keyboard_arrow_up_rounded,
+                    onTap: () => _deckCtrl?.animateToPage(
+                      _deckPage + 1,
+                      duration: WalletTokens.motion,
+                      curve: WalletTokens.curve,
+                    ),
+                  ),
+                ),
+              ),
+            if (_deckPage > 0)
+              Positioned(
+                top: 8,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: SwipeHint(
+                    icon: Icons.keyboard_arrow_down_rounded,
+                    onTap: () => _deckCtrl?.animateToPage(
+                      _deckPage - 1,
+                      duration: WalletTokens.motion,
+                      curve: WalletTokens.curve,
+                    ),
+                  ),
+                ),
+              ),
+          ],
         );
       },
     );
@@ -655,7 +702,11 @@ class _MainStoreCard extends StatelessWidget {
                           34.0 +
                           (hasActions ? (WalletTokens.md + 64.0) : 0.0);
                       final qr = (sh - reserved).clamp(84.0, 170.0);
+                      // No internal scrolling: the content is sized to fit, so
+                      // the QR/shelf area must NOT eat the deck's vertical swipe
+                      // — the whole card can be swiped up to the next card.
                       return SingleChildScrollView(
+                        physics: const NeverScrollableScrollPhysics(),
                         padding: const EdgeInsets.fromLTRB(WalletTokens.lg,
                             WalletTokens.md, WalletTokens.lg, WalletTokens.lg),
                         child: ConstrainedBox(

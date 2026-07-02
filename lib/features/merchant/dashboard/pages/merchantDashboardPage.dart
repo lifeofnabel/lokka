@@ -12,6 +12,7 @@ import '../../../../core/theme/appSpacing.dart';
 import '../../../../core/widgets/appEmptyState.dart';
 import '../../../../core/widgets/appErrorState.dart';
 import '../../../../core/widgets/appLoadingState.dart';
+import '../../../../core/widgets/appPillSwitch.dart' show kAppMaxWidth;
 import '../../orders/services/merchantOrdersService.dart';
 import '../../shared/widgets/merchantPremiumUi.dart';
 import '../../../stamps/widgets/customerScanFlow.dart';
@@ -100,22 +101,26 @@ class _MerchantDashboardView extends StatelessWidget {
 
               return Center(
                 child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 980),
+                  // Handy-Breite wie im User-Bereich – auf großen Displays
+                  // sieht das Dashboard wie auf dem Handy aus.
+                  constraints: const BoxConstraints(maxWidth: kAppMaxWidth),
                   child: ListView(
                     padding: const EdgeInsets.fromLTRB(16, 10, 16, 28),
                     children: [
                       MerchantHeroCard(
                         hero: data.hero,
                         metrics: data.metrics,
+                        // Das Symbol oben links im Hero öffnet den Profil-Link-
+                        // Chooser (Profil öffnen / Katalog öffnen / kopieren /
+                        // ändern) — die frühere Profil-Link-Karte darunter ist
+                        // damit überflüssig und entfernt.
                         onShopTap: () {
-                          // merchantId stammt aus dem geladenen Snapshot (#237),
-                          // kein erneuter AuthService-Read.
                           final merchantId = data.merchantId;
                           if (merchantId.isEmpty) {
                             showComingSoonSheet(context, title: texts.text('merchant.dashboard.shopPreview'));
                             return;
                           }
-                          context.push('/shop/$merchantId');
+                          showProfileLinkSheet(context, merchantId: merchantId);
                         },
                         onCustomersTap: () => context.push('/merchant/customers'),
                         onSettingsTap: () => context.push('/merchant/shop'),
@@ -123,10 +128,6 @@ class _MerchantDashboardView extends StatelessWidget {
                         onTodayTap: () => showTodaySheet(context, data),
                         onSaveFocus: provider.saveCoverFocus,
                       ),
-                      if (data.merchantId.isNotEmpty) ...[
-                        const SizedBox(height: AppSpacing.md),
-                        MerchantProfileLinkCard(merchantId: data.merchantId),
-                      ],
                       const SizedBox(height: AppSpacing.lg),
                       ScannerCard(
                         onTap: () => _openScan(context),

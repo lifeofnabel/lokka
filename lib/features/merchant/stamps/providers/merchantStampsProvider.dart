@@ -88,12 +88,17 @@ class MerchantStampsProvider extends ChangeNotifier {
     return id;
   }
 
-  /// Sets the cooldown (Wartezeit) between two stamps for the same customer,
-  /// preserving all other claim limits and card fields (targeted merge write).
-  Future<void> setCooldown(StampCardModel card, int seconds) async {
-    await _savingVoid(() => service.setClaimLimits(
+  /// Sets the cooldown (Wartezeit) and the optional supply cap
+  /// (Verfügbare Anzahl) in one merge write, preserving every other field.
+  Future<void> setLimits(
+    StampCardModel card, {
+    required int cooldownSeconds,
+    required int? maxDistribution,
+  }) async {
+    await _savingVoid(() => service.setLimits(
           card.id,
-          {...card.claimLimits, 'cooldownSeconds': seconds},
+          claimLimits: {...card.claimLimits, 'cooldownSeconds': cooldownSeconds},
+          maxDistribution: maxDistribution,
         ));
     await load();
   }
